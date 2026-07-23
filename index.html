@@ -155,6 +155,34 @@
   .empty-note { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
   footer.foot { color: var(--muted); font-size: 12px; margin-top: 24px; line-height: 1.7; }
   footer.foot a { color: var(--text-2); }
+
+  @media (max-width: 700px) {
+    #holdingsTable thead { display: none; }
+    #holdingsTable, #holdingsTable tbody, #holdingsTable tr, #holdingsTable td { display: block; width: 100%; }
+    #holdingsTable tr {
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 8px 12px; margin-bottom: 10px; background: var(--surface-2);
+    }
+    #holdingsTable tr:has(.empty-note) { border: none; background: none; padding: 0; }
+    #holdingsTable td {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      border-bottom: 1px dashed var(--grid); padding: 8px 0; white-space: normal;
+    }
+    #holdingsTable td:last-child { border-bottom: none; }
+    #holdingsTable td::before {
+      content: attr(data-label); color: var(--muted); font-size: 12px; flex-shrink: 0;
+    }
+    #holdingsTable td input, #holdingsTable td select {
+      width: 60%; font-size: 16px; padding: 8px 10px;
+    }
+    #holdingsTable td.row-actions { justify-content: flex-end; padding-top: 10px; }
+    #holdingsTable td.row-actions::before { content: none; }
+    #holdingsTable td.row-actions button {
+      font-size: 15px; padding: 8px 16px; border: 1px solid var(--line); border-radius: 8px;
+    }
+    .goal-actual { grid-template-columns: 1fr; }
+    .goal-actual .col + .col { margin-top: 16px; }
+  }
 </style>
 </head>
 <body>
@@ -335,17 +363,19 @@
       tr.appendChild(makeInputCell(h, "div", "number"));
 
       var tdDiv = document.createElement("td");
+      tdDiv.dataset.label = "年間配当金";
       tdDiv.textContent = fmtYen(c.divPre);
       tr.appendChild(tdDiv);
 
       var tdAcq = document.createElement("td");
+      tdAcq.dataset.label = "取得額";
       tdAcq.textContent = fmtYen(c.acquisition);
       tr.appendChild(tdAcq);
 
       var tdDel = document.createElement("td");
       tdDel.className = "row-actions";
       var delBtn = document.createElement("button");
-      delBtn.textContent = "✕";
+      delBtn.textContent = "✕ 削除";
       delBtn.title = "削除";
       delBtn.addEventListener("click", function () {
         state.holdings = state.holdings.filter(function (x) { return x.id !== h.id; });
@@ -358,11 +388,17 @@
     });
   }
 
+  var FIELD_LABELS = {
+    code: "コード", name: "銘柄名", shares: "株数",
+    cost: "取得単価(円)", div: "年間配当/株(税引前,円)"
+  };
+
   function makeInputCell(h, field, type) {
     var td = document.createElement("td");
+    td.dataset.label = FIELD_LABELS[field] || "";
     var input = document.createElement("input");
     input.type = type;
-    if (type === "number") { input.min = "0"; input.step = "any"; }
+    if (type === "number") { input.min = "0"; input.step = "any"; input.inputMode = "decimal"; }
     input.value = h[field] == null ? "" : h[field];
     input.addEventListener("input", function () {
       h[field] = type === "number" ? input.value : input.value;
@@ -376,6 +412,7 @@
 
   function makeSectorCell(h) {
     var td = document.createElement("td");
+    td.dataset.label = "業種";
     var sel = document.createElement("select");
     SECTOR_NAMES.forEach(function (s) {
       var opt = document.createElement("option");
@@ -393,6 +430,7 @@
 
   function makeAccountCell(h) {
     var td = document.createElement("td");
+    td.dataset.label = "口座";
     var sel = document.createElement("select");
     ["特定", "NISA"].forEach(function (s) {
       var opt = document.createElement("option");
@@ -419,8 +457,15 @@
   }
 
   document.getElementById("addRowBtn").addEventListener("click", function () {
-    state.holdings.push({ id: uid(), code: "", name: "", sector: SECTOR_NAMES[0], account: "特定", shares: "", cost: "", div: "" });
+    var newId = uid();
+    state.holdings.push({ id: newId, code: "", name: "", sector: SECTOR_NAMES[0], account: "特定", shares: "", cost: "", div: "" });
     save(); renderTable(); renderDashboard();
+    var newRow = document.querySelector('#holdingsBody tr[data-id="' + newId + '"]');
+    if (newRow) {
+      newRow.scrollIntoView({ behavior: "smooth", block: "center" });
+      var firstInput = newRow.querySelector("input");
+      if (firstInput) firstInput.focus({ preventScroll: true });
+    }
   });
 
   document.getElementById("clearBtn").addEventListener("click", function () {
