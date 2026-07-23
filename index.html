@@ -152,6 +152,20 @@
   .badge.warn { color: var(--warn); }
   .badge.crit { color: var(--crit); }
 
+  .paste-import { margin-top: 14px; border-top: 1px solid var(--grid); padding-top: 12px; }
+  .paste-import summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-2); list-style: none; }
+  .paste-import summary::-webkit-details-marker { display: none; }
+  .paste-import summary::before { content: "▸ "; color: var(--muted); }
+  .paste-import[open] summary::before { content: "▾ "; }
+  .paste-import-body { margin-top: 10px; }
+  .paste-import-body .hint { font-size: 12px; color: var(--muted); margin: 0 0 8px; line-height: 1.6; }
+  #yahooPasteArea {
+    width: 100%; font-size: 13px; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
+    font-family: inherit; resize: vertical;
+  }
+  .paste-status { font-size: 12px; color: var(--text-2); align-self: center; }
+
   .empty-note { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
   footer.foot { color: var(--muted); font-size: 12px; margin-top: 24px; line-height: 1.7; }
   footer.foot a { color: var(--text-2); }
@@ -182,6 +196,7 @@
     }
     .goal-actual { grid-template-columns: 1fr; }
     .goal-actual .col + .col { margin-top: 16px; }
+    #yahooPasteArea { font-size: 16px; }
   }
 </style>
 </head>
@@ -237,6 +252,20 @@
       <button class="btn" id="clearBtn">データを消去</button>
       <input type="file" id="importFile" accept="application/json" style="display:none">
     </div>
+
+    <details class="paste-import">
+      <summary>Yahoo!ファイナンスのポートフォリオから貼り付けて読み込む</summary>
+      <div class="paste-import-body">
+        <p class="hint">
+          Yahoo!ファイナンスのポートフォリオ画面で表示設定を「コード・市場・名称/現在値/業種/購入価格/保有数/1株配当/配当利回り/メモ/前日比」の順にし、表の行を選択してコピーし、下に貼り付けてください。同じコード・口座の組み合わせは上書き更新されます。メモ欄に「NISA」と入れておくとNISA口座として取り込まれます。
+        </p>
+        <textarea id="yahooPasteArea" rows="5" placeholder="ここにYahoo!ファイナンスのポートフォリオ表からコピーした内容を貼り付け"></textarea>
+        <div class="toolbar">
+          <button class="btn primary" id="yahooImportBtn">貼り付け内容を読み込む</button>
+          <span class="paste-status" id="yahooImportStatus"></span>
+        </div>
+      </div>
+    </details>
   </section>
 
   <section id="dashboardSection"></section>
@@ -466,6 +495,76 @@
       var firstInput = newRow.querySelector("input");
       if (firstInput) firstInput.focus({ preventScroll: true });
     }
+  });
+
+  // ---------- Yahoo!ファイナンス ポートフォリオ 貼り付けインポート ----------
+  // 想定する表示設定の並び: コード・市場・名称 / 現在値 / 業種 / 購入価格 / 保有数 / 1株配当 / 配当利回り / メモ / 前日比
+  // → コピーすると1銘柄が15行のブロックになる:
+  //   [0]コード [1]市場 [2]名称 [3]現在値 [4]現在値日付 [5]業種 [6]購入価格 [7]保有数
+  //   [8]1株配当 [9]配当基準年月 [10]配当利回り [11]利回り日付 [12]メモ [13]前日比額 [14]前日比%
+  function parseYahooNum(s) {
+    if (!s || /^-+$/.test(s)) return "";
+    var cleaned = s.replace(/[,%円]/g, "").trim();
+    var n = parseFloat(cleaned);
+    return isNaN(n) ? "" : n;
+  }
+
+  function parseYahooPaste(text) {
+    var blocks = text.replace(/\r/g, "").split(/\n\s*\n+/)
+      .map(function (b) {
+        return b.split("\n").map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
+      })
+      .filter(function (lines) { return lines.length > 0; });
+
+    var results = [], skipped = 0;
+    blocks.forEach(function (lines) {
+      if (lines.length === 1 && lines[0].indexOf("コード") !== -1) return;
+      if (lines.length !== 15) { skipped++; return; }
+      var code = lines[0];
+      if (!/^\d/.test(code)) { skipped++; return; }
+      var name = lines[2].replace(/[(（]株[)）]/g, "").trim();
+      var sector = lines[5];
+      if (SECTOR_NAMES.indexOf(sector) === -1) sector = SECTOR_NAMES[0];
+      var cost = parseYahooNum(lines[6]);
+      var shares = parseYahooNum(lines[7]);
+      var div = parseYahooNum(lines[8]);
+      var memo = lines[12];
+      var account = /nisa/i.test(memo) ? "NISA" : "特定";
+      results.push({ code: code, name: name || code, sector: sector, account: account, shares: shares, cost: cost, div: div });
+    });
+    return { results: results, skipped: skipped };
+  }
+
+  function mergeYahooResults(results) {
+    var added = 0, updated = 0;
+    results.forEach(function (r) {
+      var existing = state.holdings.find(function (h) { return h.code === r.code && h.account === r.account; });
+      if (existing) {
+        existing.name = r.name; existing.sector = r.sector;
+        existing.shares = r.shares; existing.cost = r.cost; existing.div = r.div;
+        updated++;
+      } else {
+        state.holdings.push({ id: uid(), code: r.code, name: r.name, sector: r.sector, account: r.account, shares: r.shares, cost: r.cost, div: r.div });
+        added++;
+      }
+    });
+    return { added: added, updated: updated };
+  }
+
+  document.getElementById("yahooImportBtn").addEventListener("click", function () {
+    var area = document.getElementById("yahooPasteArea");
+    var status = document.getElementById("yahooImportStatus");
+    var parsed = parseYahooPaste(area.value);
+    if (parsed.results.length === 0) {
+      status.textContent = "読み込める行が見つかりませんでした。表示設定の列順を確認してください。";
+      return;
+    }
+    var merged = mergeYahooResults(parsed.results);
+    save(); renderTable(); renderDashboard();
+    var msg = merged.added + "件追加、" + merged.updated + "件更新しました。";
+    if (parsed.skipped > 0) msg += "(形式が一致しない行を" + parsed.skipped + "件スキップ)";
+    status.textContent = msg;
+    area.value = "";
   });
 
   document.getElementById("clearBtn").addEventListener("click", function () {
