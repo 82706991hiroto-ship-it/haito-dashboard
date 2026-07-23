@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>高配当株ポートフォリオダッシュボード</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --surface-2: #f2f1ee;
+    --text: #0b0b0b;
+    --text-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --line: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --good: #0ca30c;
+    --warn: #fab219;
+    --crit: #d03b3b;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+    --other: #b9b7ae;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --surface-2: #232322;
+      --text: #ffffff;
+      --text-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --line: #383835;
+      --border: rgba(255,255,255,0.10);
+      --good: #0ca30c;
+      --warn: #fab219;
+      --crit: #e66767;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+      --other: #55534c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--page);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+  }
+  .app { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+  header.top { margin-bottom: 20px; }
+  header.top h1 { font-size: 22px; margin: 0 0 4px; }
+  header.top p { margin: 0; color: var(--text-2); font-size: 13px; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .panel h2 {
+    font-size: 15px; margin: 0 0 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel h2 .hint { font-weight: normal; font-size: 12px; color: var(--muted); }
+
+  details.panel > summary { cursor: pointer; font-size: 15px; font-weight: 600; list-style: none; }
+  details.panel > summary::-webkit-details-marker { display: none; }
+  details.panel > summary::before { content: "▸ "; color: var(--muted); }
+  details.panel[open] > summary::before { content: "▾ "; }
+  details.panel > summary { margin-bottom: 4px; }
+
+  .grid-inputs {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px 14px;
+  }
+  label.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-2); }
+  label.field input, label.field select {
+    font-size: 14px; padding: 6px 8px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
+  }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.data-table th, table.data-table td {
+    padding: 6px 6px; border-bottom: 1px solid var(--grid); text-align: left; white-space: nowrap;
+  }
+  table.data-table th { color: var(--muted); font-weight: 500; font-size: 11px; }
+  table.data-table input, table.data-table select {
+    width: 100%; min-width: 56px; font-size: 13px; padding: 4px 6px;
+    border-radius: 5px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text);
+  }
+  table.data-table input[type=number] { width: 88px; }
+  .table-wrap { overflow-x: auto; }
+  .row-actions button { background: none; border: none; color: var(--crit); cursor: pointer; font-size: 15px; padding: 2px 6px; }
+  .row-actions button:hover { text-decoration: underline; }
+
+  button.btn {
+    font-size: 13px; padding: 7px 14px; border-radius: 7px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--text); cursor: pointer;
+  }
+  button.btn:hover { background: var(--grid); }
+  button.btn.primary { background: var(--s1); border-color: var(--s1); color: #fff; }
+  button.btn.primary:hover { opacity: .9; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+  .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stat-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .stat-tile .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .stat-tile .value { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat-tile .sub { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+
+  .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .card h3 { font-size: 13px; margin: 0 0 10px; color: var(--text-2); font-weight: 600; }
+
+  .treemap-card { grid-column: 1 / -1; }
+  .treemap { position: relative; width: 100%; height: 380px; }
+  .tm-tile {
+    position: absolute; box-sizing: border-box; border: 1.5px solid var(--surface);
+    border-radius: 3px; overflow: hidden; padding: 3px 5px; color: #fff;
+    font-size: 11px; line-height: 1.3; cursor: default;
+  }
+  .tm-tile .tm-name { font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,.35); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tm-tile .tm-pct { opacity: .9; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+  .tm-sector-label {
+    position: absolute; top: 3px; left: 5px; font-size: 10px; font-weight: 700;
+    color: rgba(255,255,255,.85); text-shadow: 0 1px 2px rgba(0,0,0,.4); pointer-events: none;
+  }
+
+  .donut-wrap { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .donut-svg { width: 150px; height: 150px; flex-shrink: 0; }
+  .legend { list-style: none; margin: 0; padding: 0; font-size: 12px; flex: 1; min-width: 140px; max-height: 200px; overflow-y: auto; }
+  .legend li { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+  .legend .swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .legend .lname { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend .lpct { color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+  .goal-actual { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+  .goal-actual .col h3 { font-size: 13px; color: var(--text-2); margin: 0 0 8px; }
+  .goal-actual .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--grid); font-size: 13px; }
+  .goal-actual .row .k { color: var(--text-2); }
+  .goal-actual .row .v { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .goal-actual .row input { width: 110px; text-align: right; font-size: 13px; padding: 4px 6px; border-radius: 5px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); }
+
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); }
+  .badge.good { color: var(--good); }
+  .badge.warn { color: var(--warn); }
+  .badge.crit { color: var(--crit); }
+
+  .empty-note { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+  footer.foot { color: var(--muted); font-size: 12px; margin-top: 24px; line-height: 1.7; }
+  footer.foot a { color: var(--text-2); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>高配当株ポートフォリオダッシュボード</h1>
+    <p>保有銘柄を入力すると、業種別・銘柄別・景気感応度別・口座別の配当金構成比とツリーマップ、目標に対する実績を自動集計します。データはこの端末のブラウザ内(localStorage)にのみ保存されます。</p>
+  </header>
+
+  <section class="panel" id="goalsPanel">
+    <h2>目標設定 <span class="hint">分散ガイドラインもここで調整できます</span></h2>
+    <div class="grid-inputs">
+      <label class="field">月間配当金の目標(円)
+        <input type="number" id="goalMonthly" min="0" step="1000">
+      </label>
+      <label class="field">銘柄数の目標
+        <input type="number" id="goalStockCount" min="0" step="1">
+      </label>
+      <label class="field">取得額の目標(円)
+        <input type="number" id="goalAcquisition" min="0" step="10000">
+      </label>
+      <label class="field">景気敏感セクター目標比率(%)
+        <input type="number" id="targetSensitivePct" min="0" max="100" step="1">
+      </label>
+      <label class="field">銘柄あたり最大比率(%)
+        <input type="number" id="maxStockPct" min="0" max="100" step="0.5">
+      </label>
+      <label class="field">業種あたり最大比率(%)
+        <input type="number" id="maxSectorPct" min="0" max="100" step="1">
+      </label>
+    </div>
+  </section>
+
+  <section class="panel" id="holdingsPanel">
+    <h2>保有銘柄</h2>
+    <div class="table-wrap">
+      <table class="data-table" id="holdingsTable">
+        <thead>
+          <tr>
+            <th>コード</th><th>銘柄名</th><th>業種</th><th>口座</th>
+            <th>株数</th><th>取得単価(円)</th><th>年間配当/株(税引前,円)</th>
+            <th>年間配当金</th><th>取得額</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="holdingsBody"></tbody>
+      </table>
+    </div>
+    <div class="toolbar">
+      <button class="btn primary" id="addRowBtn">+ 銘柄を追加</button>
+      <button class="btn" id="exportBtn">JSONエクスポート</button>
+      <button class="btn" id="importBtn">JSONインポート</button>
+      <button class="btn" id="clearBtn">データを消去</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none">
+    </div>
+  </section>
+
+  <section id="dashboardSection"></section>
+
+  <details class="panel" id="sectorRefPanel">
+    <summary>業種一覧・景気感応度分類(東証33業種、編集可)</summary>
+    <div class="table-wrap" style="margin-top:10px;">
+      <table class="data-table" id="sectorTable">
+        <thead><tr><th>業種</th><th>分類</th></tr></thead>
+        <tbody id="sectorBody"></tbody>
+      </table>
+    </div>
+  </details>
+
+  <footer class="foot">
+    税引後の配当金は特定口座を源泉徴収税率20.315%として計算し、NISA口座は非課税として計算しています。実際の税額は制度改正や損益通算等により異なる場合があります。投資判断は自己責任で行ってください。
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORAGE_KEY = "haitoDashboardV1";
+  var TAX_RATE = 0.20315;
+
+  var SECTOR_DEFAULT_CLASS = {
+    "水産・農林業": "ディフェンシブ", "食料品": "ディフェンシブ", "パルプ・紙": "ディフェンシブ",
+    "医薬品": "ディフェンシブ", "その他製品": "ディフェンシブ", "電気・ガス業": "ディフェンシブ",
+    "陸運業": "ディフェンシブ", "倉庫・運輸関連業": "ディフェンシブ", "情報・通信業": "ディフェンシブ",
+    "小売業": "ディフェンシブ", "保険業": "ディフェンシブ", "金属製品": "ディフェンシブ",
+    "不動産業": "ディフェンシブ", "サービス業": "ディフェンシブ",
+    "鉱業": "景気敏感", "建設業": "景気敏感", "繊維製品": "景気敏感", "化学": "景気敏感",
+    "石油・石炭製品": "景気敏感", "ゴム製品": "景気敏感", "ガラス・土石製品": "景気敏感",
+    "鉄鋼": "景気敏感", "非鉄金属": "景気敏感", "機械": "景気敏感", "電気機器": "景気敏感",
+    "輸送用機器": "景気敏感", "精密機器": "景気敏感", "海運業": "景気敏感", "空運業": "景気敏感",
+    "銀行業": "景気敏感", "証券・商品先物取引業": "景気敏感", "その他金融業": "景気敏感", "卸売業": "景気敏感"
+  };
+  var SECTOR_NAMES = Object.keys(SECTOR_DEFAULT_CLASS);
+
+  var CAT_COLORS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7", "--s8"];
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function colorForIndex(i) {
+    if (i < CAT_COLORS.length) return cssVar(CAT_COLORS[i]);
+    var hue = (i * 137.508) % 360;
+    var dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    return "hsl(" + hue.toFixed(1) + "deg 55% " + (dark ? 62 : 48) + "%)";
+  }
+  var OTHER_COLOR = function () { return cssVar("--other"); };
+
+  function uid() { return Math.random().toString(36).slice(2, 10); }
+
+  function loadState() {
+    var raw = null;
+    try { raw = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+    var defaults = {
+      holdings: [],
+      sectorClass: {},
+      goals: { monthly: 50000, stockCount: 40, acquisition: 15000000 },
+      guides: { sensitiveTarget: 50, maxStockPct: 5, maxSectorPct: 15 }
+    };
+    if (!raw) return defaults;
+    try {
+      var parsed = JSON.parse(raw);
+      return Object.assign({}, defaults, parsed, {
+        goals: Object.assign({}, defaults.goals, parsed.goals),
+        guides: Object.assign({}, defaults.guides, parsed.guides)
+      });
+    } catch (e) { return defaults; }
+  }
+
+  var state = loadState();
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function sectorClassOf(sector) {
+    return state.sectorClass[sector] || SECTOR_DEFAULT_CLASS[sector] || "景気敏感";
+  }
+
+  function num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
+
+  function computeRow(h) {
+    var shares = num(h.shares), cost = num(h.cost), div = num(h.div);
+    var acquisition = shares * cost;
+    var divPre = shares * div;
+    var divPost = h.account === "NISA" ? divPre : divPre * (1 - TAX_RATE);
+    return { acquisition: acquisition, divPre: divPre, divPost: divPost };
+  }
+
+  function fmtYen(n) { return "¥" + Math.round(n).toLocaleString("ja-JP"); }
+  function fmtPct(n, d) { return (isFinite(n) ? n : 0).toFixed(d == null ? 1 : d) + "%"; }
+
+  // ---------- Holdings table ----------
+  function renderTable() {
+    var tbody = document.getElementById("holdingsBody");
+    tbody.innerHTML = "";
+    if (state.holdings.length === 0) {
+      var tr = document.createElement("tr");
+      var td = document.createElement("td");
+      td.colSpan = 10;
+      td.className = "empty-note";
+      td.textContent = "「+ 銘柄を追加」から保有銘柄を登録してください";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    state.holdings.forEach(function (h) {
+      var c = computeRow(h);
+      var tr = document.createElement("tr");
+      tr.dataset.id = h.id;
+
+      tr.appendChild(makeInputCell(h, "code", "text"));
+      tr.appendChild(makeInputCell(h, "name", "text"));
+      tr.appendChild(makeSectorCell(h));
+      tr.appendChild(makeAccountCell(h));
+      tr.appendChild(makeInputCell(h, "shares", "number"));
+      tr.appendChild(makeInputCell(h, "cost", "number"));
+      tr.appendChild(makeInputCell(h, "div", "number"));
+
+      var tdDiv = document.createElement("td");
+      tdDiv.textContent = fmtYen(c.divPre);
+      tr.appendChild(tdDiv);
+
+      var tdAcq = document.createElement("td");
+      tdAcq.textContent = fmtYen(c.acquisition);
+      tr.appendChild(tdAcq);
+
+      var tdDel = document.createElement("td");
+      tdDel.className = "row-actions";
+      var delBtn = document.createElement("button");
+      delBtn.textContent = "✕";
+      delBtn.title = "削除";
+      delBtn.addEventListener("click", function () {
+        state.holdings = state.holdings.filter(function (x) { return x.id !== h.id; });
+        save(); renderTable(); renderDashboard();
+      });
+      tdDel.appendChild(delBtn);
+      tr.appendChild(tdDel);
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  function makeInputCell(h, field, type) {
+    var td = document.createElement("td");
+    var input = document.createElement("input");
+    input.type = type;
+    if (type === "number") { input.min = "0"; input.step = "any"; }
+    input.value = h[field] == null ? "" : h[field];
+    input.addEventListener("input", function () {
+      h[field] = type === "number" ? input.value : input.value;
+      save();
+      updateRowComputedCells(h.id);
+      renderDashboard();
+    });
+    td.appendChild(input);
+    return td;
+  }
+
+  function makeSectorCell(h) {
+    var td = document.createElement("td");
+    var sel = document.createElement("select");
+    SECTOR_NAMES.forEach(function (s) {
+      var opt = document.createElement("option");
+      opt.value = s; opt.textContent = s;
+      if (h.sector === s) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (!h.sector) { h.sector = SECTOR_NAMES[0]; }
+    sel.addEventListener("change", function () {
+      h.sector = sel.value; save(); renderDashboard();
+    });
+    td.appendChild(sel);
+    return td;
+  }
+
+  function makeAccountCell(h) {
+    var td = document.createElement("td");
+    var sel = document.createElement("select");
+    ["特定", "NISA"].forEach(function (s) {
+      var opt = document.createElement("option");
+      opt.value = s; opt.textContent = s;
+      if (h.account === s) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (!h.account) h.account = "特定";
+    sel.addEventListener("change", function () {
+      h.account = sel.value; save(); renderDashboard();
+    });
+    td.appendChild(sel);
+    return td;
+  }
+
+  function updateRowComputedCells(id) {
+    var h = state.holdings.find(function (x) { return x.id === id; });
+    if (!h) return;
+    var tr = document.querySelector('#holdingsBody tr[data-id="' + id + '"]');
+    if (!tr) return;
+    var c = computeRow(h);
+    tr.children[7].textContent = fmtYen(c.divPre);
+    tr.children[8].textContent = fmtYen(c.acquisition);
+  }
+
+  document.getElementById("addRowBtn").addEventListener("click", function () {
+    state.holdings.push({ id: uid(), code: "", name: "", sector: SECTOR_NAMES[0], account: "特定", shares: "", cost: "", div: "" });
+    save(); renderTable(); renderDashboard();
+  });
+
+  document.getElementById("clearBtn").addEventListener("click", function () {
+    if (!confirm("入力したデータをすべて消去します。よろしいですか?")) return;
+    state.holdings = [];
+    save(); renderTable(); renderDashboard();
+  });
+
+  document.getElementById("exportBtn").addEventListener("click", function () {
+    var blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "haito-dashboard-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById("importBtn").addEventListener("click", function () {
+    document.getElementById("importFile").click();
+  });
+  document.getElementById("importFile").addEventListener("change", function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var parsed = JSON.parse(reader.result);
+        if (!parsed || !Array.isArray(parsed.holdings)) throw new Error("invalid");
+        state = loadStateFromObject(parsed);
+        save(); renderAll();
+      } catch (err) {
+        alert("読み込みに失敗しました。正しいJSONファイルか確認してください。");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  });
+
+  function loadStateFromObject(parsed) {
+    var defaults = { holdings: [], sectorClass: {}, goals: { monthly: 50000, stockCount: 40, acquisition: 15000000 }, guides: { sensitiveTarget: 50, maxStockPct: 5, maxSectorPct: 15 } };
+    return Object.assign({}, defaults, parsed, {
+      goals: Object.assign({}, defaults.goals, parsed.goals),
+      guides: Object.assign({}, defaults.guides, parsed.guides)
+    });
+  }
+
+  // ---------- Goals inputs ----------
+  function bindGoalInputs() {
+    var map = [
+      ["goalMonthly", "goals", "monthly"],
+      ["goalStockCount", "goals", "stockCount"],
+      ["goalAcquisition", "goals", "acquisition"],
+      ["targetSensitivePct", "guides", "sensitiveTarget"],
+      ["maxStockPct", "guides", "maxStockPct"],
+      ["maxSectorPct", "guides", "maxSectorPct"]
+    ];
+    map.forEach(function (m) {
+      var el = document.getElementById(m[0]);
+      el.value = state[m[1]][m[2]];
+      el.addEventListener("input", function () {
+        state[m[1]][m[2]] = num(el.value);
+        save(); renderDashboard();
+      });
+    });
+  }
+
+  // ---------- Sector reference table ----------
+  function renderSectorTable() {
+    var tbody = document.getElementById("sectorBody");
+    tbody.innerHTML = "";
+    SECTOR_NAMES.forEach(function (s) {
+      var tr = document.createElement("tr");
+      var tdName = document.createElement("td");
+      tdName.textContent = s;
+      tr.appendChild(tdName);
+      var tdSel = document.createElement("td");
+      var sel = document.createElement("select");
+      ["ディフェンシブ", "景気敏感"].forEach(function (c) {
+        var opt = document.createElement("option");
+        opt.value = c; opt.textContent = c;
+        if (sectorClassOf(s) === c) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener("change", function () {
+        state.sectorClass[s] = sel.value;
+        save(); renderDashboard();
+      });
+      tdSel.appendChild(sel);
+      tr.appendChild(tdSel);
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ---------- Aggregation ----------
+  function aggregate() {
+    var rows = state.holdings.map(function (h) {
+      return Object.assign({}, h, computeRow(h));
+    }).filter(function (r) { return r.divPre > 0 || r.acquisition > 0; });
+
+    var totalDivPre = rows.reduce(function (s, r) { return s + r.divPre; }, 0);
+    var totalDivPost = rows.reduce(function (s, r) { return s + r.divPost; }, 0);
+    var totalAcq = rows.reduce(function (s, r) { return s + r.acquisition; }, 0);
+    var sectorSet = {};
+    rows.forEach(function (r) { if (r.sector) sectorSet[r.sector] = true; });
+
+    function groupBy(keyFn) {
+      var map = {};
+      rows.forEach(function (r) {
+        var k = keyFn(r);
+        map[k] = (map[k] || 0) + r.divPre;
+      });
+      return Object.keys(map).map(function (k) { return { label: k, value: map[k] }; })
+        .sort(function (a, b) { return b.value - a.value; });
+    }
+
+    return {
+      rows: rows,
+      totalDivPre: totalDivPre,
+      totalDivPost: totalDivPost,
+      totalAcq: totalAcq,
+      stockCount: rows.length,
+      sectorCount: Object.keys(sectorSet).length,
+      bySector: groupBy(function (r) { return r.sector || "未分類"; }),
+      byStock: groupBy(function (r) { return (r.code ? r.code + " " : "") + (r.name || "無名銘柄") + "|" + r.id; }),
+      bySensitivity: groupBy(function (r) { return sectorClassOf(r.sector); }),
+      byAccount: groupBy(function (r) { return r.account || "特定"; })
+    };
+  }
+
+  // ---------- Donut chart ----------
+  function buildDonut(container, data, total, opts) {
+    opts = opts || {};
+    var maxDirect = opts.maxDirect || 8;
+    var items = data.slice();
+    var direct = items.slice(0, maxDirect);
+    var rest = items.slice(maxDirect);
+    var restSum = rest.reduce(function (s, x) { return s + x.value; }, 0);
+    var slices = direct.map(function (d, i) {
+      return { label: opts.labelFmt ? opts.labelFmt(d.label) : d.label, value: d.value, color: colorForIndex(i) };
+    });
+    if (rest.length) {
+      slices.push({ label: "その他(" + rest.length + ")", value: restSum, color: OTHER_COLOR() });
+    }
+
+    container.innerHTML = "";
+    var wrap = document.createElement("div");
+    wrap.className = "donut-wrap";
+
+    var svgNS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", "0 0 100 100");
+    svg.classList.add("donut-svg");
+    var r = 34, cx = 50, cy = 50, sw = 16;
+    var circumference = 2 * Math.PI * r;
+    var gap = total > 0 ? circumference * 0.006 : 0;
+    var offset = 0;
+
+    if (total <= 0 || slices.length === 0) {
+      var bg = document.createElementNS(svgNS, "circle");
+      bg.setAttribute("cx", cx); bg.setAttribute("cy", cy); bg.setAttribute("r", r);
+      bg.setAttribute("fill", "none");
+      bg.setAttribute("stroke", cssVar("--grid"));
+      bg.setAttribute("stroke-width", sw);
+      svg.appendChild(bg);
+    } else {
+      slices.forEach(function (s) {
+        var frac = s.value / total;
+        var len = Math.max(circumference * frac - gap, 0);
+        var circle = document.createElementNS(svgNS, "circle");
+        circle.setAttribute("cx", cx); circle.setAttribute("cy", cy); circle.setAttribute("r", r);
+        circle.setAttribute("fill", "none");
+        circle.setAttribute("stroke", s.color);
+        circle.setAttribute("stroke-width", sw);
+        circle.setAttribute("stroke-dasharray", len + " " + (circumference - len));
+        circle.setAttribute("stroke-dashoffset", (-offset).toFixed(2));
+        circle.setAttribute("transform", "rotate(-90 " + cx + " " + cy + ")");
+        var title = document.createElementNS(svgNS, "title");
+        title.textContent = s.label + " " + fmtPct(frac * 100) + " (" + fmtYen(s.value) + ")";
+        circle.appendChild(title);
+        svg.appendChild(circle);
+        offset += circumference * frac;
+      });
+    }
+    wrap.appendChild(svg);
+
+    var legend = document.createElement("ul");
+    legend.className = "legend";
+    if (total <= 0 || slices.length === 0) {
+      var li = document.createElement("li");
+      li.textContent = "データがありません";
+      li.style.color = "var(--muted)";
+      legend.appendChild(li);
+    } else {
+      slices.forEach(function (s) {
+        var li = document.createElement("li");
+        var sw2 = document.createElement("span");
+        sw2.className = "swatch";
+        sw2.style.background = s.color;
+        var name = document.createElement("span");
+        name.className = "lname";
+        name.textContent = s.label;
+        name.title = s.label;
+        var pct = document.createElement("span");
+        pct.className = "lpct";
+        pct.textContent = fmtPct((s.value / total) * 100);
+        li.appendChild(sw2); li.appendChild(name); li.appendChild(pct);
+        legend.appendChild(li);
+      });
+    }
+    wrap.appendChild(legend);
+    container.appendChild(wrap);
+  }
+
+  // ---------- Treemap ----------
+  function layoutTreemap(items, x, y, w, h) {
+    if (items.length === 0) return [];
+    if (items.length === 1 || w <= 0 || h <= 0) {
+      return [{ item: items[0], x: x, y: y, w: w, h: h }];
+    }
+    var total = items.reduce(function (s, i) { return s + i.value; }, 0);
+    if (total <= 0) return [];
+    var half = total / 2, acc = 0, splitIdx = 1;
+    for (var i = 0; i < items.length; i++) {
+      acc += items[i].value;
+      if (acc >= half) { splitIdx = i + 1; break; }
+    }
+    splitIdx = Math.min(Math.max(splitIdx, 1), items.length - 1);
+    var groupA = items.slice(0, splitIdx), groupB = items.slice(splitIdx);
+    var sumA = groupA.reduce(function (s, i) { return s + i.value; }, 0);
+    var fracA = sumA / total;
+    if (w >= h) {
+      var wA = w * fracA;
+      return layoutTreemap(groupA, x, y, wA, h).concat(layoutTreemap(groupB, x + wA, y, w - wA, h));
+    } else {
+      var hA = h * fracA;
+      return layoutTreemap(groupA, x, y, w, hA).concat(layoutTreemap(groupB, x, y + hA, w, h - hA));
+    }
+  }
+
+  function renderTreemap(container, agg) {
+    container.innerHTML = "";
+    var rect = container.getBoundingClientRect();
+    var W = rect.width, H = rect.height;
+    if (agg.totalDivPre <= 0 || W <= 0) {
+      var empty = document.createElement("div");
+      empty.className = "empty-note";
+      empty.textContent = "配当金データがありません";
+      container.appendChild(empty);
+      return;
+    }
+
+    var sectorColorMap = {};
+    agg.bySector.forEach(function (s, i) { sectorColorMap[s.label] = colorForIndex(i); });
+
+    var sectorItems = agg.bySector.map(function (s) { return { value: s.value, label: s.label }; });
+    var sectorRects = layoutTreemap(sectorItems, 0, 0, W, H);
+
+    sectorRects.forEach(function (sr) {
+      var sectorLabel = sr.item.label;
+      var stocksInSector = agg.rows.filter(function (r) { return (r.sector || "未分類") === sectorLabel; })
+        .sort(function (a, b) { return b.divPre - a.divPre; })
+        .map(function (r) { return { value: r.divPre, row: r }; })
+        .filter(function (x) { return x.value > 0; });
+      var stockRects = layoutTreemap(stocksInSector, sr.x, sr.y, sr.w, sr.h);
+      var baseColor = sectorColorMap[sectorLabel];
+
+      stockRects.forEach(function (tr) {
+        if (tr.w < 0.5 || tr.h < 0.5) return;
+        var tile = document.createElement("div");
+        tile.className = "tm-tile";
+        tile.style.left = tr.x + "px";
+        tile.style.top = tr.y + "px";
+        tile.style.width = tr.w + "px";
+        tile.style.height = tr.h + "px";
+        tile.style.background = baseColor;
+        var pct = (tr.item.value / agg.totalDivPre) * 100;
+        var nisaMark = tr.item.row.account === "NISA" ? "◆ " : "";
+        tile.title = sectorLabel + " / " + (tr.item.row.name || "無名銘柄") + " " + fmtPct(pct) + " " + fmtYen(tr.item.value);
+        if (tr.w > 34 && tr.h > 16) {
+          var nameEl = document.createElement("div");
+          nameEl.className = "tm-name";
+          nameEl.textContent = nisaMark + (tr.item.row.name || tr.item.row.code || "無名銘柄");
+          tile.appendChild(nameEl);
+          if (tr.h > 30) {
+            var pctEl = document.createElement("div");
+            pctEl.className = "tm-pct";
+            pctEl.textContent = fmtPct(pct);
+            tile.appendChild(pctEl);
+          }
+        }
+        container.appendChild(tile);
+      });
+    });
+  }
+
+  // ---------- Dashboard ----------
+  function dashboardTemplate() {
+    return '' +
+      '<div class="stat-row" id="statRow"></div>' +
+      '<div class="charts-grid">' +
+      '  <div class="card treemap-card">' +
+      '    <h3>ツリーマップ(業種 → 銘柄、配当金の大きさで表示・◆はNISA口座)</h3>' +
+      '    <div class="treemap" id="treemapEl"></div>' +
+      '  </div>' +
+      '  <div class="card"><h3>業種別 配当金構成比</h3><div id="donutSector"></div></div>' +
+      '  <div class="card"><h3>銘柄別 配当金構成比</h3><div id="donutStock"></div></div>' +
+      '  <div class="card"><h3>景気感応度別 配当金構成比</h3><div id="donutSensitivity"></div></div>' +
+      '  <div class="card"><h3>口座別 配当金構成比</h3><div id="donutAccount"></div></div>' +
+      '</div>' +
+      '<div class="card" style="margin-bottom:16px;">' +
+      '  <h3>目標 vs 実績</h3>' +
+      '  <div class="goal-actual" id="goalActual"></div>' +
+      '</div>' +
+      '<div class="card">' +
+      '  <h3>分散ガイドラインのチェック</h3>' +
+      '  <div class="badges" id="guideBadges"></div>' +
+      '</div>';
+  }
+
+  function renderDashboard() {
+    var section = document.getElementById("dashboardSection");
+    if (!section.dataset.built) {
+      section.innerHTML = dashboardTemplate();
+      section.dataset.built = "1";
+    }
+    var agg = aggregate();
+
+    // stat tiles
+    var statRow = document.getElementById("statRow");
+    statRow.innerHTML = "";
+    var stats = [
+      { label: "業種数", value: agg.sectorCount + "" },
+      { label: "銘柄数", value: agg.stockCount + "" },
+      { label: "月間配当金(実績・税引前)", value: fmtYen(agg.totalDivPre / 12) },
+      { label: "利回り(税引前)", value: agg.totalAcq > 0 ? fmtPct((agg.totalDivPre / agg.totalAcq) * 100, 2) : "—" }
+    ];
+    stats.forEach(function (s) {
+      var tile = document.createElement("div");
+      tile.className = "stat-tile";
+      tile.innerHTML = '<div class="label">' + s.label + '</div><div class="value">' + s.value + '</div>';
+      statRow.appendChild(tile);
+    });
+
+    // treemap
+    renderTreemap(document.getElementById("treemapEl"), agg);
+
+    // donuts
+    buildDonut(document.getElementById("donutSector"), agg.bySector, agg.totalDivPre, { maxDirect: 8 });
+    buildDonut(document.getElementById("donutStock"), agg.byStock, agg.totalDivPre, {
+      maxDirect: 8,
+      labelFmt: function (l) { return l.split("|")[0]; }
+    });
+    buildDonut(document.getElementById("donutSensitivity"), agg.bySensitivity, agg.totalDivPre, { maxDirect: 8 });
+    buildDonut(document.getElementById("donutAccount"), agg.byAccount, agg.totalDivPre, { maxDirect: 8 });
+
+    // goal vs actual
+    var g = state.goals;
+    var avgAcqGoal = g.stockCount > 0 ? g.acquisition / g.stockCount : 0;
+    var avgAcqActual = agg.stockCount > 0 ? agg.totalAcq / agg.stockCount : 0;
+    var yieldPre = agg.totalAcq > 0 ? (agg.totalDivPre / agg.totalAcq) * 100 : 0;
+    var yieldPost = agg.totalAcq > 0 ? (agg.totalDivPost / agg.totalAcq) * 100 : 0;
+
+    var ga = document.getElementById("goalActual");
+    ga.innerHTML =
+      '<div class="col"><h3>目標</h3>' +
+      gaRow("月間配当金", fmtYen(g.monthly)) +
+      gaRow("銘柄数", g.stockCount + "") +
+      gaRow("取得額", fmtYen(g.acquisition)) +
+      gaRow("平均取得額", fmtYen(avgAcqGoal)) +
+      '</div>' +
+      '<div class="col"><h3>実績</h3>' +
+      gaRow("月間配当金", fmtYen(agg.totalDivPre / 12)) +
+      gaRow("銘柄数", agg.stockCount + "") +
+      gaRow("取得額", fmtYen(agg.totalAcq)) +
+      gaRow("平均取得額", fmtYen(avgAcqActual)) +
+      gaRow("年間配当金(税引前)", fmtYen(agg.totalDivPre)) +
+      gaRow("利回り(税引前)", fmtPct(yieldPre, 2)) +
+      gaRow("配当金(税引後)", fmtYen(agg.totalDivPost)) +
+      gaRow("利回り(税引後)", fmtPct(yieldPost, 2)) +
+      '</div>';
+
+    // guideline badges
+    var badges = document.getElementById("guideBadges");
+    badges.innerHTML = "";
+    var guides = state.guides;
+
+    if (agg.stockCount === 0) {
+      badges.innerHTML = '<span class="badge">銘柄を登録するとチェックが表示されます</span>';
+    } else {
+      var sensitiveEntry = agg.bySensitivity.find(function (x) { return x.label === "景気敏感"; });
+      var sensitivePct = agg.totalDivPre > 0 && sensitiveEntry ? (sensitiveEntry.value / agg.totalDivPre) * 100 : 0;
+      addBadge(badges, "景気敏感比率 " + fmtPct(sensitivePct) + "(目標" + guides.sensitiveTarget + "%)",
+        Math.abs(sensitivePct - guides.sensitiveTarget) <= 5 ? "good" : "warn");
+
+      var maxStock = agg.byStock[0];
+      if (maxStock) {
+        var maxStockPct = (maxStock.value / agg.totalDivPre) * 100;
+        addBadge(badges, "銘柄最大 " + maxStock.label.split("|")[0] + " " + fmtPct(maxStockPct) + "(上限" + guides.maxStockPct + "%)",
+          maxStockPct <= guides.maxStockPct ? "good" : "crit");
+      }
+
+      var maxSector = agg.bySector[0];
+      if (maxSector) {
+        var maxSectorPct = (maxSector.value / agg.totalDivPre) * 100;
+        addBadge(badges, "業種最大 " + maxSector.label + " " + fmtPct(maxSectorPct) + "(上限" + guides.maxSectorPct + "%)",
+          maxSectorPct <= guides.maxSectorPct ? "good" : "crit");
+      }
+    }
+  }
+
+  function gaRow(k, v) {
+    return '<div class="row"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>';
+  }
+  function addBadge(container, text, kind) {
+    var span = document.createElement("span");
+    span.className = "badge " + kind;
+    span.textContent = (kind === "good" ? "✓ " : kind === "crit" ? "⚠ " : "△ ") + text;
+    container.appendChild(span);
+  }
+
+  var resizeTimer = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderDashboard, 150);
+  });
+
+  function renderAll() {
+    bindGoalInputs();
+    renderTable();
+    renderSectorTable();
+    renderDashboard();
+  }
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
