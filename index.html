@@ -6,50 +6,57 @@
 <title>高配当株ポートフォリオダッシュボード</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
     color-scheme: light;
-    --font-serif: "Zen Old Mincho", "Hiragino Mincho ProN", serif;
+    --font-serif: "Shippori Mincho", "Hiragino Mincho ProN", serif;
     --font-sans: "Zen Kaku Gothic New", system-ui, -apple-system, "Hiragino Sans", "Yu Gothic", sans-serif;
-    --page: #f6f3ea;
+    --font-mono: "IBM Plex Mono", "SF Mono", Consolas, monospace;
+    --page: #f5f1e6;
     --surface: #fffdf7;
-    --surface-2: #efe8d8;
-    --text: #24211c;
-    --text-2: #6b6455;
-    --muted: #9c9484;
-    --grid: #e6ddc8;
-    --line: #d2c6ab;
-    --border: rgba(36,33,28,0.12);
-    --accent: #2f6f5e;
-    --accent-ink: #fdfaf3;
-    --good: #2f6f5e;
-    --warn: #ad7d2e;
-    --crit: #a1434a;
-    --s1: #2f6f5e; --s2: #b1633a; --s3: #b8933f; --s4: #51627a;
-    --s5: #a56b6b; --s6: #7c7a3f; --s7: #6b4c6b; --s8: #8a7a63;
+    --surface-2: #ece4d2;
+    --text: #1b2430;
+    --text-2: #5b6472;
+    --muted: #8d8779;
+    --grid: #ded5c1;
+    --line: #cabfa6;
+    --border: rgba(27,36,48,0.14);
+    --indigo: #1f3a5f;
+    --indigo-ink: #fdfaf3;
+    --gold: #a8813a;
+    --cool: #6e7b87;
+    --vermillion: #b54633;
+    --good: #a8813a;
+    --warn: #6e7b87;
+    --crit: #b54633;
+    --s1: #1f3a5f; --s2: #a8813a; --s3: #3f5a78; --s4: #c6a85c;
+    --s5: #6b625a; --s6: #7c8a94; --s7: #8a6d3b; --s8: #4a5c6e;
     --other: #d9d0ba;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       color-scheme: dark;
-      --page: #1c1a15;
-      --surface: #262319;
-      --surface-2: #322e21;
-      --text: #f4f0e4;
-      --text-2: #c7bda3;
-      --muted: #9a8f77;
-      --grid: #3a3527;
-      --line: #4b4634;
-      --border: rgba(244,240,228,0.12);
-      --accent: #5a9c88;
-      --accent-ink: #16211d;
-      --good: #5a9c88;
-      --warn: #d1a256;
-      --crit: #d17f83;
-      --s1: #5a9c88; --s2: #cf7c52; --s3: #d1a256; --s4: #7188a3;
-      --s5: #c98f8f; --s6: #a3a15c; --s7: #937093; --s8: #ab9a80;
-      --other: #4b4634;
+      --page: #1a1c17;
+      --surface: #23251f;
+      --surface-2: #2d2f27;
+      --text: #f0ece0;
+      --text-2: #b9b2a0;
+      --muted: #8c8676;
+      --grid: #3a3b32;
+      --line: #4a4b40;
+      --border: rgba(240,236,224,0.14);
+      --indigo: #6a8cb8;
+      --indigo-ink: #16211d;
+      --gold: #cda862;
+      --cool: #93a1ac;
+      --vermillion: #d47058;
+      --good: #cda862;
+      --warn: #93a1ac;
+      --crit: #d47058;
+      --s1: #6a8cb8; --s2: #cda862; --s3: #7fa0c7; --s4: #ddc084;
+      --s5: #a89b8c; --s6: #a3b3bd; --s7: #b89a63; --s8: #7f95ab;
+      --other: #4a4b40;
     }
   }
   * { box-sizing: border-box; }
@@ -97,7 +104,7 @@
     font-size: 14px; padding: 6px 2px; border-radius: 0;
     border: none; border-bottom: 1px solid var(--line); background: none; color: var(--text);
   }
-  label.field input:focus, label.field select:focus { outline: none; border-bottom-color: var(--accent); }
+  label.field input:focus, label.field select:focus { outline: 2px solid var(--indigo); outline-offset: 2px; border-bottom-color: var(--indigo); }
 
   table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   table.data-table thead th { border-bottom: 2px solid var(--text); }
@@ -105,47 +112,69 @@
     padding: 9px 7px; border-bottom: 1px solid var(--grid); text-align: left; white-space: nowrap;
   }
   table.data-table th { color: var(--text-2); font-weight: 600; font-size: 10.5px; letter-spacing: .08em; }
+  table.data-table td.num, table.data-table .trend { font-family: var(--font-mono); }
   table.data-table input, table.data-table select {
     width: 100%; min-width: 56px; font-size: 13px; padding: 5px 2px;
     border-radius: 0; border: none; border-bottom: 1px solid var(--line); background: none; color: var(--text);
   }
-  table.data-table input:focus, table.data-table select:focus { outline: none; border-bottom-color: var(--accent); }
-  table.data-table input[type=number] { width: 88px; }
+  table.data-table input[type=number] { font-family: var(--font-mono); width: 88px; }
+  table.data-table input:focus, table.data-table select:focus { outline: 2px solid var(--indigo); outline-offset: 1px; border-bottom-color: var(--indigo); }
   .table-wrap { overflow-x: auto; }
   .row-actions button {
     background: none; border: none; color: var(--text-2); cursor: pointer;
     font-size: 12px; padding: 2px 0; letter-spacing: .04em; border-bottom: 1px solid var(--line);
   }
-  .row-actions button:hover { color: var(--crit); border-bottom-color: var(--crit); }
+  .row-actions button:hover { color: var(--vermillion); border-bottom-color: var(--vermillion); }
+
+  .trend-up { color: var(--gold); font-weight: 600; }
+  .trend-down { color: var(--cool); font-weight: 600; }
+  .trend-flat { color: var(--muted); }
 
   button.btn {
     font-size: 13px; padding: 9px 4px; border-radius: 0; letter-spacing: .04em;
     border: none; border-bottom: 1px solid var(--text); background: none; color: var(--text); cursor: pointer;
   }
-  button.btn:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  button.btn:hover { color: var(--indigo); border-bottom-color: var(--indigo); }
+  button.btn:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
   button.btn.primary {
-    background: var(--text); border-bottom-color: var(--text); color: var(--surface, #fff);
+    background: var(--indigo); border-bottom-color: var(--indigo); color: var(--indigo-ink);
     padding: 10px 20px;
   }
-  button.btn.primary:hover { background: var(--accent); color: var(--accent-ink); border-bottom-color: var(--accent); }
+  button.btn.primary:hover { opacity: .88; }
   .toolbar { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
 
-  .stat-row { display: flex; flex-wrap: wrap; gap: 8px 0; margin-bottom: 36px; border-top: 1px solid var(--text); border-bottom: 1px solid var(--grid); padding: 22px 0; }
-  .stat-tile { padding: 0 30px; border-right: 1px solid var(--grid); }
-  .stat-tile:first-child { padding-left: 0; }
-  .stat-tile:last-child { border-right: none; }
-  .stat-tile .label { font-size: 11px; letter-spacing: .1em; color: var(--muted); margin-bottom: 9px; }
-  .stat-tile .value { font-family: var(--font-serif); font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .stat-tile .sub { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+  /* ---- hero ---- */
+  .hero { margin-bottom: 40px; }
+  .hero-figure { margin-bottom: 22px; }
+  .hero-label { font-size: 11px; letter-spacing: .12em; color: var(--muted); margin-bottom: 6px; }
+  .hero-value { font-family: var(--font-mono); font-size: 56px; font-weight: 600; line-height: 1; color: var(--text); }
+  .hero-goal-line { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; color: var(--text-2); margin-bottom: 10px; }
+  .hero-goal-line .pct { font-family: var(--font-mono); font-size: 15px; font-weight: 600; color: var(--text); }
+  .hero-gauge { position: relative; height: 40px; margin-bottom: 6px; }
+  .gauge-rail { position: absolute; left: 0; right: 0; top: 18px; height: 2px; background: var(--grid); }
+  .gauge-fill { position: absolute; left: 0; top: 18px; height: 2px; background: var(--indigo); }
+  .gauge-tick { position: absolute; top: 12px; width: 1px; height: 14px; background: var(--grid); }
+  .gauge-tick-label { position: absolute; top: 28px; font-size: 10px; color: var(--muted); transform: translateX(-50%); font-family: var(--font-mono); }
+  .gauge-stamp { position: absolute; top: 3px; width: 32px; height: 32px; transform: translateX(-50%); filter: url(#inkRough); }
+  .hero-substats { display: flex; flex-wrap: wrap; gap: 0; margin-top: 24px; border-top: 1px solid var(--grid); padding-top: 16px; }
+  .hero-substats .stat { padding: 0 26px; border-right: 1px solid var(--grid); }
+  .hero-substats .stat:first-child { padding-left: 0; }
+  .hero-substats .stat:last-child { border-right: none; }
+  .hero-substats .label { font-size: 10.5px; letter-spacing: .08em; color: var(--muted); margin-bottom: 5px; }
+  .hero-substats .value { font-family: var(--font-mono); font-size: 18px; font-weight: 600; color: var(--text); }
 
-  .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 36px 40px; margin-bottom: 8px; }
-  .card { padding: 0; }
-  .card h3 {
-    font-size: 11.5px; margin: 0 0 16px; color: var(--text); font-weight: 700; letter-spacing: .12em;
-    padding-bottom: 9px; border-bottom: 1px solid var(--grid);
+  /* ---- composition (treemap + axis switcher) ---- */
+  .axis-tabs { display: flex; gap: 2px; margin-bottom: 18px; }
+  .axis-tab {
+    font-family: var(--font-sans); font-size: 12px; letter-spacing: .04em; padding: 8px 16px;
+    border: none; border-bottom: 2px solid var(--grid); background: none; color: var(--text-2); cursor: pointer;
   }
+  .axis-tab:hover { color: var(--text); }
+  .axis-tab.active { color: var(--text); border-bottom-color: var(--indigo); font-weight: 600; }
+  .axis-tab:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+  .composition-body { display: flex; gap: 40px; flex-wrap: wrap; align-items: flex-start; }
+  .composition-body .treemap { flex: 2 1 480px; }
 
-  .treemap-card { grid-column: 1 / -1; }
   .treemap { position: relative; width: 100%; height: 380px; }
   .tm-tile {
     position: absolute; box-sizing: border-box; border: 1.5px solid var(--surface);
@@ -153,32 +182,26 @@
     font-size: 11px; line-height: 1.3; cursor: default;
   }
   .tm-tile .tm-name { font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,.35); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tm-tile .tm-pct { opacity: .9; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
-  .tm-sector-label {
-    position: absolute; top: 3px; left: 5px; font-size: 10px; font-weight: 700;
-    color: rgba(255,255,255,.85); text-shadow: 0 1px 2px rgba(0,0,0,.4); pointer-events: none;
-  }
+  .tm-tile .tm-pct { font-family: var(--font-mono); opacity: .9; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
 
-  .donut-wrap { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
-  .donut-svg { width: 150px; height: 150px; flex-shrink: 0; }
-  .legend { list-style: none; margin: 0; padding: 0; font-size: 12px; flex: 1; min-width: 140px; max-height: 200px; overflow-y: auto; }
-  .legend li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .legend { list-style: none; margin: 0; padding: 0; font-size: 12px; flex: 1 1 220px; max-height: 380px; overflow-y: auto; }
+  .legend li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px dotted var(--grid); }
   .legend .swatch { width: 8px; height: 8px; border-radius: 1px; border: 1px solid var(--border); flex-shrink: 0; }
   .legend .lname { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .legend .lpct { color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .legend .lpct { color: var(--text-2); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 
   .goal-actual { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; }
   .goal-actual .col h3 { font-size: 11.5px; letter-spacing: .1em; color: var(--text); margin: 0 0 12px; font-weight: 700; padding-bottom: 9px; border-bottom: 1px solid var(--grid); }
   .goal-actual .row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px dotted var(--grid); font-size: 13px; }
   .goal-actual .row .k { color: var(--text-2); }
-  .goal-actual .row .v { font-variant-numeric: tabular-nums; font-weight: 600; }
-  .goal-actual .row input { width: 110px; text-align: right; font-size: 13px; padding: 4px 2px; border-radius: 0; border: none; border-bottom: 1px solid var(--line); background: none; color: var(--text); }
+  .goal-actual .row .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .goal-actual .row input { font-family: var(--font-mono); width: 110px; text-align: right; font-size: 13px; padding: 4px 2px; border-radius: 0; border: none; border-bottom: 1px solid var(--line); background: none; color: var(--text); }
 
   .badges { display: flex; flex-wrap: wrap; column-gap: 28px; row-gap: 8px; margin-top: 4px; font-size: 12.5px; }
   .badge { color: var(--text-2); }
-  .badge.good { color: var(--good); }
-  .badge.warn { color: var(--warn); }
-  .badge.crit { color: var(--crit); font-weight: 600; }
+  .badge.good { color: var(--text-2); }
+  .badge.warn { color: var(--text); font-weight: 600; }
+  .badge.crit { color: var(--text); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--cool); }
 
   .paste-import { margin-top: 20px; border-top: 1px solid var(--grid); padding-top: 16px; }
   .paste-import summary { cursor: pointer; font-size: 12.5px; font-weight: 700; letter-spacing: .1em; color: var(--text-2); list-style: none; }
@@ -192,7 +215,7 @@
     border: none; border-bottom: 1px solid var(--line); background: none; color: var(--text);
     font-family: inherit; resize: vertical;
   }
-  #yahooPasteArea:focus { outline: none; border-bottom-color: var(--accent); }
+  #yahooPasteArea:focus { outline: 2px solid var(--indigo); outline-offset: 2px; border-bottom-color: var(--indigo); }
   .paste-status { font-size: 12px; color: var(--text-2); align-self: center; }
 
   .empty-note { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
@@ -226,12 +249,23 @@
     .goal-actual { grid-template-columns: 1fr; }
     .goal-actual .col + .col { margin-top: 16px; }
     #yahooPasteArea { font-size: 16px; }
-    .stat-row { padding: 16px 0; }
-    .stat-tile { padding: 0 16px 12px; border-right: none; }
+    .hero-value { font-size: 40px; }
+    .hero-substats { padding-top: 12px; }
+    .hero-substats .stat { padding: 0 16px 10px; border-right: none; }
+    .axis-tabs { overflow-x: auto; }
+    .composition-body .treemap { flex-basis: 100%; }
   }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="inkRough" x="-30%" y="-30%" width="160%" height="160%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="noise"></feTurbulence>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="3.2"></feDisplacementMap>
+    </filter>
+  </defs>
+</svg>
 <div class="app">
   <header class="top">
     <div>
@@ -240,6 +274,19 @@
     </div>
     <div class="dateline" id="dateline"></div>
   </header>
+
+  <section class="hero" id="heroSection">
+    <div class="hero-figure">
+      <div class="hero-label">月間配当金(実績・税引前)</div>
+      <div class="hero-value" id="heroValue">¥0</div>
+    </div>
+    <div class="hero-goal-line">
+      <span id="heroGoalText">目標 ¥0 まで</span>
+      <span class="pct" id="heroPct">0.0%</span>
+    </div>
+    <div class="hero-gauge" id="heroGauge"></div>
+    <div class="hero-substats" id="heroSubstats"></div>
+  </section>
 
   <section class="panel" id="goalsPanel">
     <h2>目標設定 <span class="hint">分散ガイドラインもここで調整できます</span></h2>
@@ -273,6 +320,7 @@
           <tr>
             <th>コード</th><th>銘柄名</th><th>業種</th><th>口座</th>
             <th>株数</th><th>取得単価(円)</th><th>年間配当/株(税引前,円)</th>
+            <th>前年配当/株(円)</th><th>配当動向</th>
             <th>年間配当金</th><th>取得額</th><th></th>
           </tr>
         </thead>
@@ -363,8 +411,6 @@
     var dark = matchMedia("(prefers-color-scheme: dark)").matches;
     return "hsl(" + hue.toFixed(1) + "deg 55% " + (dark ? 62 : 48) + "%)";
   }
-  var OTHER_COLOR = function () { return cssVar("--other"); };
-
   function uid() { return Math.random().toString(36).slice(2, 10); }
 
   function loadState() {
@@ -403,7 +449,24 @@
     var acquisition = shares * cost;
     var divPre = shares * div;
     var divPost = h.account === "NISA" ? divPre : divPre * (1 - TAX_RATE);
-    return { acquisition: acquisition, divPre: divPre, divPost: divPost };
+    var trend = null;
+    if (h.prevDiv !== "" && h.prevDiv != null) {
+      var prev = num(h.prevDiv);
+      if (div > prev) trend = "up";
+      else if (div < prev) trend = "down";
+      else trend = "flat";
+    }
+    return { acquisition: acquisition, divPre: divPre, divPost: divPost, trend: trend };
+  }
+
+  function trendText(trend) {
+    if (trend === "up") return "▲ 増配";
+    if (trend === "down") return "▽ 減配";
+    if (trend === "flat") return "― 据え置き";
+    return "―";
+  }
+  function trendClass(trend) {
+    return trend === "up" ? "trend-up" : trend === "down" ? "trend-down" : "trend-flat";
   }
 
   function fmtYen(n) { return "¥" + Math.round(n).toLocaleString("ja-JP"); }
@@ -416,7 +479,7 @@
     if (state.holdings.length === 0) {
       var tr = document.createElement("tr");
       var td = document.createElement("td");
-      td.colSpan = 10;
+      td.colSpan = 12;
       td.className = "empty-note";
       td.textContent = "「+ 銘柄を追加」から保有銘柄を登録してください";
       tr.appendChild(td);
@@ -439,13 +502,24 @@
       tr.appendChild(makeInputCell(h, "shares", "number"));
       tr.appendChild(makeInputCell(h, "cost", "number"));
       tr.appendChild(makeInputCell(h, "div", "number"));
+      tr.appendChild(makeInputCell(h, "prevDiv", "number"));
+
+      var tdTrend = document.createElement("td");
+      tdTrend.dataset.label = "配当動向";
+      var trendSpan = document.createElement("span");
+      trendSpan.className = "trend " + trendClass(c.trend);
+      trendSpan.textContent = trendText(c.trend);
+      tdTrend.appendChild(trendSpan);
+      tr.appendChild(tdTrend);
 
       var tdDiv = document.createElement("td");
+      tdDiv.className = "num";
       tdDiv.dataset.label = "年間配当金";
       tdDiv.textContent = fmtYen(c.divPre);
       tr.appendChild(tdDiv);
 
       var tdAcq = document.createElement("td");
+      tdAcq.className = "num";
       tdAcq.dataset.label = "取得額";
       tdAcq.textContent = fmtYen(c.acquisition);
       tr.appendChild(tdAcq);
@@ -468,7 +542,7 @@
 
   var FIELD_LABELS = {
     code: "コード", name: "銘柄名", shares: "株数",
-    cost: "取得単価(円)", div: "年間配当/株(税引前,円)"
+    cost: "取得単価(円)", div: "年間配当/株(税引前,円)", prevDiv: "前年配当/株(円)"
   };
 
   function wireCodeAutofill(h, codeCell, nameCell, sectorCell) {
@@ -544,13 +618,16 @@
     var tr = document.querySelector('#holdingsBody tr[data-id="' + id + '"]');
     if (!tr) return;
     var c = computeRow(h);
-    tr.children[7].textContent = fmtYen(c.divPre);
-    tr.children[8].textContent = fmtYen(c.acquisition);
+    var trendSpan = tr.children[8].querySelector(".trend");
+    trendSpan.className = "trend " + trendClass(c.trend);
+    trendSpan.textContent = trendText(c.trend);
+    tr.children[9].textContent = fmtYen(c.divPre);
+    tr.children[10].textContent = fmtYen(c.acquisition);
   }
 
   document.getElementById("addRowBtn").addEventListener("click", function () {
     var newId = uid();
-    state.holdings.push({ id: newId, code: "", name: "", sector: SECTOR_NAMES[0], account: "特定", shares: "", cost: "", div: "" });
+    state.holdings.push({ id: newId, code: "", name: "", sector: SECTOR_NAMES[0], account: "特定", shares: "", cost: "", div: "", prevDiv: "" });
     save(); renderTable(); renderDashboard();
     var newRow = document.querySelector('#holdingsBody tr[data-id="' + newId + '"]');
     if (newRow) {
@@ -840,6 +917,15 @@
   }
 
   // ---------- Aggregation ----------
+  var AXIS_CONFIG = {
+    sector: { label: "業種別", groupKey: function (r) { return r.sector || "未分類"; } },
+    stock: { label: "銘柄別", groupKey: function (r) { return r.id; } },
+    sensitivity: { label: "景気感応度別", groupKey: function (r) { return sectorClassOf(r.sector); } },
+    account: { label: "口座別", groupKey: function (r) { return r.account || "特定"; } }
+  };
+  var AXIS_ORDER = ["sector", "stock", "sensitivity", "account"];
+  var currentAxis = "sector";
+
   function aggregate() {
     var rows = state.holdings.map(function (h) {
       return Object.assign({}, h, computeRow(h));
@@ -875,91 +961,7 @@
     };
   }
 
-  // ---------- Donut chart ----------
-  function buildDonut(container, data, total, opts) {
-    opts = opts || {};
-    var maxDirect = opts.maxDirect || 8;
-    var items = data.slice();
-    var direct = items.slice(0, maxDirect);
-    var rest = items.slice(maxDirect);
-    var restSum = rest.reduce(function (s, x) { return s + x.value; }, 0);
-    var slices = direct.map(function (d, i) {
-      return { label: opts.labelFmt ? opts.labelFmt(d.label) : d.label, value: d.value, color: colorForIndex(i) };
-    });
-    if (rest.length) {
-      slices.push({ label: "その他(" + rest.length + ")", value: restSum, color: OTHER_COLOR() });
-    }
-
-    container.innerHTML = "";
-    var wrap = document.createElement("div");
-    wrap.className = "donut-wrap";
-
-    var svgNS = "http://www.w3.org/2000/svg";
-    var svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("viewBox", "0 0 100 100");
-    svg.classList.add("donut-svg");
-    var r = 37, cx = 50, cy = 50, sw = 11;
-    var circumference = 2 * Math.PI * r;
-    var gap = total > 0 ? circumference * 0.006 : 0;
-    var offset = 0;
-
-    if (total <= 0 || slices.length === 0) {
-      var bg = document.createElementNS(svgNS, "circle");
-      bg.setAttribute("cx", cx); bg.setAttribute("cy", cy); bg.setAttribute("r", r);
-      bg.setAttribute("fill", "none");
-      bg.setAttribute("stroke", cssVar("--grid"));
-      bg.setAttribute("stroke-width", sw);
-      svg.appendChild(bg);
-    } else {
-      slices.forEach(function (s) {
-        var frac = s.value / total;
-        var len = Math.max(circumference * frac - gap, 0);
-        var circle = document.createElementNS(svgNS, "circle");
-        circle.setAttribute("cx", cx); circle.setAttribute("cy", cy); circle.setAttribute("r", r);
-        circle.setAttribute("fill", "none");
-        circle.setAttribute("stroke", s.color);
-        circle.setAttribute("stroke-width", sw);
-        circle.setAttribute("stroke-dasharray", len + " " + (circumference - len));
-        circle.setAttribute("stroke-dashoffset", (-offset).toFixed(2));
-        circle.setAttribute("transform", "rotate(-90 " + cx + " " + cy + ")");
-        var title = document.createElementNS(svgNS, "title");
-        title.textContent = s.label + " " + fmtPct(frac * 100) + " (" + fmtYen(s.value) + ")";
-        circle.appendChild(title);
-        svg.appendChild(circle);
-        offset += circumference * frac;
-      });
-    }
-    wrap.appendChild(svg);
-
-    var legend = document.createElement("ul");
-    legend.className = "legend";
-    if (total <= 0 || slices.length === 0) {
-      var li = document.createElement("li");
-      li.textContent = "データがありません";
-      li.style.color = "var(--muted)";
-      legend.appendChild(li);
-    } else {
-      slices.forEach(function (s) {
-        var li = document.createElement("li");
-        var sw2 = document.createElement("span");
-        sw2.className = "swatch";
-        sw2.style.background = s.color;
-        var name = document.createElement("span");
-        name.className = "lname";
-        name.textContent = s.label;
-        name.title = s.label;
-        var pct = document.createElement("span");
-        pct.className = "lpct";
-        pct.textContent = fmtPct((s.value / total) * 100);
-        li.appendChild(sw2); li.appendChild(name); li.appendChild(pct);
-        legend.appendChild(li);
-      });
-    }
-    wrap.appendChild(legend);
-    container.appendChild(wrap);
-  }
-
-  // ---------- Treemap ----------
+  // ---------- Treemap (軸切替対応) ----------
   function layoutTreemap(items, x, y, w, h) {
     if (items.length === 0) return [];
     if (items.length === 1 || w <= 0 || h <= 0) {
@@ -985,7 +987,9 @@
     }
   }
 
-  function renderTreemap(container, agg) {
+  // 業種別/景気感応度別/口座別/銘柄別のいずれも「グループ→銘柄」の2階層ツリーマップとして
+  // 同じロジックで描画する(銘柄別はグループ=銘柄そのものになるため実質1階層になる)。
+  function renderTreemap(container, agg, axisKey) {
     container.innerHTML = "";
     var rect = container.getBoundingClientRect();
     var W = rect.width, H = rect.height;
@@ -994,23 +998,35 @@
       empty.className = "empty-note";
       empty.textContent = "配当金データがありません";
       container.appendChild(empty);
-      return;
+      return null;
     }
 
-    var sectorColorMap = {};
-    agg.bySector.forEach(function (s, i) { sectorColorMap[s.label] = colorForIndex(i); });
+    var groupKeyFn = AXIS_CONFIG[axisKey].groupKey;
+    var groupMap = {};
+    agg.rows.forEach(function (r) {
+      var k = groupKeyFn(r);
+      if (!groupMap[k]) {
+        groupMap[k] = { key: k, label: axisKey === "stock" ? (r.name || r.code || "無名銘柄") : k, value: 0, rows: [] };
+      }
+      groupMap[k].value += r.divPre;
+      groupMap[k].rows.push(r);
+    });
+    var groups = Object.keys(groupMap).map(function (k) { return groupMap[k]; })
+      .sort(function (a, b) { return b.value - a.value; });
 
-    var sectorItems = agg.bySector.map(function (s) { return { value: s.value, label: s.label }; });
-    var sectorRects = layoutTreemap(sectorItems, 0, 0, W, H);
+    var colorMap = {};
+    groups.forEach(function (g, i) { colorMap[g.key] = colorForIndex(i); });
 
-    sectorRects.forEach(function (sr) {
-      var sectorLabel = sr.item.label;
-      var stocksInSector = agg.rows.filter(function (r) { return (r.sector || "未分類") === sectorLabel; })
-        .sort(function (a, b) { return b.divPre - a.divPre; })
+    var groupItems = groups.map(function (g) { return { value: g.value, key: g.key, label: g.label }; });
+    var groupRects = layoutTreemap(groupItems, 0, 0, W, H);
+
+    groupRects.forEach(function (gr) {
+      var group = groupMap[gr.item.key];
+      var stockItems = group.rows.slice().sort(function (a, b) { return b.divPre - a.divPre; })
         .map(function (r) { return { value: r.divPre, row: r }; })
         .filter(function (x) { return x.value > 0; });
-      var stockRects = layoutTreemap(stocksInSector, sr.x, sr.y, sr.w, sr.h);
-      var baseColor = sectorColorMap[sectorLabel];
+      var stockRects = layoutTreemap(stockItems, gr.x, gr.y, gr.w, gr.h);
+      var baseColor = colorMap[gr.item.key];
 
       stockRects.forEach(function (tr) {
         if (tr.w < 0.5 || tr.h < 0.5) return;
@@ -1023,7 +1039,7 @@
         tile.style.background = baseColor;
         var pct = (tr.item.value / agg.totalDivPre) * 100;
         var nisaMark = tr.item.row.account === "NISA" ? "◆ " : "";
-        tile.title = sectorLabel + " / " + (tr.item.row.name || "無名銘柄") + " " + fmtPct(pct) + " " + fmtYen(tr.item.value);
+        tile.title = group.label + " / " + (tr.item.row.name || "無名銘柄") + " " + fmtPct(pct) + " " + fmtYen(tr.item.value);
         if (tr.w > 34 && tr.h > 16) {
           var nameEl = document.createElement("div");
           nameEl.className = "tm-name";
@@ -1039,28 +1055,123 @@
         container.appendChild(tile);
       });
     });
+
+    return { groups: groups, colorMap: colorMap };
+  }
+
+  function renderLegendList(container, groups, colorMap, total) {
+    container.innerHTML = "";
+    if (!groups || groups.length === 0 || total <= 0) {
+      var li0 = document.createElement("li");
+      li0.textContent = "データがありません";
+      li0.style.color = "var(--muted)";
+      container.appendChild(li0);
+      return;
+    }
+    var maxDirect = 12;
+    var direct = groups.slice(0, maxDirect);
+    var rest = groups.slice(maxDirect);
+    var restSum = rest.reduce(function (s, g) { return s + g.value; }, 0);
+    direct.forEach(function (g) {
+      var li = document.createElement("li");
+      var sw = document.createElement("span"); sw.className = "swatch"; sw.style.background = colorMap[g.key];
+      var name = document.createElement("span"); name.className = "lname"; name.textContent = g.label; name.title = g.label;
+      var pct = document.createElement("span"); pct.className = "lpct"; pct.textContent = fmtPct((g.value / total) * 100);
+      li.appendChild(sw); li.appendChild(name); li.appendChild(pct);
+      container.appendChild(li);
+    });
+    if (rest.length) {
+      var li2 = document.createElement("li");
+      var sw2 = document.createElement("span"); sw2.className = "swatch"; sw2.style.background = cssVar("--other");
+      var name2 = document.createElement("span"); name2.className = "lname"; name2.textContent = "その他(" + rest.length + ")";
+      var pct2 = document.createElement("span"); pct2.className = "lpct"; pct2.textContent = fmtPct((restSum / total) * 100);
+      li2.appendChild(sw2); li2.appendChild(name2); li2.appendChild(pct2);
+      container.appendChild(li2);
+    }
+  }
+
+  function renderComposition(agg) {
+    var result = renderTreemap(document.getElementById("treemapEl"), agg, currentAxis);
+    var legendEl = document.getElementById("axisLegend");
+    if (result) {
+      renderLegendList(legendEl, result.groups, result.colorMap, agg.totalDivPre);
+    } else {
+      legendEl.innerHTML = "";
+    }
+  }
+
+  // ---------- ヒーロー(月間配当金実績・目標達成ゲージ) ----------
+  function renderHeroGauge(container, pct) {
+    container.innerHTML = "";
+    var clamped = Math.max(0, Math.min(100, isFinite(pct) ? pct : 0));
+    var rail = document.createElement("div"); rail.className = "gauge-rail";
+    container.appendChild(rail);
+    var fill = document.createElement("div"); fill.className = "gauge-fill"; fill.style.width = clamped + "%";
+    container.appendChild(fill);
+    [0, 25, 50, 75, 100].forEach(function (t) {
+      var tick = document.createElement("div"); tick.className = "gauge-tick"; tick.style.left = t + "%";
+      container.appendChild(tick);
+      var lbl = document.createElement("div"); lbl.className = "gauge-tick-label"; lbl.style.left = t + "%"; lbl.textContent = t + "%";
+      container.appendChild(lbl);
+    });
+    var svgNS = "http://www.w3.org/2000/svg";
+    var stamp = document.createElementNS(svgNS, "svg");
+    stamp.setAttribute("viewBox", "0 0 32 32");
+    stamp.classList.add("gauge-stamp");
+    stamp.style.left = clamped + "%";
+    var ring1 = document.createElementNS(svgNS, "circle");
+    ring1.setAttribute("cx", 16); ring1.setAttribute("cy", 16); ring1.setAttribute("r", 12.5);
+    ring1.setAttribute("fill", "none"); ring1.setAttribute("stroke", cssVar("--vermillion")); ring1.setAttribute("stroke-width", 2.2);
+    stamp.appendChild(ring1);
+    var ring2 = document.createElementNS(svgNS, "circle");
+    ring2.setAttribute("cx", 16); ring2.setAttribute("cy", 16); ring2.setAttribute("r", 7.5);
+    ring2.setAttribute("fill", "none"); ring2.setAttribute("stroke", cssVar("--vermillion")); ring2.setAttribute("stroke-width", 1.5);
+    stamp.appendChild(ring2);
+    container.appendChild(stamp);
+  }
+
+  function renderHero(agg) {
+    var monthly = agg.totalDivPre / 12;
+    var goal = state.goals.monthly;
+    var pct = goal > 0 ? (monthly / goal) * 100 : 0;
+
+    document.getElementById("heroValue").textContent = fmtYen(monthly);
+    document.getElementById("heroGoalText").textContent = "目標 " + fmtYen(goal) + " まで";
+    document.getElementById("heroPct").textContent = fmtPct(pct, 1);
+    renderHeroGauge(document.getElementById("heroGauge"), pct);
+
+    var yieldPre = agg.totalAcq > 0 ? (agg.totalDivPre / agg.totalAcq) * 100 : 0;
+    var subs = [
+      { label: "業種数", value: agg.sectorCount + "" },
+      { label: "銘柄数", value: agg.stockCount + "" },
+      { label: "年間配当金(税引前)", value: fmtYen(agg.totalDivPre) },
+      { label: "利回り(税引前)", value: agg.totalAcq > 0 ? fmtPct(yieldPre, 2) : "—" }
+    ];
+    document.getElementById("heroSubstats").innerHTML = subs.map(function (s) {
+      return '<div class="stat"><div class="label">' + s.label + '</div><div class="value">' + s.value + '</div></div>';
+    }).join("");
   }
 
   // ---------- Dashboard ----------
   function dashboardTemplate() {
+    var tabsHtml = AXIS_ORDER.map(function (k, i) {
+      return '<button class="axis-tab' + (i === 0 ? ' active' : '') + '" data-axis="' + k + '">' + AXIS_CONFIG[k].label + '</button>';
+    }).join('');
     return '' +
-      '<div class="stat-row" id="statRow"></div>' +
-      '<div class="charts-grid">' +
-      '  <div class="card treemap-card">' +
-      '    <h3>ツリーマップ(業種 → 銘柄、配当金の大きさで表示・◆はNISA口座)</h3>' +
+      '<div class="panel">' +
+      '  <h2>構成を見る <span class="hint">面積は配当金額の大きさ・◆はNISA口座</span></h2>' +
+      '  <div class="axis-tabs" id="axisTabs">' + tabsHtml + '</div>' +
+      '  <div class="composition-body">' +
       '    <div class="treemap" id="treemapEl"></div>' +
+      '    <ul class="legend" id="axisLegend"></ul>' +
       '  </div>' +
-      '  <div class="card"><h3>業種別 配当金構成比</h3><div id="donutSector"></div></div>' +
-      '  <div class="card"><h3>銘柄別 配当金構成比</h3><div id="donutStock"></div></div>' +
-      '  <div class="card"><h3>景気感応度別 配当金構成比</h3><div id="donutSensitivity"></div></div>' +
-      '  <div class="card"><h3>口座別 配当金構成比</h3><div id="donutAccount"></div></div>' +
       '</div>' +
-      '<div class="card" style="margin-bottom:16px;">' +
-      '  <h3>目標 vs 実績</h3>' +
+      '<div class="panel">' +
+      '  <h2>目標 vs 実績</h2>' +
       '  <div class="goal-actual" id="goalActual"></div>' +
       '</div>' +
-      '<div class="card">' +
-      '  <h3>分散ガイドラインのチェック</h3>' +
+      '<div class="panel">' +
+      '  <h2>分散ガイドラインのチェック</h2>' +
       '  <div class="badges" id="guideBadges"></div>' +
       '</div>';
   }
@@ -1070,36 +1181,20 @@
     if (!section.dataset.built) {
       section.innerHTML = dashboardTemplate();
       section.dataset.built = "1";
+      Array.prototype.forEach.call(document.querySelectorAll(".axis-tab"), function (btn) {
+        btn.addEventListener("click", function () {
+          currentAxis = btn.dataset.axis;
+          Array.prototype.forEach.call(document.querySelectorAll(".axis-tab"), function (b) {
+            b.classList.toggle("active", b === btn);
+          });
+          renderComposition(aggregate());
+        });
+      });
     }
     var agg = aggregate();
 
-    // stat tiles
-    var statRow = document.getElementById("statRow");
-    statRow.innerHTML = "";
-    var stats = [
-      { label: "業種数", value: agg.sectorCount + "" },
-      { label: "銘柄数", value: agg.stockCount + "" },
-      { label: "月間配当金(実績・税引前)", value: fmtYen(agg.totalDivPre / 12) },
-      { label: "利回り(税引前)", value: agg.totalAcq > 0 ? fmtPct((agg.totalDivPre / agg.totalAcq) * 100, 2) : "—" }
-    ];
-    stats.forEach(function (s) {
-      var tile = document.createElement("div");
-      tile.className = "stat-tile";
-      tile.innerHTML = '<div class="label">' + s.label + '</div><div class="value">' + s.value + '</div>';
-      statRow.appendChild(tile);
-    });
-
-    // treemap
-    renderTreemap(document.getElementById("treemapEl"), agg);
-
-    // donuts
-    buildDonut(document.getElementById("donutSector"), agg.bySector, agg.totalDivPre, { maxDirect: 8 });
-    buildDonut(document.getElementById("donutStock"), agg.byStock, agg.totalDivPre, {
-      maxDirect: 8,
-      labelFmt: function (l) { return l.split("|")[0]; }
-    });
-    buildDonut(document.getElementById("donutSensitivity"), agg.bySensitivity, agg.totalDivPre, { maxDirect: 8 });
-    buildDonut(document.getElementById("donutAccount"), agg.byAccount, agg.totalDivPre, { maxDirect: 8 });
+    renderHero(agg);
+    renderComposition(agg);
 
     // goal vs actual
     var g = state.goals;
