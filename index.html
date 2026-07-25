@@ -192,6 +192,18 @@
   .legend .lname { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .legend .lpct { color: var(--text-2); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 
+  /* 増配・減配の状況 */
+  .change-summary { display: flex; flex-wrap: wrap; gap: 8px 0; margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid var(--grid); }
+  .change-summary .stat { padding: 0 26px; border-right: 1px solid var(--grid); }
+  .change-summary .stat:first-child { padding-left: 0; }
+  .change-summary .stat:last-child { border-right: none; }
+  .change-summary .label { font-size: 10.5px; letter-spacing: .08em; color: var(--muted); margin-bottom: 6px; }
+  .change-summary .value { font-family: var(--font-mono); font-size: 22px; font-weight: 600; color: var(--text); }
+  .change-summary .value.is-down { color: var(--crit); }
+  .change-summary .unit { font-family: var(--font-sans); font-size: 11px; font-weight: 400; color: var(--text-2); margin-left: 3px; }
+  .change-table td.num { font-family: var(--font-mono); }
+  .change-table td { white-space: nowrap; }
+
   /* 目標対比: 品目名と金額を点線リーダーで結ぶ(決算書の表記) */
   .goal-actual { display: grid; grid-template-columns: 1fr 1fr; gap: 0 44px; }
   .goal-actual .col h3 { font-size: 11.5px; letter-spacing: .1em; color: var(--text); margin: 0 0 12px; font-weight: 700; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
@@ -267,6 +279,19 @@
     .hero-substats { padding-top: 12px; }
     .hero-substats .stat { padding: 0 16px 10px; border-right: none; }
     .axis-tabs { overflow-x: auto; }
+    .change-summary { padding-bottom: 12px; }
+    .change-summary .stat { padding: 0 16px 12px; border-right: none; }
+    .change-table thead { display: none; }
+    .change-table, .change-table tbody, .change-table tr, .change-table td { display: block; width: 100%; }
+    .change-table tr { border-top: 1px solid var(--text); padding: 10px 0 12px; }
+    .change-table td {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+      border-bottom: 1px dotted var(--grid); padding: 7px 0; white-space: normal;
+    }
+    .change-table td:last-child { border-bottom: none; }
+    .change-table td::before { content: attr(data-label); color: var(--muted); font-size: 12px; flex-shrink: 0; font-family: var(--font-sans); }
+    .change-table td:first-child { font-weight: 700; }
+    .change-table td:first-child::before { content: none; }
     .composition-body .treemap { flex-basis: 100%; }
   }
 </style>
@@ -1030,6 +1055,24 @@
         .sort(function (a, b) { return b.value - a.value; });
     }
 
+    // 前年配当が入力済みの銘柄だけを対象に、増配・減配の実額インパクトを集計する
+    var changes = rows.filter(function (r) { return r.trend !== null; }).map(function (r) {
+      var perShareNow = num(r.div), perSharePrev = num(r.prevDiv), shares = num(r.shares);
+      return {
+        row: r,
+        perSharePrev: perSharePrev,
+        perShareNow: perShareNow,
+        perShareDiff: perShareNow - perSharePrev,
+        ratePct: perSharePrev > 0 ? ((perShareNow - perSharePrev) / perSharePrev) * 100 : null,
+        annualNow: perShareNow * shares,
+        annualDiff: (perShareNow - perSharePrev) * shares,
+        trend: r.trend
+      };
+    }).sort(function (a, b) { return b.annualDiff - a.annualDiff; });
+
+    var prevTotal = changes.reduce(function (s, c) { return s + c.perSharePrev * num(c.row.shares); }, 0);
+    var changeTotal = changes.reduce(function (s, c) { return s + c.annualDiff; }, 0);
+
     return {
       rows: rows,
       totalDivPre: totalDivPre,
@@ -1040,7 +1083,14 @@
       bySector: groupBy(function (r) { return r.sector || "未分類"; }),
       byStock: groupBy(function (r) { return (r.code ? r.code + " " : "") + (r.name || "無名銘柄") + "|" + r.id; }),
       bySensitivity: groupBy(function (r) { return sectorClassOf(r.sector); }),
-      byAccount: groupBy(function (r) { return r.account || "特定"; })
+      byAccount: groupBy(function (r) { return r.account || "特定"; }),
+      changes: changes,
+      changeTotal: changeTotal,
+      changePrevTotal: prevTotal,
+      changeRatePct: prevTotal > 0 ? (changeTotal / prevTotal) * 100 : null,
+      upCount: changes.filter(function (c) { return c.trend === "up"; }).length,
+      flatCount: changes.filter(function (c) { return c.trend === "flat"; }).length,
+      downCount: changes.filter(function (c) { return c.trend === "down"; }).length
     };
   }
 
@@ -1239,6 +1289,84 @@
   }
 
   // ---------- Dashboard ----------
+  // ---------- 増配・減配の状況 ----------
+  function fmtSignedYen(n) {
+    var v = Math.round(n);
+    return (v > 0 ? "+" : v < 0 ? "−" : "±") + "¥" + Math.abs(v).toLocaleString("ja-JP");
+  }
+  function fmtSignedPct(n) {
+    if (n === null || !isFinite(n)) return "—";
+    return (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n).toFixed(1) + "%";
+  }
+  function fmtPerShare(n) {
+    return "¥" + (Math.round(n * 100) / 100).toLocaleString("ja-JP");
+  }
+  // 1株配当は小数を持ちうるので、円単位に丸めずに符号付きで表示する
+  function fmtSignedPerShare(n) {
+    var v = Math.round(n * 100) / 100;
+    return (v > 0 ? "+" : v < 0 ? "−" : "±") + "¥" + Math.abs(v).toLocaleString("ja-JP");
+  }
+
+  function renderChangeSummary(agg) {
+    var el = document.getElementById("changeSummary");
+    el.innerHTML = "";
+
+    if (agg.changes.length === 0) {
+      var note = document.createElement("p");
+      note.className = "empty-note";
+      note.textContent = "保有銘柄の「前年配当/株」を入力すると、増配・減配の状況が集計されます。";
+      el.appendChild(note);
+      return;
+    }
+
+    var summary = document.createElement("div");
+    summary.className = "change-summary";
+    summary.innerHTML =
+      '<div class="stat"><div class="label">増配</div><div class="value">' + agg.upCount + '<span class="unit">銘柄</span></div></div>' +
+      '<div class="stat"><div class="label">据え置き</div><div class="value">' + agg.flatCount + '<span class="unit">銘柄</span></div></div>' +
+      '<div class="stat"><div class="label">減配</div><div class="value' + (agg.downCount > 0 ? ' is-down' : '') + '">' + agg.downCount + '<span class="unit">銘柄</span></div></div>' +
+      '<div class="stat"><div class="label">年間配当の増減額</div><div class="value' + (agg.changeTotal < 0 ? ' is-down' : '') + '">' + fmtSignedYen(agg.changeTotal) + '</div></div>' +
+      '<div class="stat"><div class="label">増配率(金額加重)</div><div class="value' + (agg.changeRatePct !== null && agg.changeRatePct < 0 ? ' is-down' : '') + '">' + fmtSignedPct(agg.changeRatePct) + '</div></div>';
+    el.appendChild(summary);
+
+    var wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    var table = document.createElement("table");
+    table.className = "data-table change-table";
+    table.innerHTML =
+      '<thead><tr>' +
+      '<th>銘柄</th><th>1株配当 前年 → 今年</th><th>増減率</th>' +
+      '<th>保有株数</th><th>年間配当</th><th>増減額</th>' +
+      '</tr></thead>';
+    var tbody = document.createElement("tbody");
+
+    agg.changes.forEach(function (c) {
+      var tr = document.createElement("tr");
+      var cls = trendClass(c.trend);
+
+      function td(label, text, extraClass) {
+        var cell = document.createElement("td");
+        cell.dataset.label = label;
+        if (extraClass) cell.className = extraClass;
+        cell.textContent = text;
+        return cell;
+      }
+
+      tr.appendChild(td("銘柄", (c.row.code ? c.row.code + " " : "") + (c.row.name || "無名銘柄")));
+      tr.appendChild(td("1株配当", fmtPerShare(c.perSharePrev) + " → " + fmtPerShare(c.perShareNow) + " (" + fmtSignedPerShare(c.perShareDiff) + ")", "num"));
+      tr.appendChild(td("増減率", fmtSignedPct(c.ratePct), "num " + cls));
+      tr.appendChild(td("保有株数", num(c.row.shares).toLocaleString("ja-JP"), "num"));
+      tr.appendChild(td("年間配当", fmtYen(c.annualNow), "num"));
+      tr.appendChild(td("増減額", fmtSignedYen(c.annualDiff), "num " + cls));
+
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    el.appendChild(wrap);
+  }
+
   function dashboardTemplate() {
     var tabsHtml = AXIS_ORDER.map(function (k, i) {
       return '<button class="axis-tab' + (i === 0 ? ' active' : '') + '" data-axis="' + k + '">' + AXIS_CONFIG[k].label + '</button>';
@@ -1253,11 +1381,15 @@
       '  </div>' +
       '</div>' +
       '<div class="panel">' +
-      '  <h2><span class="chap">四</span>目標対比</h2>' +
+      '  <h2><span class="chap">四</span>増配・減配の状況 <span class="hint">前年配当を入力した銘柄が対象</span></h2>' +
+      '  <div id="changeSummary"></div>' +
+      '</div>' +
+      '<div class="panel">' +
+      '  <h2><span class="chap">五</span>目標対比</h2>' +
       '  <div class="goal-actual" id="goalActual"></div>' +
       '</div>' +
       '<div class="panel">' +
-      '  <h2><span class="chap">五</span>分散ガイドライン</h2>' +
+      '  <h2><span class="chap">六</span>分散ガイドライン</h2>' +
       '  <div class="badges" id="guideBadges"></div>' +
       '</div>';
   }
@@ -1281,6 +1413,7 @@
 
     renderHero(agg);
     renderComposition(agg);
+    renderChangeSummary(agg);
 
     // goal vs actual
     var g = state.goals;
