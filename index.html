@@ -217,12 +217,18 @@
   .paste-import[open] summary::before { content: "⌄ "; }
   .paste-import-body { margin-top: 14px; }
   .paste-import-body .hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.7; }
-  #yahooPasteArea {
+  #yahooPasteArea, #quickEntryArea {
     width: 100%; font-size: 13px; padding: 8px 2px; border-radius: 0;
     border: none; border-bottom: 1px solid var(--line); background: none; color: var(--text);
     font-family: inherit; resize: vertical;
   }
-  #yahooPasteArea:focus { outline: 2px solid var(--indigo); outline-offset: 2px; border-bottom-color: var(--indigo); }
+  #quickEntryArea { font-family: var(--font-mono); }
+  #yahooPasteArea:focus, #quickEntryArea:focus { outline: 2px solid var(--indigo); outline-offset: 2px; border-bottom-color: var(--indigo); }
+  .hint-example {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.7; color: var(--text-2);
+    margin: 0 0 12px; padding: 10px 12px; background: var(--surface-2);
+    border-left: 2px solid var(--line); overflow-x: auto;
+  }
   .paste-status { font-size: 12px; color: var(--text-2); align-self: center; }
 
   .empty-note { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
@@ -342,6 +348,23 @@
       <button class="btn" id="clearBtn">データを消去</button>
       <input type="file" id="importFile" accept="application/json" style="display:none">
     </div>
+
+    <details class="paste-import">
+      <summary>かんたん一括入力(1行に1銘柄を並べて登録)</summary>
+      <div class="paste-import-body">
+        <p class="hint">
+          1行に1銘柄を、<strong>コード 株数 取得単価 年間配当/株 前年配当/株</strong> の順に並べてください。後ろの3つは省略できます。行のどこかに「NISA」と書くとNISA口座として登録します。区切りは半角スペース・カンマ・タブのいずれでも構いません。銘柄名と業種は証券コードから自動補完します。
+        </p>
+        <pre class="hint-example">8306 100 1500
+9433 20 4000 145 NISA
+1928 5 3061</pre>
+        <textarea id="quickEntryArea" rows="5" placeholder="8306 100 1500"></textarea>
+        <div class="toolbar">
+          <button class="btn primary" id="quickEntryBtn">この内容で登録する</button>
+          <span class="paste-status" id="quickEntryStatus"></span>
+        </div>
+      </div>
+    </details>
 
     <details class="paste-import">
       <summary>証券会社の保有証券画面から貼り付けて読み込む</summary>
@@ -779,9 +802,15 @@
       if (existing) {
         existing.name = r.name; existing.sector = r.sector;
         existing.shares = r.shares; existing.cost = r.cost; existing.div = r.div;
+        // 前年配当を持たない取り込み元(貼り付け・CSV)では既存の入力値を消さない
+        if (r.prevDiv !== undefined) existing.prevDiv = r.prevDiv;
         updated++;
       } else {
-        state.holdings.push({ id: uid(), code: r.code, name: r.name, sector: r.sector, account: r.account, shares: r.shares, cost: r.cost, div: r.div });
+        state.holdings.push({
+          id: uid(), code: r.code, name: r.name, sector: r.sector, account: r.account,
+          shares: r.shares, cost: r.cost, div: r.div,
+          prevDiv: r.prevDiv !== undefined ? r.prevDiv : ""
+        });
         added++;
       }
     });
@@ -789,17 +818,63 @@
   }
 
   function applyParsedHoldings(text, statusEl) {
-    var parsed = parseHoldingsPaste(text);
+    applyResults(parseHoldingsPaste(text), statusEl, "読み込める行が見つかりませんでした。対応形式か確認してください。");
+  }
+
+  function applyResults(parsed, statusEl, emptyMessage) {
     if (parsed.results.length === 0) {
-      statusEl.textContent = "読み込める行が見つかりませんでした。対応形式か確認してください。";
-      return;
+      statusEl.textContent = emptyMessage;
+      return false;
     }
     var merged = mergePastedResults(parsed.results);
     save(); renderTable(); renderDashboard();
     var msg = merged.added + "件追加、" + merged.updated + "件更新しました。";
     if (parsed.skipped > 0) msg += "(形式が一致しない行を" + parsed.skipped + "件スキップ)";
     statusEl.textContent = msg;
+    return true;
   }
+
+  // ---------- かんたん一括入力 ----------
+  // 1行 = 1銘柄。「コード 株数 取得単価 年間配当/株 前年配当/株」の順で、後ろ3つは省略可。
+  // 行内のどこかに NISA と書かれていればNISA口座として扱う。
+  function parseQuickEntry(text) {
+    var lines = text.replace(/\r/g, "").split("\n")
+      .map(function (l) { return l.trim(); })
+      .filter(function (l) { return l.length > 0; });
+
+    var results = [], skipped = 0;
+    lines.forEach(function (line) {
+      var isNisa = /nisa/i.test(line);
+      var parts = line.replace(/nisa/ig, " ").replace(/特定/g, " ")
+        .split(/[\s,、]+/).filter(function (p) { return p.length > 0; });
+      if (parts.length === 0) return;
+
+      var code = parts[0];
+      if (!/^[0-9][0-9A-Za-z]{2,4}$/.test(code)) { skipped++; return; }
+
+      var nums = parts.slice(1).map(parsePasteNum);
+      function at(i) { return nums[i] === undefined ? "" : nums[i]; }
+
+      results.push({
+        code: code,
+        name: nameFor(code) || code,
+        sector: sectorFor(code, ""),
+        account: isNisa ? "NISA" : "特定",
+        shares: at(0), cost: at(1), div: at(2), prevDiv: at(3)
+      });
+    });
+    return { results: results, skipped: skipped };
+  }
+
+  document.getElementById("quickEntryBtn").addEventListener("click", function () {
+    var area = document.getElementById("quickEntryArea");
+    var ok = applyResults(
+      parseQuickEntry(area.value),
+      document.getElementById("quickEntryStatus"),
+      "登録できる行がありませんでした。行の先頭が証券コードになっているか確認してください。"
+    );
+    if (ok) area.value = "";
+  });
 
   document.getElementById("yahooImportBtn").addEventListener("click", function () {
     var area = document.getElementById("yahooPasteArea");
