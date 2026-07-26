@@ -204,6 +204,30 @@
   .cal-month { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); padding-top: 7px; border-top: 1px solid var(--line); width: 100%; text-align: center; margin-top: 4px; }
   .calendar-note { font-size: 12px; color: var(--muted); line-height: 1.7; margin: 16px 0 0; }
 
+  /* 利回りの分布 */
+  .band-list { margin-bottom: 6px; }
+  .band-row { display: flex; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px dotted var(--grid); font-size: 12.5px; }
+  .band-row.is-empty { color: var(--muted); }
+  .band-label { width: 11em; flex-shrink: 0; }
+  .band-bar-slot { flex: 1; min-width: 40px; }
+  .band-bar { height: 9px; background: var(--indigo); min-width: 1px; }
+  .band-row.is-empty .band-bar { background: var(--grid); }
+  .band-share { font-family: var(--font-mono); width: 4.5em; text-align: right; font-weight: 600; }
+  .band-count { font-family: var(--font-mono); width: 5em; text-align: right; color: var(--text-2); }
+
+  /* 将来見通し */
+  .sim-inputs { margin-bottom: 22px; }
+  .field-check { justify-content: flex-end; }
+  .field-check span { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text); }
+  .field-check input { width: auto; }
+  .sim-chart { height: 170px; gap: 3px; }
+  .sim-chart .cal-col.is-goal .cal-bar { background: var(--vermillion); }
+
+  /* バックアップの鮮度 */
+  .backup-status { font-size: 12px; color: var(--text-2); margin: 14px 0 0; line-height: 1.7; }
+  .backup-status.is-warn { color: var(--crit); }
+  .backup-status:empty { display: none; }
+
   /* 増配・減配の状況 */
   .change-summary { display: flex; flex-wrap: wrap; gap: 8px 0; margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid var(--grid); }
   .change-summary .stat { padding: 0 26px; border-right: 1px solid var(--grid); }
@@ -294,7 +318,11 @@
     /* 見出しが長いと float した補足が重なるので、狭い画面では下に回す */
     .panel h2 .hint { float: none; display: block; margin-top: 6px; }
     .calendar-chart { height: 170px; gap: 3px; }
+    .sim-chart { height: 140px; gap: 2px; }
     .cal-value { display: none; }
+    .band-label { width: 8.5em; font-size: 12px; }
+    .band-count { display: none; }
+    .field-check { justify-content: flex-start; }
     .cal-month { font-size: 10px; }
     .change-summary { padding-bottom: 12px; }
     .change-summary .stat { padding: 0 16px 12px; border-right: none; }
@@ -390,6 +418,7 @@
       <button class="btn" id="clearBtn">データを消去</button>
       <input type="file" id="importFile" accept="application/json" style="display:none">
     </div>
+    <p class="backup-status" id="backupStatus"></p>
 
     <details class="paste-import">
       <summary>かんたん一括入力(1行に1銘柄を並べて登録)</summary>
@@ -497,14 +526,18 @@
       holdings: [],
       sectorClass: {},
       goals: { monthly: 50000, stockCount: 40, acquisition: 15000000 },
-      guides: { sensitiveTarget: 50, maxStockPct: 5, maxSectorPct: 15 }
+      guides: { sensitiveTarget: 50, maxStockPct: 5, maxSectorPct: 15 },
+      // 将来見通しの前提。growth が null のときは実績の増配率を使う。
+      sim: { monthlyInvest: 30000, growth: null, reinvest: true },
+      lastExport: null
     };
     if (!raw) return defaults;
     try {
       var parsed = JSON.parse(raw);
       return Object.assign({}, defaults, parsed, {
         goals: Object.assign({}, defaults.goals, parsed.goals),
-        guides: Object.assign({}, defaults.guides, parsed.guides)
+        guides: Object.assign({}, defaults.guides, parsed.guides),
+        sim: Object.assign({}, defaults.sim, parsed.sim)
       });
     } catch (e) { return defaults; }
   }
@@ -1036,6 +1069,7 @@
   });
 
   document.getElementById("exportBtn").addEventListener("click", function () {
+    state.lastExport = new Date().toISOString();
     var blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
@@ -1043,7 +1077,35 @@
     a.download = "haito-dashboard-" + new Date().toISOString().slice(0, 10) + ".json";
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    save(); renderBackupStatus();
   });
+
+  // データはこの端末のlocalStorageにしか無いため、バックアップの鮮度を明示する。
+  var BACKUP_STALE_DAYS = 30;
+
+  function renderBackupStatus() {
+    var el = document.getElementById("backupStatus");
+    if (!el) return;
+    el.className = "backup-status";
+
+    if (state.holdings.length === 0) { el.textContent = ""; return; }
+
+    if (!state.lastExport) {
+      el.classList.add("is-warn");
+      el.textContent = "このデータはブラウザ内にのみ保存されています。閲覧データを消すと失われるため、「JSONエクスポート」で控えを取っておいてください。";
+      return;
+    }
+
+    var last = new Date(state.lastExport);
+    var days = Math.floor((Date.now() - last.getTime()) / 86400000);
+    var stamp = last.getFullYear() + "年" + (last.getMonth() + 1) + "月" + last.getDate() + "日";
+    if (days >= BACKUP_STALE_DAYS) {
+      el.classList.add("is-warn");
+      el.textContent = "前回のバックアップは " + stamp + "(" + days + "日前)です。控えを取り直しておくと安心です。";
+    } else {
+      el.textContent = "前回のバックアップ: " + stamp + (days === 0 ? "(本日)" : "(" + days + "日前)");
+    }
+  }
 
   document.getElementById("importBtn").addEventListener("click", function () {
     document.getElementById("importFile").click();
@@ -1067,10 +1129,17 @@
   });
 
   function loadStateFromObject(parsed) {
-    var defaults = { holdings: [], sectorClass: {}, goals: { monthly: 50000, stockCount: 40, acquisition: 15000000 }, guides: { sensitiveTarget: 50, maxStockPct: 5, maxSectorPct: 15 } };
+    var defaults = {
+      holdings: [], sectorClass: {},
+      goals: { monthly: 50000, stockCount: 40, acquisition: 15000000 },
+      guides: { sensitiveTarget: 50, maxStockPct: 5, maxSectorPct: 15 },
+      sim: { monthlyInvest: 30000, growth: null, reinvest: true },
+      lastExport: null
+    };
     return Object.assign({}, defaults, parsed, {
       goals: Object.assign({}, defaults.goals, parsed.goals),
-      guides: Object.assign({}, defaults.guides, parsed.guides)
+      guides: Object.assign({}, defaults.guides, parsed.guides),
+      sim: Object.assign({}, defaults.sim, parsed.sim)
     });
   }
 
@@ -1188,7 +1257,68 @@
       upCount: changes.filter(function (c) { return c.trend === "up"; }).length,
       flatCount: changes.filter(function (c) { return c.trend === "flat"; }).length,
       downCount: changes.filter(function (c) { return c.trend === "down"; }).length,
-      calendar: buildCalendar(rows)
+      calendar: buildCalendar(rows),
+      yields: buildYields(rows, totalDivPre),
+      concentration: buildConcentration(rows, totalDivPre, groupBy)
+    };
+  }
+
+  // 簿価利回り(YOC) = 年間配当 ÷ 取得額。現在株価を持たないため、
+  // このツールの「利回り」はすべて取得価格ベースになる。
+  var YIELD_BANDS = [
+    { label: "3%未満", min: -Infinity, max: 3 },
+    { label: "3%以上4%未満", min: 3, max: 4 },
+    { label: "4%以上5%未満", min: 4, max: 5 },
+    { label: "5%以上6%未満", min: 5, max: 6 },
+    { label: "6%以上", min: 6, max: Infinity }
+  ];
+
+  function buildYields(rows, totalDivPre) {
+    var list = rows.filter(function (r) { return r.acquisition > 0 && r.divPre > 0; })
+      .map(function (r) {
+        return {
+          row: r,
+          yoc: (r.divPre / r.acquisition) * 100,
+          share: totalDivPre > 0 ? (r.divPre / totalDivPre) * 100 : 0
+        };
+      })
+      .sort(function (a, b) { return b.yoc - a.yoc; });
+
+    var bands = YIELD_BANDS.map(function (b) {
+      var members = list.filter(function (x) { return x.yoc >= b.min && x.yoc < b.max; });
+      return {
+        label: b.label,
+        count: members.length,
+        divSum: members.reduce(function (s, x) { return s + x.row.divPre; }, 0),
+        share: members.reduce(function (s, x) { return s + x.share; }, 0)
+      };
+    });
+
+    var highShare = list.filter(function (x) { return x.yoc >= 5; })
+      .reduce(function (s, x) { return s + x.share; }, 0);
+
+    return { list: list, bands: bands, highShare: highShare };
+  }
+
+  // 集中度: 上位いくつで配当全体の何%を占めるか。
+  function buildConcentration(rows, totalDivPre, groupBy) {
+    function topShare(entries, n) {
+      if (totalDivPre <= 0) return 0;
+      return entries.slice(0, n).reduce(function (s, e) { return s + e.value; }, 0) / totalDivPre * 100;
+    }
+    var byStock = groupBy(function (r) { return r.id; });
+    var bySector = groupBy(function (r) { return r.sector || "未分類"; });
+    // ハーフィンダール指数(構成比の二乗和)。1銘柄集中=10000、均等分散ほど小さい。
+    var hhi = totalDivPre > 0
+      ? byStock.reduce(function (s, e) { var p = e.value / totalDivPre * 100; return s + p * p; }, 0)
+      : 0;
+    return {
+      top3Stock: topShare(byStock, 3),
+      top5Stock: topShare(byStock, 5),
+      top3Sector: topShare(bySector, 3),
+      hhi: hhi,
+      // HHIの逆数は「実質的に何銘柄に分散できているか」を表す
+      effectiveStocks: hhi > 0 ? 10000 / hhi : 0
     };
   }
 
@@ -1471,6 +1601,172 @@
     }
   }
 
+  // ---------- 利回りと集中度 ----------
+  function renderYields(agg) {
+    var el = document.getElementById("yieldBody");
+    el.innerHTML = "";
+    var y = agg.yields, c = agg.concentration;
+
+    if (y.list.length === 0) {
+      var note = document.createElement("p");
+      note.className = "empty-note";
+      note.textContent = "取得額と配当が入力された銘柄がありません。";
+      el.appendChild(note);
+      return;
+    }
+
+    var portfolioYoc = agg.totalAcq > 0 ? (agg.totalDivPre / agg.totalAcq) * 100 : 0;
+    var summary = document.createElement("div");
+    summary.className = "change-summary";
+    summary.innerHTML =
+      '<div class="stat"><div class="label">簿価利回り(全体)</div><div class="value">' + fmtPct(portfolioYoc, 2) + '</div></div>' +
+      '<div class="stat"><div class="label">最高</div><div class="value">' + fmtPct(y.list[0].yoc, 2) + '</div></div>' +
+      '<div class="stat"><div class="label">最低</div><div class="value">' + fmtPct(y.list[y.list.length - 1].yoc, 2) + '</div></div>' +
+      '<div class="stat"><div class="label">上位3銘柄で占める配当</div><div class="value' + (c.top3Stock > 50 ? ' is-down' : '') + '">' + fmtPct(c.top3Stock) + '</div></div>' +
+      '<div class="stat"><div class="label">実質的な分散銘柄数</div><div class="value">' + c.effectiveStocks.toFixed(1) + '<span class="unit">銘柄相当</span></div></div>';
+    el.appendChild(summary);
+
+    // 利回り帯ごとの配当構成比
+    var bandWrap = document.createElement("div");
+    bandWrap.className = "band-list";
+    var bandMax = Math.max.apply(null, y.bands.map(function (b) { return b.share; }).concat([1]));
+    y.bands.forEach(function (b) {
+      var rowEl = document.createElement("div");
+      rowEl.className = "band-row" + (b.count === 0 ? " is-empty" : "");
+      rowEl.innerHTML =
+        '<div class="band-label">' + b.label + '</div>' +
+        '<div class="band-bar-slot"><div class="band-bar" style="width:' + (b.share / bandMax * 100) + '%"></div></div>' +
+        '<div class="band-share">' + fmtPct(b.share) + '</div>' +
+        '<div class="band-count">' + b.count + '銘柄</div>';
+      bandWrap.appendChild(rowEl);
+    });
+    el.appendChild(bandWrap);
+
+    if (y.highShare > 0) {
+      var warn = document.createElement("p");
+      warn.className = "calendar-note";
+      warn.textContent = "利回り5%以上の銘柄が配当全体の " + fmtPct(y.highShare) +
+        " を占めています。高利回りは減配余地の小ささと表裏なので、配当性向とあわせて確認してください。";
+      el.appendChild(warn);
+    }
+
+    // 銘柄別の簿価利回り
+    var wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    var table = document.createElement("table");
+    table.className = "data-table change-table";
+    table.innerHTML = '<thead><tr><th>銘柄</th><th>簿価利回り</th><th>取得額</th><th>年間配当</th><th>配当構成比</th></tr></thead>';
+    var tbody = document.createElement("tbody");
+    y.list.forEach(function (x) {
+      var tr = document.createElement("tr");
+      function td(label, text, cls) {
+        var cell = document.createElement("td");
+        cell.dataset.label = label;
+        if (cls) cell.className = cls;
+        cell.textContent = text;
+        return cell;
+      }
+      tr.appendChild(td("銘柄", (x.row.code ? x.row.code + " " : "") + (x.row.name || "無名銘柄")));
+      tr.appendChild(td("簿価利回り", fmtPct(x.yoc, 2), "num" + (x.yoc >= 5 ? " trend-down" : "")));
+      tr.appendChild(td("取得額", fmtYen(x.row.acquisition), "num"));
+      tr.appendChild(td("年間配当", fmtYen(x.row.divPre), "num"));
+      tr.appendChild(td("配当構成比", fmtPct(x.share), "num"));
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    el.appendChild(wrap);
+  }
+
+  // ---------- 将来見通し ----------
+  var SIM_MAX_YEARS = 40;
+
+  // 各年: 前年の配当が増配率ぶん伸び、そこに新規投資(積立+再投資)の配当が乗る。
+  function simulate(agg) {
+    var yieldRate = agg.totalAcq > 0 ? agg.totalDivPre / agg.totalAcq : 0;
+    var growth = state.sim.growth != null
+      ? state.sim.growth / 100
+      : (agg.changeRatePct != null ? agg.changeRatePct / 100 : 0);
+    var monthly = num(state.sim.monthlyInvest);
+    var goalAnnual = num(state.goals.monthly) * 12;
+
+    if (yieldRate <= 0) return null;
+
+    var annualDiv = agg.totalDivPre;
+    var principal = agg.totalAcq;
+    var series = [{ year: 0, div: annualDiv, principal: principal }];
+    var reached = null;
+
+    for (var y = 1; y <= SIM_MAX_YEARS; y++) {
+      // 保有中の銘柄が増配する分
+      var grown = annualDiv * (1 + growth);
+      // 新たに投じる資金(積立 + 税引後配当の再投資)
+      var invest = monthly * 12 + (state.sim.reinvest ? annualDiv * (1 - TAX_RATE) : 0);
+      principal += invest;
+      annualDiv = grown + invest * yieldRate;
+      series.push({ year: y, div: annualDiv, principal: principal });
+      if (reached === null && annualDiv >= goalAnnual && goalAnnual > 0) reached = y;
+    }
+    return {
+      series: series, reached: reached, growth: growth * 100,
+      yieldRate: yieldRate * 100, goalAnnual: goalAnnual,
+      // 追加投資だけで目標に届かせる場合に必要な額(増配・再投資を織り込まない)
+      neededNow: goalAnnual > agg.totalDivPre ? (goalAnnual - agg.totalDivPre) / yieldRate : 0
+    };
+  }
+
+  function renderSimulation(agg) {
+    var el = document.getElementById("simBody");
+    el.innerHTML = "";
+    var sim = simulate(agg);
+
+    if (!sim) {
+      var note = document.createElement("p");
+      note.className = "empty-note";
+      note.textContent = "取得額と配当を入力すると、目標までの見通しを試算します。";
+      el.appendChild(note);
+      return;
+    }
+
+    var reachText = sim.reached === null
+      ? SIM_MAX_YEARS + "年以内には届きません"
+      : sim.reached + "年後";
+    var y5 = sim.series[5], y10 = sim.series[10];
+
+    var summary = document.createElement("div");
+    summary.className = "change-summary";
+    summary.innerHTML =
+      '<div class="stat"><div class="label">目標到達</div><div class="value' + (sim.reached === null ? ' is-down' : '') + '">' + reachText + '</div></div>' +
+      '<div class="stat"><div class="label">5年後の月間配当</div><div class="value">' + fmtYen(y5.div / 12) + '</div></div>' +
+      '<div class="stat"><div class="label">10年後の月間配当</div><div class="value">' + fmtYen(y10.div / 12) + '</div></div>' +
+      '<div class="stat"><div class="label">今すぐ目標に届かせるなら</div><div class="value">' + (sim.neededNow > 0 ? "+" + fmtYen(sim.neededNow) : "達成済み") + '</div></div>';
+    el.appendChild(summary);
+
+    var chart = document.createElement("div");
+    chart.className = "calendar-chart sim-chart";
+    var shown = sim.series.filter(function (s) { return s.year <= 20; });
+    var max = Math.max.apply(null, shown.map(function (s) { return s.div; }));
+    shown.forEach(function (s) {
+      var col = document.createElement("div");
+      col.className = "cal-col" + (sim.reached !== null && s.year === sim.reached ? " is-goal" : "");
+      col.title = s.year + "年後 月間 " + fmtYen(s.div / 12) + " / 投資元本 " + fmtYen(s.principal);
+      col.innerHTML =
+        '<div class="cal-bar-slot"><div class="cal-bar" style="height:' + (max > 0 ? s.div / max * 100 : 0) + '%"></div></div>' +
+        '<div class="cal-month">' + (s.year % 5 === 0 ? s.year : "") + '</div>';
+      chart.appendChild(col);
+    });
+    el.appendChild(chart);
+
+    var note2 = document.createElement("p");
+    note2.className = "calendar-note";
+    note2.textContent = "横軸は経過年数(20年まで)。簿価利回り " + fmtPct(sim.yieldRate, 2) +
+      " が続き、保有銘柄が年 " + fmtPct(sim.growth, 1) + " 増配し、毎月 " + fmtYen(num(state.sim.monthlyInvest)) +
+      " を追加投資する前提での試算です" +
+      (state.sim.reinvest ? "(受取配当は税引後に再投資)" : "(配当の再投資はしない)") +
+      "。株価変動・減配・増配率の変化は考慮していません。";
+    el.appendChild(note2);
+  }
+
   // ---------- 増配・減配の状況 ----------
   function fmtSignedYen(n) {
     var v = Math.round(n);
@@ -1549,6 +1845,29 @@
     el.appendChild(wrap);
   }
 
+  function bindSimInputs() {
+    var invest = document.getElementById("simMonthlyInvest");
+    var growth = document.getElementById("simGrowth");
+    var reinvest = document.getElementById("simReinvest");
+
+    invest.value = state.sim.monthlyInvest;
+    growth.value = state.sim.growth == null ? "" : state.sim.growth;
+    reinvest.checked = !!state.sim.reinvest;
+
+    invest.addEventListener("input", function () {
+      state.sim.monthlyInvest = num(invest.value);
+      save(); renderSimulation(aggregate());
+    });
+    growth.addEventListener("input", function () {
+      state.sim.growth = growth.value.trim() === "" ? null : parseFloat(growth.value);
+      save(); renderSimulation(aggregate());
+    });
+    reinvest.addEventListener("change", function () {
+      state.sim.reinvest = reinvest.checked;
+      save(); renderSimulation(aggregate());
+    });
+  }
+
   function dashboardTemplate() {
     var tabsHtml = AXIS_ORDER.map(function (k, i) {
       return '<button class="axis-tab' + (i === 0 ? ' active' : '') + '" data-axis="' + k + '">' + AXIS_CONFIG[k].label + '</button>';
@@ -1575,11 +1894,30 @@
       '  <div id="changeSummary"></div>' +
       '</div>' +
       '<div class="panel">' +
-      '  <h2><span class="chap">六</span>目標対比</h2>' +
+      '  <h2><span class="chap">六</span>利回りと集中度 <span class="hint">利回りは取得価格ベース(簿価利回り)</span></h2>' +
+      '  <div id="yieldBody"></div>' +
+      '</div>' +
+      '<div class="panel">' +
+      '  <h2><span class="chap">七</span>目標対比</h2>' +
       '  <div class="goal-actual" id="goalActual"></div>' +
       '</div>' +
       '<div class="panel">' +
-      '  <h2><span class="chap">七</span>分散ガイドライン</h2>' +
+      '  <h2><span class="chap">八</span>将来見通し <span class="hint">前提を変えると試算が変わります</span></h2>' +
+      '  <div class="grid-inputs sim-inputs">' +
+      '    <label class="field">毎月の追加投資額(円)' +
+      '      <input type="number" id="simMonthlyInvest" min="0" step="10000">' +
+      '    </label>' +
+      '    <label class="field">想定増配率(%/年)' +
+      '      <input type="number" id="simGrowth" step="0.1" placeholder="空欄なら実績値">' +
+      '    </label>' +
+      '    <label class="field field-check">' +
+      '      <span><input type="checkbox" id="simReinvest"> 受取配当を再投資する</span>' +
+      '    </label>' +
+      '  </div>' +
+      '  <div id="simBody"></div>' +
+      '</div>' +
+      '<div class="panel">' +
+      '  <h2><span class="chap">九</span>分散ガイドライン</h2>' +
       '  <div class="badges" id="guideBadges"></div>' +
       '</div>';
   }
@@ -1608,6 +1946,7 @@
         calendarMode = btn.dataset.mode;
         renderCalendar(aggregate());
       });
+      bindSimInputs();
     }
     var agg = aggregate();
 
@@ -1615,6 +1954,9 @@
     renderComposition(agg);
     renderCalendar(agg);
     renderChangeSummary(agg);
+    renderYields(agg);
+    renderSimulation(agg);
+    renderBackupStatus();
 
     // goal vs actual
     var g = state.goals;
@@ -1718,6 +2060,7 @@
     renderTable();
     renderSectorTable();
     renderDashboard();
+    renderBackupStatus();
     var dl = document.getElementById("dateline");
     if (dl) {
       var d = new Date();
