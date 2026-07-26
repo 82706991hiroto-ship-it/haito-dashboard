@@ -878,7 +878,7 @@
     shares: ["保有数量", "保有数", "数量", "口数", "株数", "保有株数"],
     cost: ["取得単価", "平均取得単価", "平均取得価額", "平均単価", "取得価額", "取得価格", "購入価格", "買付単価", "簿価単価"],
     sector: ["業種", "業種名"],
-    account: ["口座", "口座区分", "預り区分", "口座種別"],
+    account: ["口座", "口座区分", "預り区分", "口座種別", "口座種類", "保管区分", "預り", "課税区分"],
     div: ["1株配当", "予想配当", "配当金(1株)", "1株当り配当金"]
   };
 
@@ -893,48 +893,101 @@
     });
   }
 
+  // 「保有数量［株］」「平均取得価額［円］」のように単位が付く列名があるため、
+  // 最初の括弧以降を落としてから同義語と突き合わせる。
+  // 「(内訳　通常数量[株])」のような括弧で始まる列は空文字になり、どれにも一致しない。
+  function normalizeHeader(cell) {
+    return String(cell || "").replace(/[［\[(（].*$/, "").replace(/[\s　]/g, "").trim();
+  }
+
+  var HEADER_LOOKUP = (function () {
+    var map = {};
+    Object.keys(HEADER_SYNONYMS).forEach(function (key) {
+      HEADER_SYNONYMS[key].forEach(function (label) {
+        var n = normalizeHeader(label);
+        if (n && map[n] === undefined) map[n] = key;
+      });
+    });
+    return map;
+  })();
+
   function matchHeaderColumn(cell) {
-    var trimmed = cell.trim();
-    for (var key in HEADER_SYNONYMS) {
-      if (HEADER_SYNONYMS[key].indexOf(trimmed) !== -1) return key;
-    }
+    var n = normalizeHeader(cell);
+    return n ? (HEADER_LOOKUP[n] || null) : null;
+  }
+
+  function buildColMap(cells) {
+    if (cells.length < 3) return null;
+    var map = {};
+    cells.forEach(function (c, idx) {
+      var key = matchHeaderColumn(c);
+      if (key && map[key] === undefined) map[key] = idx;
+    });
+    return (map.code !== undefined && (map.shares !== undefined || map.cost !== undefined)) ? map : null;
+  }
+
+  function accountFromText(text) {
+    if (/nisa|ニーサ/i.test(text)) return "NISA";
+    if (/特定|一般/.test(text)) return "特定";
     return null;
+  }
+
+  // 楽天証券のように口座列を持たず「■特定口座」「■NISA成長投資枠」という
+  // 見出しでブロックが分かれる形式があるので、その行を口座の切り替えとして扱う。
+  function detectSectionAccount(cells) {
+    var filled = cells.filter(function (c) { return c && c.trim() !== ""; });
+    if (filled.length === 0 || filled.length > 2) return null;
+    return accountFromText(filled.join(" "));
   }
 
   function parseHeaderTableFormat(text) {
     var lines = text.replace(/\r/g, "").split("\n").map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
     if (lines.length < 2) return { results: [], skipped: 0 };
 
-    var headerIdx = -1, colMap = null;
-    for (var i = 0; i < Math.min(lines.length, 5); i++) {
-      var cells = splitRow(lines[i]);
-      if (cells.length < 3) continue;
-      var map = {};
-      cells.forEach(function (c, idx) { var key = matchHeaderColumn(c); if (key) map[key] = idx; });
-      if (map.code !== undefined && (map.shares !== undefined || map.cost !== undefined)) {
-        headerIdx = i; colMap = map; break;
-      }
-    }
-    if (!colMap) return { results: [], skipped: 0 };
-
+    var colMap = null, sectionAccount = null;
     var results = [], skipped = 0;
-    for (var r = headerIdx + 1; r < lines.length; r++) {
-      var row = splitRow(lines[r]);
+
+    lines.forEach(function (line) {
+      var row = splitRow(line);
+
+      var marker = detectSectionAccount(row);
+      if (marker) {
+        // セクションが変わると列構成も変わりうるので、見出しを取り直す
+        sectionAccount = marker;
+        colMap = null;
+        return;
+      }
+
+      var map = buildColMap(row);
+      if (map) { colMap = map; return; }
+
+      if (!colMap) return;
+
       var code = colMap.code !== undefined ? (row[colMap.code] || "").trim() : "";
-      if (!/^[0-9][0-9A-Za-z]{2,4}$/.test(code)) { skipped++; continue; }
+      if (!/^[0-9][0-9A-Za-z]{2,4}$/.test(code)) { skipped++; return; }
+
       var name = colMap.name !== undefined ? cleanName(row[colMap.name]) : "";
       var sectorRaw = colMap.sector !== undefined ? (row[colMap.sector] || "").trim() : "";
+      // 口座は「列があればその値」→「無ければ直前のセクション見出し」→「既定は特定」の順で決める
       var accountRaw = colMap.account !== undefined ? (row[colMap.account] || "").trim() : "";
+      var account = accountFromText(accountRaw) || sectionAccount || "特定";
+
+      var autoDivs = dividendsFor(code) || [];
+      var div = colMap.div !== undefined ? parsePasteNum(row[colMap.div]) : "";
+      if (div === "" && autoDivs.length > 0) div = autoDivs[0];
+      var prevDiv = autoDivs.length > 1 ? autoDivs[1] : undefined;
+
       results.push({
         code: code,
         name: name || nameFor(code) || code,
         sector: sectorFor(code, sectorRaw),
-        account: /nisa/i.test(accountRaw) ? "NISA" : "特定",
+        account: account,
         shares: colMap.shares !== undefined ? parsePasteNum(row[colMap.shares]) : "",
         cost: colMap.cost !== undefined ? parsePasteNum(row[colMap.cost]) : "",
-        div: colMap.div !== undefined ? parsePasteNum(row[colMap.div]) : ""
+        div: div,
+        prevDiv: prevDiv
       });
-    }
+    });
     return { results: results, skipped: skipped };
   }
 
@@ -977,8 +1030,11 @@
     }
     var merged = mergePastedResults(parsed.results);
     save(); renderTable(); renderDashboard();
-    var msg = merged.added + "件追加、" + merged.updated + "件更新しました。";
-    if (parsed.skipped > 0) msg += "(形式が一致しない行を" + parsed.skipped + "件スキップ)";
+    // 口座の判定は誤ると税額・利回りがずれるので、内訳を出して気づけるようにする
+    var nisa = parsed.results.filter(function (r) { return r.account === "NISA"; }).length;
+    var msg = merged.added + "件追加、" + merged.updated + "件更新しました。"
+      + "(NISA " + nisa + "件 / 特定 " + (parsed.results.length - nisa) + "件)";
+    if (parsed.skipped > 0) msg += " 形式が一致しない行を" + parsed.skipped + "件スキップしました。";
     statusEl.textContent = msg;
     return true;
   }
