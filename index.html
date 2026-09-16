@@ -227,6 +227,14 @@
     opacity: .92; text-shadow: 0 1px 2px rgba(0,0,0,.45);
     font-variant-numeric: tabular-nums; white-space: nowrap;
   }
+  /* 銘柄のマーク。実ロゴは使えないので、社名から文字と色を決めて銘柄ごとに固定する */
+  .tm-mark {
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    border-radius: 50%; color: #fff; font-weight: 700; line-height: 1;
+    letter-spacing: .02em; white-space: nowrap; margin-bottom: 5px;
+    box-shadow: 0 0 0 2px rgba(255,255,255,.6), 0 1px 3px rgba(0,0,0,.35);
+  }
+
   /* タイルを押すと保有銘柄明細の該当行へ飛ぶ */
   .tm-tile { cursor: pointer; }
   .tm-tile:hover { z-index: 2; box-shadow: inset 0 0 0 2px rgba(255,255,255,.9); }
@@ -1612,6 +1620,24 @@
   var HEAT_NA = "#2b313a";
   var YIELD_RAMP = ["#3b3c34", "#6a5822", "#98791c", "#c69c17", "#edc02d"];
 
+  // 実のロゴ画像は使わない(商標であり、外部に取りに行くと保有銘柄がその先に漏れる)。
+  // 代わりに社名の頭の文字と、コードから決まる色で銘柄ごとに固定のマークを作る。
+  function markText(name) {
+    var s = String(name || "").trim();
+    if (!s) return "?";
+    var half = s.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function (c) {
+      return String.fromCharCode(c.charCodeAt(0) - 0xFEE0);
+    });
+    var latin = half.match(/^[A-Za-z0-9]+/);
+    if (latin) return latin[0].slice(0, 4).toUpperCase();
+    return half.slice(0, 2);
+  }
+  function markColor(seed) {
+    var str = String(seed || "?"), h = 0;
+    for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 360;
+    return "hsl(" + h + "deg 55% 40%)";
+  }
+
   function growthStep(a) { return a >= 20 ? 3 : a >= 10 ? 2 : a >= 3 ? 1 : 0; }
   function yieldStep(y) { return y >= 5 ? 4 : y >= 4 ? 3 : y >= 3 ? 2 : y >= 2 ? 1 : 0; }
 
@@ -1756,6 +1782,19 @@
         // タイルの大きさに合わせて文字を拡縮し、市場ヒートマップの見え方に近づける
         if (tr.w > 30 && tr.h > 15) {
           var fs = Math.max(9.5, Math.min(18, Math.sqrt(tr.w * tr.h) / 5.6));
+          // マークは名前と数字を押し出さない大きさのタイルにだけ出す
+          if (tr.w > 64 && tr.h > 78) {
+            var label = markText(name);
+            var ms = Math.max(18, Math.min(42, Math.sqrt(tr.w * tr.h) / 4.2));
+            var markEl = document.createElement("div");
+            markEl.className = "tm-mark";
+            markEl.style.width = ms.toFixed(1) + "px";
+            markEl.style.height = ms.toFixed(1) + "px";
+            markEl.style.fontSize = (ms * (label.length >= 4 ? 0.27 : label.length === 3 ? 0.33 : 0.42)).toFixed(1) + "px";
+            markEl.style.background = markColor(row.code || name);
+            markEl.textContent = label;
+            tile.appendChild(markEl);
+          }
           var nameEl = document.createElement("div");
           nameEl.className = "tm-name";
           nameEl.style.fontSize = fs.toFixed(1) + "px";
