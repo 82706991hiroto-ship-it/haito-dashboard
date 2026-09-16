@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>高配当株ポートフォリオダッシュボード</title>
+<meta name="description" content="保有する高配当株を入力すると、業種別・銘柄別の配当構成比、配当金カレンダー、増配率、目標達成の見通しまで自動で集計します。登録不要・データは端末内にのみ保存。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23e8543f%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2245%22%20font-size%3D%2238%22%20font-family%3D%22Helvetica%2CArial%2Csans-serif%22%20font-weight%3D%22bold%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3E%C2%A5%3C%2Ftext%3E%3C%2Fsvg%3E">
+<meta property="og:type" content="website">
+<meta property="og:title" content="高配当株ポートフォリオダッシュボード">
+<meta property="og:description" content="保有する高配当株を入力すると、業種別・銘柄別の配当構成比、配当金カレンダー、増配率、目標達成の見通しまで自動で集計します。登録不要・データは端末内にのみ保存。">
+<meta property="og:url" content="https://82706991hiroto-ship-it.github.io/haito-dashboard/">
+<meta property="og:image" content="https://82706991hiroto-ship-it.github.io/haito-dashboard/og.png">
+<meta property="og:site_name" content="高配当株ポートフォリオダッシュボード">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
@@ -59,7 +68,7 @@
     font-family: var(--font-sans); font-size: 16px;
     -webkit-text-size-adjust: 100%;
   }
-  .app { max-width: 860px; margin: 0 auto; padding: 16px 16px 72px; }
+  .app { max-width: 1120px; margin: 0 auto; padding: 16px 16px 72px; }
 
   /* ---- ヘッダー ---- */
   header.top {
@@ -110,7 +119,7 @@
   /* ---- テーブル ---- */
   table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   table.data-table th, table.data-table td {
-    padding: 11px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap;
+    padding: 10px 7px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap;
   }
   table.data-table thead th { font-size: 11px; color: var(--text-2); font-weight: 500; }
   table.data-table th { color: var(--text-2); font-weight: 500; }
@@ -119,7 +128,10 @@
     width: 100%; min-width: 64px; font-size: 14px; padding: 8px 10px; font-family: inherit;
     border-radius: 9px; border: 1px solid transparent; background: var(--field); color: var(--text);
   }
-  table.data-table input[type=number] { width: 96px; font-variant-numeric: tabular-nums; }
+  table.data-table input[type=number] { width: 84px; font-variant-numeric: tabular-nums; }
+  table.data-table input[data-field="name"] { min-width: 150px; }
+  table.data-table input[data-field="code"] { width: 76px; font-variant-numeric: tabular-nums; }
+  table.data-table .months-input { width: 74px; }
   table.data-table input:focus, table.data-table select:focus { outline: none; border-color: var(--accent); background: var(--card); }
   .table-wrap { overflow-x: auto; }
   .row-actions button {
@@ -356,6 +368,22 @@
     .composition-body .treemap { flex-basis: 100%; }
     .treemap { height: 300px; }
   }
+  /* 対になるサイトへの導線 */
+  .sibling {
+    display: flex; align-items: center; gap: 12px; text-decoration: none;
+    background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 15px 18px; margin: 0 0 16px; color: var(--text);
+  }
+  .sibling:hover { background: var(--field); }
+  .sibling .ico {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px;
+  }
+  .sibling .txt { flex: 1; min-width: 0; }
+  .sibling .ttl { font-size: 13.5px; font-weight: 700; }
+  .sibling .sub { font-size: 11.5px; color: var(--text-2); margin-top: 3px; }
+  .sibling .arw { color: var(--muted); flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -420,8 +448,8 @@
         <thead>
           <tr>
             <th>コード</th><th>銘柄名</th><th>業種</th><th>口座</th>
-            <th>株数</th><th>取得単価(円)</th><th>年間配当/株(税引前,円)</th>
-            <th>前年配当/株(円)</th><th>配当動向</th><th>権利確定月</th>
+            <th>株数</th><th>取得単価(円)</th><th>配当/株(税引前)</th>
+            <th>前年配当/株</th><th>配当動向</th><th>権利確定月</th>
             <th>年間配当金</th><th>取得額</th><th></th>
           </tr>
         </thead>
@@ -489,6 +517,11 @@
     </div>
   </details>
 
+  <a class="sibling" href="../ir-check/">
+    <span class="ico">✓</span>
+    <span class="txt"><span class="ttl">高配当株チェックシート</span><span class="sub">買う前の1銘柄を、IRバンクの10項目で採点する</span></span>
+    <span class="arw">›</span>
+  </a>
   <footer class="foot">
     <span class="note-label">注記</span>税引後の配当金は特定口座を源泉徴収税率20.315%として計算し、NISA口座は非課税として計算しています。実際の税額は制度改正や損益通算等により異なる場合があります。投資判断は自己責任で行ってください。
   </footer>
@@ -708,6 +741,8 @@
     input.type = type;
     input.dataset.field = field;
     if (field === "code") input.placeholder = "例: 8306";
+    // 長い銘柄名は列内で見切れるので、ホバーで全体が読めるようにする
+    if (field === "name") input.title = h.name || "";
     if (type === "number") { input.min = "0"; input.step = "any"; input.inputMode = "decimal"; }
     if (field === "div" || field === "prevDiv") {
       var autoDivs = dividendsFor(h.code);
