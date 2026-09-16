@@ -39,6 +39,7 @@
     --s1: #2f6fd0; --s2: #5b93e6; --s3: #8fb7f0; --s4: #f0a63c;
     --s5: #58b79a; --s6: #9b7fd4; --s7: #94a3b8; --s8: #d98080;
     --other: #cbd3de;
+    --heat-bg: #151a22;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -59,6 +60,7 @@
       --s1: #5b93e6; --s2: #8fb7f0; --s3: #b9d2f6; --s4: #f0b357;
       --s5: #6cc9aa; --s6: #b198e0; --s7: #a6b2c1; --s8: #e59797;
       --other: #3a3f48;
+      --heat-bg: #0e1319;
     }
   }
   * { box-sizing: border-box; }
@@ -189,24 +191,66 @@
   .axis-tab.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 700; }
   .axis-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  /* ---- 構成(ツリーマップ) ---- */
-  .composition-body { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
-  .composition-body .treemap { flex: 2 1 400px; }
-  .treemap { position: relative; width: 100%; height: 340px; }
-  .tm-tile {
-    position: absolute; box-sizing: border-box; border: 2px solid var(--card);
-    border-radius: 8px; overflow: hidden; padding: 5px 7px; color: #fff;
-    font-size: 11px; line-height: 1.35; cursor: default;
+  /* ---- 構成(ヒートマップ) ---- */
+  .heat-controls { display: grid; gap: 9px; margin-bottom: 14px; }
+  .ctl-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ctl-label {
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    letter-spacing: .08em; min-width: 3.4em; flex-shrink: 0;
   }
-  .tm-tile .tm-name { font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,.28); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tm-tile .tm-pct { opacity: .92; text-shadow: 0 1px 2px rgba(0,0,0,.28); font-variant-numeric: tabular-nums; }
+  .ctl-row .axis-tabs { margin-bottom: 0; gap: 6px; }
+  .ctl-row .axis-tab { padding: 6px 13px; font-size: 12px; }
 
-  .legend { list-style: none; margin: 0; padding: 0; font-size: 12.5px; flex: 1 1 200px; max-height: 340px; overflow-y: auto; }
-  .legend li { display: flex; align-items: center; gap: 9px; padding: 8px 0; border-bottom: 1px solid var(--line); }
-  .legend li:last-child { border-bottom: none; }
-  .legend .swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
-  .legend .lname { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .legend .lpct { color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .treemap {
+    position: relative; width: 100%; height: 460px;
+    background: var(--heat-bg); border-radius: 12px; overflow: hidden;
+  }
+  .treemap .empty-note { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #7b8697; }
+  /* 業種名の帯。参照した市場ヒートマップと同じく、ブロックの頭に小さく置く */
+  .tm-glabel {
+    position: absolute; box-sizing: border-box; display: flex; align-items: center;
+    padding: 0 3px; color: #97a3b4; font-size: 10.5px; font-weight: 700;
+    letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    pointer-events: none;
+  }
+  .tm-tile {
+    position: absolute; box-sizing: border-box; border: 1px solid var(--heat-bg);
+    border-radius: 3px; overflow: hidden; padding: 1px 3px; color: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    line-height: 1.2; cursor: default; text-align: center;
+  }
+  .tm-tile .tm-name {
+    font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,.45);
+    max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tm-tile .tm-pct {
+    opacity: .92; text-shadow: 0 1px 2px rgba(0,0,0,.45);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+
+  /* 色の目盛り */
+  .heat-scale { display: flex; align-items: stretch; gap: 2px; margin: 12px 0 0; flex-wrap: wrap; }
+  .heat-scale .hs-cell {
+    flex: 1 1 0; min-width: 46px; text-align: center; font-size: 10.5px;
+    color: var(--text-2); font-variant-numeric: tabular-nums;
+  }
+  .heat-scale .hs-chip { height: 9px; border-radius: 2px; margin-bottom: 5px; }
+  .heat-scale .hs-cell.is-sep { margin-left: 12px; }
+  .heat-note { font-size: 12px; color: var(--muted); line-height: 1.8; margin: 10px 0 0; }
+
+  .legend {
+    list-style: none; margin: 18px 0 0; padding: 0; font-size: 12.5px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+    column-gap: 22px;
+  }
+  .legend li {
+    display: grid; grid-template-columns: 1fr 54px 4.4em; align-items: center; gap: 9px;
+    padding: 8px 0; border-bottom: 1px solid var(--line);
+  }
+  .legend .lname { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend .lbar { height: 7px; border-radius: 999px; background: var(--field); overflow: hidden; }
+  .legend .lbar i { display: block; height: 100%; border-radius: 999px; min-width: 2px; }
+  .legend .lpct { color: var(--text-2); text-align: right; font-variant-numeric: tabular-nums; }
 
   /* ---- 配当金カレンダー ---- */
   .calendar-lead { display: flex; flex-wrap: wrap; gap: 8px 10px; font-size: 12.5px; color: var(--text-2); margin-bottom: 16px; }
@@ -366,8 +410,9 @@
     .band-label { width: 8em; font-size: 12px; }
     .band-count { display: none; }
     .field-check { justify-content: flex-start; }
-    .composition-body .treemap { flex-basis: 100%; }
-    .treemap { height: 300px; }
+    .treemap { height: 400px; }
+    .ctl-label { min-width: 0; }
+    .heat-scale .hs-cell { min-width: 40px; font-size: 9.5px; }
   }
   /* 初回訪問の案内 */
   .onboard {
@@ -1531,9 +1576,76 @@
     }
   }
 
-  // 業種別/景気感応度別/口座別/銘柄別のいずれも「グループ→銘柄」の2階層ツリーマップとして
-  // 同じロジックで描画する(銘柄別はグループ=銘柄そのものになるため実質1階層になる)。
-  function renderTreemap(container, agg, axisKey) {
+  // ---------- 色の尺度 ----------
+  // 値上がり/値下がりではなく、配当固有の指標(増配率・簿価利回り)を色に割り当てる。
+  var GROWTH_UP = ["#2f4a3a", "#256b41", "#199a4f", "#25c463"];
+  var GROWTH_DOWN = ["#553438", "#8c2f36", "#c02b33", "#e04048"];
+  var GROWTH_FLAT = "#474e59";
+  var HEAT_NA = "#2b313a";
+  var YIELD_RAMP = ["#3b3c34", "#6a5822", "#98791c", "#c69c17", "#edc02d"];
+
+  function growthStep(a) { return a >= 20 ? 3 : a >= 10 ? 2 : a >= 3 ? 1 : 0; }
+  function yieldStep(y) { return y >= 5 ? 4 : y >= 4 ? 3 : y >= 3 ? 2 : y >= 2 ? 1 : 0; }
+
+  function growthOf(r) {
+    var prev = num(r.prevDiv);
+    if (r.prevDiv === "" || r.prevDiv == null || prev <= 0) return null;
+    return ((num(r.div) - prev) / prev) * 100;
+  }
+  function bookYieldOf(r) {
+    var c = num(r.cost);
+    return c > 0 ? (num(r.div) / c) * 100 : null;
+  }
+  function fmtSigned(n) { return (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n).toFixed(1) + "%"; }
+
+  var COLOR_MODES = {
+    growth: {
+      label: "増配率",
+      value: growthOf,
+      color: function (g) {
+        if (g === null) return HEAT_NA;
+        if (g === 0) return GROWTH_FLAT;
+        return (g > 0 ? GROWTH_UP : GROWTH_DOWN)[growthStep(Math.abs(g))];
+      },
+      text: function (g) { return g === null ? "―" : fmtSigned(g); },
+      note: "前年の1株配当との比較で塗り分けています。前年配当が空欄の銘柄はグレーです。",
+      scale: [
+        { c: GROWTH_DOWN[3], t: "−20%↓" }, { c: GROWTH_DOWN[2], t: "−10%" },
+        { c: GROWTH_DOWN[1], t: "−3%" }, { c: GROWTH_FLAT, t: "据え置き" },
+        { c: GROWTH_UP[1], t: "+3%" }, { c: GROWTH_UP[2], t: "+10%" },
+        { c: GROWTH_UP[3], t: "+20%↑" }, { c: HEAT_NA, t: "不明", sep: true }
+      ]
+    },
+    yield: {
+      label: "簿価利回り",
+      value: bookYieldOf,
+      color: function (y) { return y === null || !isFinite(y) || y <= 0 ? HEAT_NA : YIELD_RAMP[yieldStep(y)]; },
+      text: function (y) { return y === null || !isFinite(y) ? "―" : y.toFixed(1) + "%"; },
+      note: "取得価格に対する利回りです。濃いほど高利回りです。",
+      scale: [
+        { c: YIELD_RAMP[0], t: "2%未満" }, { c: YIELD_RAMP[1], t: "2〜3%" },
+        { c: YIELD_RAMP[2], t: "3〜4%" }, { c: YIELD_RAMP[3], t: "4〜5%" },
+        { c: YIELD_RAMP[4], t: "5%以上" }, { c: HEAT_NA, t: "不明", sep: true }
+      ]
+    },
+    group: {
+      label: "グループ",
+      value: null,
+      color: null,
+      text: null,
+      note: "分け方で選んだグループごとに同じ色を割り当てます。",
+      scale: null
+    }
+  };
+  var COLOR_ORDER = ["growth", "yield", "group"];
+  var currentColor = "growth";
+
+  // ---------- ヒートマップ ----------
+  // 業種別/景気感応度別/口座別/銘柄別のいずれも「グループ→銘柄」の2階層で描画し、
+  // グループの頭に名前の帯を置く(銘柄別はグループ=銘柄なので帯を出さない)。
+  var HEAT_GAP = 3, HEAT_HEAD = 16;
+
+  function renderTreemap(container, agg, axisKey, colorKey) {
     container.innerHTML = "";
     var rect = container.getBoundingClientRect();
     var W = rect.width, H = rect.height;
@@ -1561,38 +1673,67 @@
     var colorMap = {};
     groups.forEach(function (g, i) { colorMap[g.key] = colorForIndex(i); });
 
+    var mode = COLOR_MODES[colorKey] || COLOR_MODES.group;
     var groupItems = groups.map(function (g) { return { value: g.value, key: g.key, label: g.label }; });
     var groupRects = layoutTreemap(groupItems, 0, 0, W, H);
 
     groupRects.forEach(function (gr) {
       var group = groupMap[gr.item.key];
+      var showHead = axisKey !== "stock" && gr.w >= 58 && gr.h >= 48;
+      var head = showHead ? HEAT_HEAD : 0;
+      var ix = gr.x + HEAT_GAP, iy = gr.y + HEAT_GAP + head;
+      var iw = Math.max(0, gr.w - HEAT_GAP * 2), ih = Math.max(0, gr.h - HEAT_GAP * 2 - head);
+
+      if (showHead) {
+        var lab = document.createElement("div");
+        lab.className = "tm-glabel";
+        lab.style.left = ix + "px";
+        lab.style.top = (gr.y + HEAT_GAP) + "px";
+        lab.style.width = iw + "px";
+        lab.style.height = head + "px";
+        lab.textContent = group.label;
+        container.appendChild(lab);
+      }
+
       var stockItems = group.rows.slice().sort(function (a, b) { return b.divPre - a.divPre; })
         .map(function (r) { return { value: r.divPre, row: r }; })
         .filter(function (x) { return x.value > 0; });
-      var stockRects = layoutTreemap(stockItems, gr.x, gr.y, gr.w, gr.h);
-      var baseColor = colorMap[gr.item.key];
+      var stockRects = layoutTreemap(stockItems, ix, iy, iw, ih);
 
       stockRects.forEach(function (tr) {
         if (tr.w < 0.5 || tr.h < 0.5) return;
+        var row = tr.item.row;
+        var pct = (tr.item.value / agg.totalDivPre) * 100;
         var tile = document.createElement("div");
         tile.className = "tm-tile";
         tile.style.left = tr.x + "px";
         tile.style.top = tr.y + "px";
         tile.style.width = tr.w + "px";
         tile.style.height = tr.h + "px";
-        tile.style.background = baseColor;
-        var pct = (tr.item.value / agg.totalDivPre) * 100;
-        var nisaMark = tr.item.row.account === "NISA" ? "◆ " : "";
-        tile.title = group.label + " / " + (tr.item.row.name || "無名銘柄") + " " + fmtPct(pct) + " " + fmtYen(tr.item.value);
-        if (tr.w > 34 && tr.h > 16) {
+
+        var metric = mode.value ? mode.value(row) : null;
+        tile.style.background = mode.color ? mode.color(metric) : colorMap[gr.item.key];
+        var valueText = mode.text ? mode.text(metric) : fmtPct(pct);
+
+        var nisaMark = row.account === "NISA" ? "◆ " : "";
+        var name = row.name || row.code || "無名銘柄";
+        tile.title = group.label + " / " + name + "\n構成比 " + fmtPct(pct) + " (" + fmtYen(tr.item.value) + ")"
+          + "\n増配率 " + COLOR_MODES.growth.text(growthOf(row))
+          + " / 簿価利回り " + COLOR_MODES.yield.text(bookYieldOf(row));
+
+        // タイルの大きさに合わせて文字を拡縮し、市場ヒートマップの見え方に近づける
+        if (tr.w > 30 && tr.h > 15) {
+          var fs = Math.max(9.5, Math.min(18, Math.sqrt(tr.w * tr.h) / 5.6));
           var nameEl = document.createElement("div");
           nameEl.className = "tm-name";
-          nameEl.textContent = nisaMark + (tr.item.row.name || tr.item.row.code || "無名銘柄");
+          nameEl.style.fontSize = fs.toFixed(1) + "px";
+          nameEl.textContent = nisaMark + name;
           tile.appendChild(nameEl);
-          if (tr.h > 30) {
+          if (tr.h > 28) {
             var pctEl = document.createElement("div");
             pctEl.className = "tm-pct";
-            pctEl.textContent = fmtPct(pct);
+            pctEl.style.fontSize = Math.max(9, fs * 0.8).toFixed(1) + "px";
+            pctEl.textContent = valueText;
             tile.appendChild(pctEl);
           }
         }
@@ -1603,7 +1744,23 @@
     return { groups: groups, colorMap: colorMap };
   }
 
-  function renderLegendList(container, groups, colorMap, total) {
+  function renderHeatScale(container, colorKey) {
+    container.innerHTML = "";
+    var mode = COLOR_MODES[colorKey] || COLOR_MODES.group;
+    if (!mode.scale) return;
+    mode.scale.forEach(function (b) {
+      var cell = document.createElement("div");
+      cell.className = "hs-cell" + (b.sep ? " is-sep" : "");
+      var chip = document.createElement("div");
+      chip.className = "hs-chip";
+      chip.style.background = b.c;
+      cell.appendChild(chip);
+      cell.appendChild(document.createTextNode(b.t));
+      container.appendChild(cell);
+    });
+  }
+
+  function renderLegendList(container, groups, colorMap, total, colorKey) {
     container.innerHTML = "";
     if (!groups || groups.length === 0 || total <= 0) {
       var li0 = document.createElement("li");
@@ -1616,29 +1773,41 @@
     var direct = groups.slice(0, maxDirect);
     var rest = groups.slice(maxDirect);
     var restSum = rest.reduce(function (s, g) { return s + g.value; }, 0);
-    direct.forEach(function (g) {
+    var top = groups[0].value || 1;
+
+    function addRow(label, value, color) {
       var li = document.createElement("li");
-      var sw = document.createElement("span"); sw.className = "swatch"; sw.style.background = colorMap[g.key];
-      var name = document.createElement("span"); name.className = "lname"; name.textContent = g.label; name.title = g.label;
-      var pct = document.createElement("span"); pct.className = "lpct"; pct.textContent = fmtPct((g.value / total) * 100);
-      li.appendChild(sw); li.appendChild(name); li.appendChild(pct);
+      var name = document.createElement("span");
+      name.className = "lname"; name.textContent = label; name.title = label;
+      var bar = document.createElement("span"); bar.className = "lbar";
+      var fill = document.createElement("i");
+      fill.style.width = Math.max(2, (value / top) * 100) + "%";
+      fill.style.background = color;
+      bar.appendChild(fill);
+      var pct = document.createElement("span");
+      pct.className = "lpct"; pct.textContent = fmtPct((value / total) * 100);
+      li.appendChild(name); li.appendChild(bar); li.appendChild(pct);
       container.appendChild(li);
+    }
+
+    // ヒートマップを指標で塗っているときは、ここの色は地図と対応しないので中立色にする
+    var useGroupColor = colorKey === "group";
+    direct.forEach(function (g) {
+      addRow(g.label, g.value, useGroupColor ? colorMap[g.key] : cssVar("--s2"));
     });
     if (rest.length) {
-      var li2 = document.createElement("li");
-      var sw2 = document.createElement("span"); sw2.className = "swatch"; sw2.style.background = cssVar("--other");
-      var name2 = document.createElement("span"); name2.className = "lname"; name2.textContent = "その他(" + rest.length + ")";
-      var pct2 = document.createElement("span"); pct2.className = "lpct"; pct2.textContent = fmtPct((restSum / total) * 100);
-      li2.appendChild(sw2); li2.appendChild(name2); li2.appendChild(pct2);
-      container.appendChild(li2);
+      addRow("その他(" + rest.length + ")", restSum, useGroupColor ? cssVar("--other") : cssVar("--s3"));
     }
   }
 
   function renderComposition(agg) {
-    var result = renderTreemap(document.getElementById("treemapEl"), agg, currentAxis);
+    var result = renderTreemap(document.getElementById("treemapEl"), agg, currentAxis, currentColor);
+    renderHeatScale(document.getElementById("heatScale"), currentColor);
+    var noteEl = document.getElementById("heatNote");
+    if (noteEl) noteEl.textContent = (COLOR_MODES[currentColor] || COLOR_MODES.group).note;
     var legendEl = document.getElementById("axisLegend");
     if (result) {
-      renderLegendList(legendEl, result.groups, result.colorMap, agg.totalDivPre);
+      renderLegendList(legendEl, result.groups, result.colorMap, agg.totalDivPre, currentColor);
     } else {
       legendEl.innerHTML = "";
     }
@@ -2027,16 +2196,22 @@
 
   function dashboardTemplate() {
     var tabsHtml = AXIS_ORDER.map(function (k, i) {
-      return '<button class="axis-tab' + (i === 0 ? ' active' : '') + '" data-axis="' + k + '">' + AXIS_CONFIG[k].label + '</button>';
+      return '<button class="axis-tab' + (k === currentAxis ? ' active' : '') + '" data-axis="' + k + '">' + AXIS_CONFIG[k].label + '</button>';
+    }).join('');
+    var colorTabsHtml = COLOR_ORDER.map(function (k) {
+      return '<button class="axis-tab' + (k === currentColor ? ' active' : '') + '" data-color="' + k + '">' + COLOR_MODES[k].label + '</button>';
     }).join('');
     return '' +
       '<div class="panel">' +
-      '  <h2><span class="chap">三</span>構成 <span class="hint">面積は配当金額の大きさ・◆はNISA口座</span></h2>' +
-      '  <div class="axis-tabs" id="axisTabs">' + tabsHtml + '</div>' +
-      '  <div class="composition-body">' +
-      '    <div class="treemap" id="treemapEl"></div>' +
-      '    <ul class="legend" id="axisLegend"></ul>' +
+      '  <h2><span class="chap">三</span>構成 <span class="hint">面積は年間配当金額・◆はNISA口座</span></h2>' +
+      '  <div class="heat-controls">' +
+      '    <div class="ctl-row"><span class="ctl-label">分け方</span><div class="axis-tabs" id="axisTabs">' + tabsHtml + '</div></div>' +
+      '    <div class="ctl-row"><span class="ctl-label">色</span><div class="axis-tabs" id="colorTabs">' + colorTabsHtml + '</div></div>' +
       '  </div>' +
+      '  <div class="treemap" id="treemapEl"></div>' +
+      '  <div class="heat-scale" id="heatScale"></div>' +
+      '  <p class="heat-note" id="heatNote"></p>' +
+      '  <ul class="legend" id="axisLegend"></ul>' +
       '</div>' +
       '<div class="panel">' +
       '  <h2><span class="chap">四</span>配当金カレンダー <span class="hint">権利確定月は証券コードから自動判定</span></h2>' +
@@ -2097,6 +2272,10 @@
       }
       bindTabs("axisTabs", function (btn) {
         currentAxis = btn.dataset.axis;
+        renderComposition(aggregate());
+      });
+      bindTabs("colorTabs", function (btn) {
+        currentColor = btn.dataset.color;
         renderComposition(aggregate());
       });
       bindTabs("calendarTabs", function (btn) {
