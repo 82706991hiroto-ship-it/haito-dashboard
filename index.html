@@ -62,6 +62,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body {
     margin: 0; padding: 0;
     background: var(--page); color: var(--text);
@@ -368,6 +369,30 @@
     .composition-body .treemap { flex-basis: 100%; }
     .treemap { height: 300px; }
   }
+  /* 初回訪問の案内 */
+  .onboard {
+    background: var(--card); border-radius: var(--radius-lg); box-shadow: var(--shadow);
+    padding: 24px 22px; margin: 0 0 16px;
+  }
+  .onboard h2 { font-size: 17px; font-weight: 700; margin: 0 0 8px; }
+  .onboard > p { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.9; }
+  .onboard-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 10px; }
+  .onboard-list li {
+    display: flex; align-items: center; gap: 12px; line-height: 1.7; font-size: 13px; color: var(--text);
+    background: var(--field); border-radius: 12px; padding: 13px 15px;
+  }
+  .onboard-list .ico {
+    width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+    background: var(--accent-soft); color: var(--accent);
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+  }
+  .sample-banner {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: var(--warn-soft); border-radius: var(--radius);
+    padding: 13px 16px; margin: 0 0 16px; font-size: 12.5px; color: var(--text);
+  }
+  .sample-banner button.btn { margin-left: auto; padding: 8px 14px; font-size: 12.5px; background: var(--card); }
+
   /* 対になるサイトへの導線 */
   .sibling {
     display: flex; align-items: center; gap: 12px; text-decoration: none;
@@ -403,6 +428,25 @@
     </div>
     <div class="dateline" id="dateline"></div>
   </header>
+
+  <section class="onboard" id="onboard" hidden>
+    <h2>まだ銘柄が登録されていません</h2>
+    <p>証券コードを入れるだけで、銘柄名・業種・権利確定月・配当金は自動で埋まります。入力するのは株数と取得単価だけです。</p>
+    <ul class="onboard-list">
+      <li><span class="ico">■</span><span>業種別・銘柄別の<strong>配当構成比</strong>をツリーマップで</span></li>
+      <li><span class="ico">▦</span><span>受取が何月に偏っているかが分かる<strong>配当金カレンダー</strong></span></li>
+      <li><span class="ico">↗</span><span><strong>増配率</strong>と、目標達成までの<strong>将来見通し</strong></span></li>
+    </ul>
+    <div class="toolbar">
+      <button class="btn primary" id="startBtn">銘柄を登録する</button>
+      <button class="btn" id="sampleBtn">サンプルで動きを見る</button>
+    </div>
+  </section>
+
+  <p class="sample-banner" id="sampleBanner" hidden>
+    <span>サンプルデータを表示しています。実際の保有状況ではありません。</span>
+    <button class="btn" id="clearSampleBtn">消して自分の銘柄を入れる</button>
+  </p>
 
   <section class="hero" id="heroSection">
     <div class="hero-figure">
@@ -579,7 +623,8 @@
       guides: { sensitiveTarget: 50, maxStockPct: 5, maxSectorPct: 15 },
       // 将来見通しの前提。growth が null のときは実績の増配率を使う。
       sim: { monthlyInvest: 30000, growth: null, reinvest: true },
-      lastExport: null
+      lastExport: null,
+      isSample: false
     };
     if (!raw) return defaults;
     try {
@@ -836,6 +881,7 @@
 
   document.getElementById("addRowBtn").addEventListener("click", function () {
     var newId = uid();
+    state.isSample = false;
     state.holdings.push({ id: newId, code: "", name: "", sector: SECTOR_NAMES[0], account: "特定", shares: "", cost: "", div: "", prevDiv: "" });
     save(); renderTable(); renderDashboard();
     var newRow = document.querySelector('#holdingsBody tr[data-id="' + newId + '"]');
@@ -1080,6 +1126,7 @@
       statusEl.textContent = emptyMessage;
       return false;
     }
+    state.isSample = false;
     var merged = mergePastedResults(parsed.results);
     save(); renderTable(); renderDashboard();
     // 口座の判定は誤ると税額・利回りがずれるので、内訳を出して気づけるようにする
@@ -1173,6 +1220,7 @@
   document.getElementById("clearBtn").addEventListener("click", function () {
     if (!confirm("入力したデータをすべて消去します。よろしいですか?")) return;
     state.holdings = [];
+    state.isSample = false;
     save(); renderTable(); renderDashboard();
   });
 
@@ -1242,7 +1290,8 @@
       goals: { monthly: 50000, stockCount: 40, acquisition: 15000000 },
       guides: { sensitiveTarget: 50, maxStockPct: 5, maxSectorPct: 15 },
       sim: { monthlyInvest: 30000, growth: null, reinvest: true },
-      lastExport: null
+      lastExport: null,
+      isSample: false
     };
     return Object.assign({}, defaults, parsed, {
       goals: Object.assign({}, defaults.goals, parsed.goals),
@@ -2056,6 +2105,9 @@
       });
       bindSimInputs();
     }
+    // ツリーマップなどは容器の幅を測って描くため、先に表示状態を確定させる
+    renderOnboarding();
+
     var agg = aggregate();
 
     renderHero(agg);
@@ -2163,12 +2215,61 @@
     resizeTimer = setTimeout(renderDashboard, 150);
   });
 
+  // 銘柄が無いうちは分析セクションを出さない。空の集計を9つ並べても読むものがなく、
+  // 最初にやることが見えないため、案内カードだけを見せる。
+  function renderOnboarding() {
+    var empty = state.holdings.length === 0;
+    document.getElementById("onboard").hidden = !empty;
+    document.getElementById("heroSection").hidden = empty;
+    document.getElementById("dashboardSection").hidden = empty;
+    document.getElementById("sampleBanner").hidden = !(state.isSample && !empty);
+  }
+
+  var SAMPLE_ENTRY = [
+    "8306 300 1500",
+    "9433 100 4000 NISA",
+    "2914 100 2430",
+    "1928 100 3061 NISA",
+    "8058 100 2420",
+    "4502 50 3538",
+    "9432 200 1500 NISA",
+    "5020 500 600"
+  ].join("\n");
+
+  document.getElementById("sampleBtn").addEventListener("click", function () {
+    var parsed = parseQuickEntry(SAMPLE_ENTRY);
+    mergePastedResults(parsed.results);
+    state.isSample = true;
+    save(); renderTable(); renderDashboard(); renderOnboarding();
+    document.getElementById("heroSection").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  document.getElementById("clearSampleBtn").addEventListener("click", function () {
+    state.holdings = [];
+    state.isSample = false;
+    save(); renderTable(); renderDashboard(); renderOnboarding();
+    openQuickEntry();
+  });
+
+  document.getElementById("startBtn").addEventListener("click", openQuickEntry);
+
+  function openQuickEntry() {
+    var details = document.querySelectorAll(".paste-import")[0];
+    if (details) details.open = true;
+    var area = document.getElementById("quickEntryArea");
+    if (area) {
+      area.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(function () { area.focus({ preventScroll: true }); }, 350);
+    }
+  }
+
   function renderAll() {
     bindGoalInputs();
     renderTable();
     renderSectorTable();
     renderDashboard();
     renderBackupStatus();
+    renderOnboarding();
     var dl = document.getElementById("dateline");
     if (dl) {
       var d = new Date();
