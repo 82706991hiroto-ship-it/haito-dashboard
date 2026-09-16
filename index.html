@@ -227,6 +227,15 @@
     opacity: .92; text-shadow: 0 1px 2px rgba(0,0,0,.45);
     font-variant-numeric: tabular-nums; white-space: nowrap;
   }
+  /* タイルを押すと保有銘柄明細の該当行へ飛ぶ */
+  .tm-tile { cursor: pointer; }
+  .tm-tile:hover { z-index: 2; box-shadow: inset 0 0 0 2px rgba(255,255,255,.9); }
+  .tm-tile:focus-visible { z-index: 3; outline: 2px solid #fff; outline-offset: -3px; }
+  @keyframes rowHit { from { background: var(--accent-soft); } to { background: transparent; } }
+  table.data-table tbody tr.is-hit td { animation: rowHit 1.8s ease-out; }
+  @media (prefers-reduced-motion: reduce) {
+    table.data-table tbody tr.is-hit td { animation-duration: .01s; }
+  }
 
   /* 色の目盛り */
   .heat-scale { display: flex; align-items: stretch; gap: 2px; margin: 12px 0 0; flex-wrap: wrap; }
@@ -908,6 +917,25 @@
     });
     td.appendChild(sel);
     return td;
+  }
+
+  // ヒートマップから明細の行を指す。見つけたあと見失わないよう一拍光らせる。
+  function focusHolding(id) {
+    var tr = document.querySelector('#holdingsBody tr[data-id="' + id + '"]');
+    if (!tr) return;
+    var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var y0 = window.scrollY;
+    tr.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+    // 背面タブなどスムーススクロールが走らない環境では黙って何も起きないので、全く動いていなければ瞬間移動に切り替える
+    if (!reduce) {
+      setTimeout(function () {
+        if (window.scrollY === y0) tr.scrollIntoView({ block: "center" });
+      }, 400);
+    }
+    tr.classList.remove("is-hit");
+    void tr.offsetWidth; // 連打してもアニメーションをやり直させる
+    tr.classList.add("is-hit");
+    setTimeout(function () { tr.classList.remove("is-hit"); }, 2000);
   }
 
   function updateRowComputedCells(id) {
@@ -1717,6 +1745,10 @@
 
         var nisaMark = row.account === "NISA" ? "◆ " : "";
         var name = row.name || row.code || "無名銘柄";
+        tile.dataset.holdingId = row.id;
+        tile.tabIndex = 0;
+        tile.setAttribute("role", "button");
+        tile.setAttribute("aria-label", name + " の明細へ移動");
         tile.title = group.label + " / " + name + "\n構成比 " + fmtPct(pct) + " (" + fmtYen(tr.item.value) + ")"
           + "\n増配率 " + COLOR_MODES.growth.text(growthOf(row))
           + " / 簿価利回り " + COLOR_MODES.yield.text(bookYieldOf(row));
@@ -2203,7 +2235,7 @@
     }).join('');
     return '' +
       '<div class="panel">' +
-      '  <h2><span class="chap">三</span>構成 <span class="hint">面積は年間配当金額・◆はNISA口座</span></h2>' +
+      '  <h2><span class="chap">三</span>構成 <span class="hint">面積は年間配当金額・◆はNISA口座・タイルを押すと明細へ</span></h2>' +
       '  <div class="heat-controls">' +
       '    <div class="ctl-row"><span class="ctl-label">分け方</span><div class="axis-tabs" id="axisTabs">' + tabsHtml + '</div></div>' +
       '    <div class="ctl-row"><span class="ctl-label">色</span><div class="axis-tabs" id="colorTabs">' + colorTabsHtml + '</div></div>' +
@@ -2277,6 +2309,18 @@
       bindTabs("colorTabs", function (btn) {
         currentColor = btn.dataset.color;
         renderComposition(aggregate());
+      });
+      var tmEl = document.getElementById("treemapEl");
+      tmEl.addEventListener("click", function (e) {
+        var tile = e.target.closest(".tm-tile");
+        if (tile && tile.dataset.holdingId) focusHolding(tile.dataset.holdingId);
+      });
+      tmEl.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        var tile = e.target.closest(".tm-tile");
+        if (!tile || !tile.dataset.holdingId) return;
+        e.preventDefault();
+        focusHolding(tile.dataset.holdingId);
       });
       bindTabs("calendarTabs", function (btn) {
         calendarMode = btn.dataset.mode;
