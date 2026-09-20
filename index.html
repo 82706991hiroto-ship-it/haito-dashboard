@@ -1325,7 +1325,7 @@
     unit: ["単価", "1株あたり配当金"],
     qty: ["数量", "株数", "保有数量"],
     gross: ["配当金・分配金・利金合計", "配当金合計", "配当金額", "支払額"],
-    net: ["受取金額", "受領額"],
+    net: ["受取金額", "受領額", "受取額"],
     tax: ["国内税額合計", "国内税額", "源泉徴収税額"]
   };
 
@@ -1349,7 +1349,9 @@
       if (key && map[key] === undefined) map[key] = idx;
     });
     var hasAmount = map.gross !== undefined || map.net !== undefined || map.unit !== undefined;
-    return (map.code !== undefined && map.qty !== undefined && hasAmount && map.date !== undefined) ? map : null;
+    // SBIのようにコード列が無く、「ヒューリック 3003」と銘柄名の末尾に付く形式がある
+    var hasCode = map.code !== undefined || map.name !== undefined;
+    return (hasCode && map.qty !== undefined && hasAmount && map.date !== undefined) ? map : null;
   }
 
   // 入金は権利確定のおよそ3か月後なので、入金月から3か月戻して権利確定月とする。
@@ -1373,7 +1375,12 @@
       var product = cell("product");
       if (product && product.indexOf("国内株") === -1) { skipped.product++; return; }
 
+      var rawName = cell("name");
       var code = cell("code");
+      if (!/^[0-9][0-9A-Za-z]{3}$/.test(code)) {
+        var inName = rawName.match(/([0-9][0-9A-Za-z]{3})\s*$/);
+        code = inName ? inName[1] : "";
+      }
       if (!/^[0-9][0-9A-Za-z]{3}$/.test(code)) { skipped.other++; return; }
 
       var m = cell("date").match(/(\d{4})\D+(\d{1,2})/);
@@ -1381,11 +1388,17 @@
 
       var qty = parsePasteNum(cell("qty"));
       var unit = parsePasteNum(cell("unit"));
-      var gross = parsePasteNum(cell("gross"));
+      var grossCol = parsePasteNum(cell("gross"));
+      var gross = grossCol;
+      var isNisa = /nisa|ニーサ/i.test(cell("account"));
       if (gross === "") {
-        // 税引前の列が無い形式では、受取額に国内税額を戻して税引前を作る
         var net = parsePasteNum(cell("net")), tax = parsePasteNum(cell("tax"));
-        if (net !== "") gross = net + (tax === "" ? 0 : tax);
+        if (net !== "") {
+          // 税額の列があれば戻すだけでよい。無ければNISAは非課税、それ以外は源泉徴収率で割り戻す。
+          if (tax !== "") gross = net + tax;
+          else if (isNisa) gross = net;
+          else gross = net / (1 - TAX_RATE);
+        }
       }
 
       var per = unit !== "" && unit > 0 ? unit : (gross !== "" && qty !== "" && qty > 0 ? gross / qty : "");
@@ -1394,7 +1407,11 @@
       var ry = parseInt(m[1], 10), rm = parseInt(m[2], 10) - PAYOUT_LAG_MONTHS_HIST;
       if (rm <= 0) { rm += 12; ry -= 1; }
 
-      rows.push({ code: code, name: cell("name"), per: per, ry: ry, rm: rm });
+      rows.push({
+        code: code, name: rawName, per: per, qty: qty === "" ? null : qty,
+        ry: ry, rm: rm, seq: ry * 12 + rm,
+        estimated: grossCol === "" && !isNisa && parsePasteNum(cell("tax")) === ""
+      });
     });
 
     return { rows: rows, skipped: skipped, headerFound: colMap !== null };
@@ -1407,21 +1424,51 @@
     var out = {};
     Object.keys(by).forEach(function (code) {
       var xs = by[code];
-      var seen = {};
-      xs.forEach(function (x) { seen[x.rm] = true; });
-      var months = Object.keys(seen).map(Number).sort(function (a, b) { return a - b; });
+      // 入金の遅れは月によって2〜4か月とばらつくので、隣り合う月に割れたものは多いほうへ寄せる。
+      function monthCounts() {
+        var c = {};
+        xs.forEach(function (x) { c[x.rm] = (c[x.rm] || 0) + 1; });
+        return c;
+      }
+      for (var pass = 0; pass < 4; pass++) {
+        var counts = monthCounts();
+        var ms = Object.keys(counts).map(Number).sort(function (a, b) { return a - b; });
+        var merged = false;
+        for (var i = 0; i + 1 < ms.length && !merged; i++) {
+          if ((ms[i + 1] - ms[i]) !== 1) continue;
+          var from = counts[ms[i]] <= counts[ms[i + 1]] ? ms[i] : ms[i + 1];
+          var to = from === ms[i] ? ms[i + 1] : ms[i];
+          xs.forEach(function (x) { if (x.rm === from) { x.rm = to; x.seq = x.ry * 12 + to; } });
+          merged = true;
+        }
+        if (!merged) break;
+      }
 
-      // 年月回の銘柄で権利月の間隔が6か月にならないのは、入金の遅れによる1か月のずれ。
+      var months = Object.keys(monthCounts()).map(Number).sort(function (a, b) { return a - b; });
+
+      // 年2回払いで権利月の間隔が6か月にならないのは、入金の遅れによる1か月のずれ。
       if (months.length === 2) {
         var gap = (months[1] - months[0] + 12) % 12;
         if (gap === 5 || gap === 7) {
           var fixed = ((months[0] + 6 - 1) % 12) + 1, before = months[1];
-          xs.forEach(function (x) { if (x.rm === before) x.rm = fixed; });
+          xs.forEach(function (x) { if (x.rm === before) { x.rm = fixed; x.seq = x.ry * 12 + fixed; } });
           months = [months[0], fixed].sort(function (a, b) { return a - b; });
         }
       }
 
-      // 中間と期末が暦年をまたぐ銘柄(3月決算なら9月と翌3月)があるので、
+      // 株式分割を挟むと1株配当が見かけ上いきなり減る。株数が増えたのと同じ割合で
+      // 1株あたりが減っていれば分割とみなす(買い増しでは1株あたりは動かない)。
+      var ordered = xs.slice().sort(function (a, b) { return a.seq - b.seq; });
+      var splits = [];
+      for (var k = 1; k < ordered.length; k++) {
+        var a = ordered[k - 1], b = ordered[k];
+        if (!a.qty || !b.qty || a.per <= 0) continue;
+        var qr = b.qty / a.qty;
+        if (qr < 1.5) continue;
+        var product = qr * (b.per / a.per);
+        if (product > 0.8 && product < 1.2) splits.push({ seq: b.seq, factor: qr });
+      }
+
       // 暦年ではなく会計年度でまとめる。期末月は分からないので、
       // 候補を順に試して「支払がそろった年度」が多くなる月を期末とみなす。
       var best = null;
@@ -1441,7 +1488,28 @@
         }
       });
 
-      out[code] = { months: months, years: best.years, complete: best.complete };
+      // 分割が「使う年度の内側」で起きていると、その年度の合計は分割前後の混在になる。
+      // 直しようがないので、その銘柄の配当額は入れない。
+      function fyOf(x) { return x.rm <= best.end ? x.ry : x.ry + 1; }
+      var splitInside = false, splitFactors = [];
+      splits.forEach(function (sp) {
+        var before = null, after = null;
+        ordered.forEach(function (x) {
+          if (x.seq < sp.seq) before = x;
+          else if (after === null) after = x;
+        });
+        if (before && after && fyOf(before) === fyOf(after)) splitInside = true;
+        else if (after) splitFactors.push({ fy: fyOf(after), factor: sp.factor });
+      });
+
+      // 年度をまたぐ分割は、古い年度を今の株数に合わせて割り戻せば比較できる。
+      splitFactors.forEach(function (sp) {
+        Object.keys(best.years).map(Number).forEach(function (fy) {
+          if (fy < sp.fy) best.years[fy].sum = best.years[fy].sum / sp.factor;
+        });
+      });
+
+      out[code] = { months: months, years: best.years, complete: best.complete, splitInside: splitInside, splitAdjusted: splitFactors.length > 0 };
     });
     return out;
   }
@@ -1460,17 +1528,21 @@
     }
 
     var agg = aggregateDividendHistory(parsed.rows);
-    var monthsSet = 0, divSet = 0, prevSet = 0, unmatched = 0, partial = 0;
+    var monthsSet = 0, divSet = 0, prevSet = 0, unmatched = 0, partial = 0, suspect = 0, adjusted = 0;
 
     Object.keys(agg).forEach(function (code) {
       var a = agg[code];
       var targets = state.holdings.filter(function (h) { return String(h.code || "").trim() === code; });
       if (targets.length === 0) { unmatched++; return; }
       if (a.complete.length === 0) partial++;
+      if (a.splitInside) suspect++;
+      if (a.splitAdjusted) adjusted++;
 
       targets.forEach(function (h) {
         h.months = a.months.slice();
         monthsSet++;
+        // 分割をまたぐ年度は合計が分割前後の混在になるため、配当額は入れない
+        if (a.splitInside) return;
         // 今期の配当は予想を手で入れていることがあるので、空欄のときだけ補う。
         if (a.complete.length >= 1 && (h.div === "" || h.div == null)) {
           h.div = round2(a.years[a.complete[0]].sum);
@@ -1489,6 +1561,8 @@
 
     var msg = "権利確定月を" + monthsSet + "件、年間配当を" + divSet + "件、前年配当を" + prevSet + "件入れました。";
     if (partial > 0) msg += " " + partial + "銘柄は年度の途中までの履歴しか無く、配当額は入れていません。";
+    if (adjusted > 0) msg += " " + adjusted + "銘柄は株式分割を検出し、過去の配当を今の株数に合わせて調整しました。";
+    if (suspect > 0) msg += " " + suspect + "銘柄は年度の途中で株式分割があったとみられ、配当額は入れていません。";
     if (unmatched > 0) msg += " " + unmatched + "銘柄は未登録のため見送りました。";
     var sk = parsed.skipped.product + parsed.skipped.other;
     if (sk > 0) msg += " 国内株式以外の行を" + sk + "件読み飛ばしました。";
