@@ -349,13 +349,13 @@
     color: var(--text-2); margin: 0 0 12px; padding: 12px 14px; background: var(--field);
     border-radius: 12px; overflow-x: auto;
   }
-  #yahooPasteArea, #quickEntryArea {
+  #yahooPasteArea, #quickEntryArea, #divHistArea {
     width: 100%; font-size: 13px; padding: 12px 14px; border-radius: 12px;
     border: 1px solid transparent; background: var(--field); color: var(--text);
     font-family: inherit; resize: vertical;
   }
   #quickEntryArea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  #yahooPasteArea:focus, #quickEntryArea:focus { outline: none; border-color: var(--accent); background: var(--card); }
+  #yahooPasteArea:focus, #quickEntryArea:focus, #divHistArea:focus { border-color: var(--accent); background: var(--card); }
   .paste-status { font-size: 12px; color: var(--text-2); }
 
   .backup-status {
@@ -412,7 +412,7 @@
 
     .goal-actual { grid-template-columns: 1fr; }
     .goal-actual .col + .col { margin-top: 18px; }
-    #yahooPasteArea, #quickEntryArea { font-size: 16px; }
+    #yahooPasteArea, #quickEntryArea, #divHistArea { font-size: 16px; }
     .calendar-chart { height: 170px; gap: 3px; }
     .sim-chart { height: 140px; gap: 2px; }
     .cal-value { display: none; }
@@ -596,8 +596,31 @@
         </p>
         <div class="toolbar">
           <button class="btn" id="csvImportBtn">CSVファイルを選択して読み込む</button>
-          <input type="file" id="csvImportFile" accept=".csv,text/csv" style="display:none">
+          <input type="file" id="csvImportFile" accept=".csv,.txt,text/csv,text/plain,application/vnd.ms-excel" style="display:none">
           <span class="paste-status" id="csvImportStatus"></span>
+        </div>
+      </div>
+    </details>
+
+    <details class="paste-import">
+      <summary>配当金の受取履歴を読み込む(権利確定月・配当の自動入力)</summary>
+      <div class="paste-import-body">
+        <p class="hint">
+          証券会社の「配当金・分配金の受取履歴」をCSVで落として読み込むと、実際に受け取った記録から権利確定月と
+          1株あたりの配当を自動で入れます。<strong>2年分以上</strong>の期間を指定して落とすと、前年配当も入ります。
+          国内株式の行だけを使い、投資信託と外国株の行は読み飛ばします。
+        </p>
+        <div class="toolbar">
+          <button class="btn primary" id="divHistCsvBtn">CSVファイルを選択して読み込む</button>
+          <input type="file" id="divHistCsvFile" accept=".csv,.txt,text/csv,text/plain,application/vnd.ms-excel" style="display:none">
+          <span class="paste-status" id="divHistStatus"></span>
+        </div>
+        <p class="hint" style="margin-top:14px;">
+          ファイルを選べない端末では、受取履歴の表を見出し行ごとコピーして下に貼り付けても読み込めます。
+        </p>
+        <textarea id="divHistArea" rows="5" placeholder="ここに配当金の受取履歴を貼り付け"></textarea>
+        <div class="toolbar">
+          <button class="btn" id="divHistPasteBtn">貼り付け内容を読み込む</button>
         </div>
       </div>
     </details>
@@ -1288,6 +1311,207 @@
     reader.onerror = function () { status.textContent = "ファイルの読み込みに失敗しました。"; };
     reader.readAsArrayBuffer(file);
     e.target.value = "";
+  });
+
+  // ---------- 配当金の受取履歴 ----------
+  // 証券会社が出す「配当金・分配金・利金一覧」から、実際に受け取った記録を読む。
+  // 予想ではなく実績なので、権利確定月と過去の1株配当の根拠になる。
+  var DIVHIST_SYNONYMS = {
+    date: ["入金日", "受渡日", "支払日", "支払開始日"],
+    product: ["商品", "商品区分", "種別"],
+    account: ["口座", "口座区分", "預り区分"],
+    code: ["銘柄コード", "コード", "証券コード"],
+    name: ["銘柄", "銘柄名"],
+    unit: ["単価", "1株あたり配当金"],
+    qty: ["数量", "株数", "保有数量"],
+    gross: ["配当金・分配金・利金合計", "配当金合計", "配当金額", "支払額"],
+    net: ["受取金額", "受領額"],
+    tax: ["国内税額合計", "国内税額", "源泉徴収税額"]
+  };
+
+  var DIVHIST_LOOKUP = (function () {
+    var map = {};
+    Object.keys(DIVHIST_SYNONYMS).forEach(function (key) {
+      DIVHIST_SYNONYMS[key].forEach(function (label) {
+        var n = normalizeHeader(label);
+        if (n && map[n] === undefined) map[n] = key;
+      });
+    });
+    return map;
+  })();
+
+  function buildDivHistColMap(cells) {
+    if (cells.length < 4) return null;
+    var map = {};
+    cells.forEach(function (c, idx) {
+      var n = normalizeHeader(c);
+      var key = n ? DIVHIST_LOOKUP[n] : null;
+      if (key && map[key] === undefined) map[key] = idx;
+    });
+    var hasAmount = map.gross !== undefined || map.net !== undefined || map.unit !== undefined;
+    return (map.code !== undefined && map.qty !== undefined && hasAmount && map.date !== undefined) ? map : null;
+  }
+
+  // 入金は権利確定のおよそ3か月後なので、入金月から3か月戻して権利確定月とする。
+  var PAYOUT_LAG_MONTHS_HIST = 3;
+
+  function parseDividendHistory(text) {
+    var lines = String(text || "").replace(/\r/g, "").split("\n")
+      .map(function (l) { return l.trim(); })
+      .filter(function (l) { return l.length > 0; });
+
+    var colMap = null, rows = [], skipped = { product: 0, other: 0 };
+
+    lines.forEach(function (line) {
+      var cells = splitRow(line);
+      var map = buildDivHistColMap(cells);
+      if (map) { colMap = map; return; }
+      if (!colMap) return;
+
+      function cell(key) { return colMap[key] !== undefined ? String(cells[colMap[key]] || "").trim() : ""; }
+
+      var product = cell("product");
+      if (product && product.indexOf("国内株") === -1) { skipped.product++; return; }
+
+      var code = cell("code");
+      if (!/^[0-9][0-9A-Za-z]{3}$/.test(code)) { skipped.other++; return; }
+
+      var m = cell("date").match(/(\d{4})\D+(\d{1,2})/);
+      if (!m) { skipped.other++; return; }
+
+      var qty = parsePasteNum(cell("qty"));
+      var unit = parsePasteNum(cell("unit"));
+      var gross = parsePasteNum(cell("gross"));
+      if (gross === "") {
+        // 税引前の列が無い形式では、受取額に国内税額を戻して税引前を作る
+        var net = parsePasteNum(cell("net")), tax = parsePasteNum(cell("tax"));
+        if (net !== "") gross = net + (tax === "" ? 0 : tax);
+      }
+
+      var per = unit !== "" && unit > 0 ? unit : (gross !== "" && qty !== "" && qty > 0 ? gross / qty : "");
+      if (per === "" || !isFinite(per) || per <= 0) { skipped.other++; return; }
+
+      var ry = parseInt(m[1], 10), rm = parseInt(m[2], 10) - PAYOUT_LAG_MONTHS_HIST;
+      if (rm <= 0) { rm += 12; ry -= 1; }
+
+      rows.push({ code: code, name: cell("name"), per: per, ry: ry, rm: rm });
+    });
+
+    return { rows: rows, skipped: skipped, headerFound: colMap !== null };
+  }
+
+  function aggregateDividendHistory(rows) {
+    var by = {};
+    rows.forEach(function (r) { (by[r.code] = by[r.code] || []).push(r); });
+
+    var out = {};
+    Object.keys(by).forEach(function (code) {
+      var xs = by[code];
+      var seen = {};
+      xs.forEach(function (x) { seen[x.rm] = true; });
+      var months = Object.keys(seen).map(Number).sort(function (a, b) { return a - b; });
+
+      // 年月回の銘柄で権利月の間隔が6か月にならないのは、入金の遅れによる1か月のずれ。
+      if (months.length === 2) {
+        var gap = (months[1] - months[0] + 12) % 12;
+        if (gap === 5 || gap === 7) {
+          var fixed = ((months[0] + 6 - 1) % 12) + 1, before = months[1];
+          xs.forEach(function (x) { if (x.rm === before) x.rm = fixed; });
+          months = [months[0], fixed].sort(function (a, b) { return a - b; });
+        }
+      }
+
+      // 中間と期末が暦年をまたぐ銘柄(3月決算なら9月と翌3月)があるので、
+      // 暦年ではなく会計年度でまとめる。期末月は分からないので、
+      // 候補を順に試して「支払がそろった年度」が多くなる月を期末とみなす。
+      var best = null;
+      months.forEach(function (end) {
+        var years = {};
+        xs.forEach(function (x) {
+          var fy = x.rm <= end ? x.ry : x.ry + 1;
+          var y = years[fy] = years[fy] || { sum: 0, months: {} };
+          y.sum += x.per;
+          y.months[x.rm] = true;
+        });
+        var complete = Object.keys(years).map(Number)
+          .filter(function (fy) { return Object.keys(years[fy].months).length === months.length; })
+          .sort(function (a, b) { return b - a; });
+        if (best === null || complete.length > best.complete.length) {
+          best = { years: years, complete: complete, end: end };
+        }
+      });
+
+      out[code] = { months: months, years: best.years, complete: best.complete };
+    });
+    return out;
+  }
+
+  function round2(n) { return Math.round(n * 100) / 100; }
+
+  function applyDividendHistory(text, statusEl) {
+    var parsed = parseDividendHistory(text);
+    if (!parsed.headerFound) {
+      statusEl.textContent = "見出し行が見つかりませんでした。受取履歴のCSVか、見出しを含めてコピーした内容か確認してください。";
+      return;
+    }
+    if (parsed.rows.length === 0) {
+      statusEl.textContent = "国内株式の行が見つかりませんでした。";
+      return;
+    }
+
+    var agg = aggregateDividendHistory(parsed.rows);
+    var monthsSet = 0, divSet = 0, prevSet = 0, unmatched = 0, partial = 0;
+
+    Object.keys(agg).forEach(function (code) {
+      var a = agg[code];
+      var targets = state.holdings.filter(function (h) { return String(h.code || "").trim() === code; });
+      if (targets.length === 0) { unmatched++; return; }
+      if (a.complete.length === 0) partial++;
+
+      targets.forEach(function (h) {
+        h.months = a.months.slice();
+        monthsSet++;
+        // 今期の配当は予想を手で入れていることがあるので、空欄のときだけ補う。
+        if (a.complete.length >= 1 && (h.div === "" || h.div == null)) {
+          h.div = round2(a.years[a.complete[0]].sum);
+          divSet++;
+        }
+        // 前年配当は確定した実績なので上書きする。
+        if (a.complete.length >= 2) {
+          h.prevDiv = round2(a.years[a.complete[1]].sum);
+          prevSet++;
+        }
+      });
+    });
+
+    state.isSample = false;
+    save(); renderTable(); renderDashboard();
+
+    var msg = "権利確定月を" + monthsSet + "件、年間配当を" + divSet + "件、前年配当を" + prevSet + "件入れました。";
+    if (partial > 0) msg += " " + partial + "銘柄は年度の途中までの履歴しか無く、配当額は入れていません。";
+    if (unmatched > 0) msg += " " + unmatched + "銘柄は未登録のため見送りました。";
+    var sk = parsed.skipped.product + parsed.skipped.other;
+    if (sk > 0) msg += " 国内株式以外の行を" + sk + "件読み飛ばしました。";
+    statusEl.textContent = msg;
+  }
+
+  document.getElementById("divHistCsvBtn").addEventListener("click", function () {
+    document.getElementById("divHistCsvFile").click();
+  });
+  document.getElementById("divHistCsvFile").addEventListener("change", function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var status = document.getElementById("divHistStatus");
+    var reader = new FileReader();
+    reader.onload = function () { applyDividendHistory(decodeCsvBuffer(reader.result), status); };
+    reader.onerror = function () { status.textContent = "ファイルの読み込みに失敗しました。"; };
+    reader.readAsArrayBuffer(file);
+    e.target.value = "";
+  });
+  document.getElementById("divHistPasteBtn").addEventListener("click", function () {
+    var area = document.getElementById("divHistArea");
+    applyDividendHistory(area.value, document.getElementById("divHistStatus"));
+    area.value = "";
   });
 
   document.getElementById("clearBtn").addEventListener("click", function () {
