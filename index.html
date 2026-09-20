@@ -358,6 +358,54 @@
   #yahooPasteArea:focus, #quickEntryArea:focus, #divHistArea:focus { border-color: var(--accent); background: var(--card); }
   .paste-status { font-size: 12px; color: var(--text-2); }
 
+  /* 入力が足りない項目の一覧 */
+  .missing-box {
+    margin-top: 18px; padding: 16px 18px; border-radius: var(--radius);
+    background: var(--field);
+  }
+  .missing-box h3 { font-size: 13.5px; font-weight: 700; margin: 0 0 6px; }
+  .missing-box .hint { font-size: 12px; color: var(--text-2); margin: 0 0 12px; line-height: 1.8; }
+  .missing-list { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+  .missing-list li {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 9px 0; border-bottom: 1px solid var(--line);
+  }
+  .missing-list li:last-child { border-bottom: none; }
+  .missing-list .mname { font-weight: 700; }
+  .missing-list .mlack { color: var(--text-2); flex: 1; min-width: 10em; }
+  .missing-list .mlink { color: var(--accent); text-decoration: none; white-space: nowrap; }
+  .missing-list .mlink:hover { text-decoration: underline; }
+  .missing-list .mjump {
+    font-family: inherit; font-size: 12px; padding: 4px 11px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text-2); cursor: pointer;
+  }
+  .missing-list .mjump:hover { color: var(--text); }
+
+  /* 権利確定月を押して選ぶ */
+  .months-dialog {
+    border: none; border-radius: var(--radius-lg); padding: 22px 22px 18px;
+    max-width: 340px; width: calc(100% - 32px);
+    background: var(--card); color: var(--text); box-shadow: 0 18px 50px rgba(35,48,74,.22);
+  }
+  .months-dialog::backdrop { background: rgba(20,26,36,.45); }
+  .months-dialog h3 { font-size: 15px; font-weight: 700; margin: 0 0 6px; }
+  .months-dialog .hint { font-size: 12px; color: var(--text-2); margin: 0 0 14px; line-height: 1.8; }
+  .months-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+  .months-grid button {
+    font-family: inherit; font-size: 13px; font-weight: 600; padding: 11px 0;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--field);
+    color: var(--text-2); cursor: pointer; font-variant-numeric: tabular-nums;
+  }
+  .months-grid button:hover { color: var(--text); }
+  .months-grid button.is-on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .months-grid button.is-suggest { border-style: dashed; }
+  .months-cell-btn {
+    font-family: inherit; font-size: 13px; padding: 7px 10px; width: 100%;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--field);
+    color: var(--text); cursor: pointer; text-align: left; font-variant-numeric: tabular-nums;
+  }
+  .months-cell-btn.is-empty { color: var(--muted); }
+
   .backup-status {
     font-size: 12px; color: var(--text-2); margin: 14px 0 0; line-height: 1.8;
     background: var(--field); border-radius: 12px; padding: 11px 14px;
@@ -556,12 +604,30 @@
     </div>
     <div class="toolbar">
       <button class="btn primary" id="addRowBtn">+ 銘柄を追加</button>
+      <button class="btn" id="rolloverBtn">今期の配当を前年配当に移す</button>
       <button class="btn" id="exportBtn">JSONエクスポート</button>
       <button class="btn" id="importBtn">JSONインポート</button>
       <button class="btn" id="clearBtn">データを消去</button>
       <input type="file" id="importFile" accept="application/json" style="display:none">
     </div>
     <p class="backup-status" id="backupStatus"></p>
+
+    <div class="missing-box" id="missingBox" hidden>
+      <h3>入力が足りない項目</h3>
+      <p class="hint">空欄のままでも表示は壊れませんが、埋めると増配率や配当金カレンダーが出ます。</p>
+      <ul class="missing-list" id="missingList"></ul>
+    </div>
+
+    <dialog class="months-dialog" id="monthsDialog">
+      <h3 id="monthsDialogTitle">権利確定月</h3>
+      <p class="hint">配当をもらう権利が確定する月です。年2回の銘柄が多く、その場合は6か月離れた2つになります。</p>
+      <div class="months-grid" id="monthsGrid"></div>
+      <p class="hint" id="monthsHintLine"></p>
+      <div class="toolbar">
+        <button class="btn primary" id="monthsDoneBtn">決定</button>
+        <button class="btn" id="monthsClearBtn">空欄にする</button>
+      </div>
+    </dialog>
 
     <details class="paste-import">
       <summary>かんたん一括入力(1行に1銘柄を並べて登録)</summary>
@@ -756,6 +822,7 @@
 
   // ---------- Holdings table ----------
   function renderTable() {
+    renderMissingList();
     var tbody = document.getElementById("holdingsBody");
     tbody.innerHTML = "";
     if (state.holdings.length === 0) {
@@ -900,29 +967,90 @@
     return td;
   }
 
-  // 権利確定月。空欄ならコードから自動判定した月を薄く表示し、
-  // 「3,9」のように入力すれば個別に上書きできる。
+  // 権利確定月。狭いセルに「3,9」と打たせる代わりに、1〜12を押して選べるようにする。
+  var monthsTarget = null;
+
+  function monthsLabel(h) {
+    if (Array.isArray(h.months) && h.months.length > 0) return h.months.join("月,") + "月";
+    var auto = recordMonthsFor(h.code);
+    return auto ? auto.join("月,") + "月" : "未設定";
+  }
+
   function makeMonthsCell(h) {
     var td = document.createElement("td");
     td.dataset.label = "権利確定月";
-    var input = document.createElement("input");
-    input.type = "text";
-    input.className = "months-input";
-    input.inputMode = "numeric";
-    var auto = recordMonthsFor(h.code);
-    input.placeholder = auto ? auto.join(",") : "例: 3,9";
-    input.title = auto ? "証券コードから自動判定: " + auto.join("月,") + "月" : "権利確定月を入力してください";
-    input.value = Array.isArray(h.months) ? h.months.join(",") : "";
-    input.addEventListener("input", function () {
-      var months = input.value.split(/[^0-9]+/)
-        .map(function (s) { return parseInt(s, 10); })
-        .filter(function (n) { return n >= 1 && n <= 12; });
-      h.months = months.length > 0 ? months : undefined;
-      save(); renderDashboard();
-    });
-    td.appendChild(input);
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "months-cell-btn";
+    var own = Array.isArray(h.months) && h.months.length > 0;
+    if (!own) btn.classList.add("is-empty");
+    btn.textContent = monthsLabel(h);
+    btn.addEventListener("click", function () { openMonthsDialog(h); });
+    td.appendChild(btn);
     return td;
   }
+
+  function openMonthsDialog(h) {
+    monthsTarget = h;
+    var dlg = document.getElementById("monthsDialog");
+    var grid = document.getElementById("monthsGrid");
+    var picked = Array.isArray(h.months) ? h.months.slice() : (recordMonthsFor(h.code) || []).slice();
+
+    document.getElementById("monthsDialogTitle").textContent =
+      (h.name || h.code || "銘柄") + " の権利確定月";
+
+    function paint() {
+      // 年2回の銘柄が多いので、1つだけ選ばれていたら6か月前(後)を候補として点線で示す
+      var suggest = picked.length === 1 ? ((picked[0] + 5) % 12) + 1 : null;
+      Array.prototype.forEach.call(grid.children, function (b) {
+        var m = Number(b.dataset.month);
+        b.classList.toggle("is-on", picked.indexOf(m) !== -1);
+        b.classList.toggle("is-suggest", suggest === m);
+        b.setAttribute("aria-pressed", picked.indexOf(m) !== -1 ? "true" : "false");
+      });
+      document.getElementById("monthsHintLine").textContent = suggest
+        ? "年2回なら " + suggest + "月 も選ぶことが多いです(点線)。"
+        : "";
+    }
+
+    grid.innerHTML = "";
+    for (var m = 1; m <= 12; m++) {
+      (function (month) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.dataset.month = String(month);
+        b.textContent = month + "月";
+        b.addEventListener("click", function () {
+          var i = picked.indexOf(month);
+          if (i === -1) picked.push(month); else picked.splice(i, 1);
+          picked.sort(function (a, c) { return a - c; });
+          paint();
+        });
+        grid.appendChild(b);
+      })(m);
+    }
+    paint();
+
+    dlg.returnValue = "";
+    dlg.onclose = function () {
+      if (dlg.returnValue !== "ok" || !monthsTarget) { monthsTarget = null; return; }
+      monthsTarget.months = picked.length > 0 ? picked : undefined;
+      monthsTarget = null;
+      save(); renderTable(); renderDashboard();
+    };
+    dlg.showModal();
+  }
+
+  document.getElementById("monthsDoneBtn").addEventListener("click", function () {
+    document.getElementById("monthsDialog").close("ok");
+  });
+  document.getElementById("monthsClearBtn").addEventListener("click", function () {
+    if (monthsTarget) monthsTarget.months = undefined;
+    var t = monthsTarget;
+    monthsTarget = null;
+    document.getElementById("monthsDialog").close("cleared");
+    if (t) { save(); renderTable(); renderDashboard(); }
+  });
 
   function makeAccountCell(h) {
     var td = document.createElement("td");
@@ -1586,6 +1714,84 @@
     var area = document.getElementById("divHistArea");
     applyDividendHistory(area.value, document.getElementById("divHistStatus"));
     area.value = "";
+  });
+
+  // ---------- 入力が足りない項目 ----------
+  // 横に長い表の中から空欄を探すのは手間なので、足りないものだけを一覧にして
+  // 銘柄ごとに調べ先へのリンクと、明細の行へのジャンプを添える。
+  function missingFieldsOf(h) {
+    var lack = [];
+    if (h.div === "" || h.div == null) lack.push("配当");
+    if (h.prevDiv === "" || h.prevDiv == null) lack.push("前年配当");
+    if (monthsOf(h).length === 0) lack.push("権利確定月");
+    return lack;
+  }
+
+  function renderMissingList() {
+    var box = document.getElementById("missingBox");
+    var list = document.getElementById("missingList");
+    if (!box || !list) return;
+
+    var rows = state.holdings
+      .map(function (h) { return { h: h, lack: missingFieldsOf(h) }; })
+      .filter(function (x) { return x.lack.length > 0; });
+
+    box.hidden = rows.length === 0;
+    list.innerHTML = "";
+    if (rows.length === 0) return;
+
+    rows.forEach(function (x) {
+      var h = x.h;
+      var li = document.createElement("li");
+
+      var name = document.createElement("span");
+      name.className = "mname";
+      name.textContent = (h.name || "無名銘柄") + (h.code ? "(" + h.code + ")" : "");
+      li.appendChild(name);
+
+      var lack = document.createElement("span");
+      lack.className = "mlack";
+      lack.textContent = x.lack.join("・") + " が空欄";
+      li.appendChild(lack);
+
+      if (nameFor(String(h.code || "").trim())) {
+        var a = document.createElement("a");
+        a.className = "mlink";
+        a.href = "https://irbank.net/" + String(h.code).trim() + "/dividend";
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = "IR BANKで調べる";
+        li.appendChild(a);
+      }
+
+      var jump = document.createElement("button");
+      jump.type = "button";
+      jump.className = "mjump";
+      jump.textContent = "明細へ";
+      jump.addEventListener("click", function () { focusHolding(h.id); });
+      li.appendChild(jump);
+
+      list.appendChild(li);
+    });
+  }
+
+  // ---------- 年に1回の更新 ----------
+  // 今期の配当を前年配当へ送る。翌年の増配率を出すための下ごしらえで、
+  // 配当そのものは消さない(消すと年間配当が0円になって驚くため)。
+  document.getElementById("rolloverBtn").addEventListener("click", function () {
+    var movable = state.holdings.filter(function (h) { return h.div !== "" && h.div != null; });
+    if (movable.length === 0) {
+      alert("移せる配当がありません。先に今期の配当を入れてください。");
+      return;
+    }
+    if (!confirm(
+      movable.length + "件の「配当/株」を「前年配当/株」に移します。\n" +
+      "そのあと新しい配当を入れ直すと、増配率が出ます。\n" +
+      "今入っている前年配当は上書きされます。よろしいですか?"
+    )) return;
+    movable.forEach(function (h) { h.prevDiv = h.div; });
+    state.isSample = false;
+    save(); renderTable(); renderDashboard();
   });
 
   document.getElementById("clearBtn").addEventListener("click", function () {
