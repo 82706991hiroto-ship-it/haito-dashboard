@@ -261,6 +261,15 @@
   .legend .lbar i { display: block; height: 100%; border-radius: 999px; min-width: 2px; }
   .legend .lpct { color: var(--text-2); text-align: right; font-variant-numeric: tabular-nums; }
 
+  /* ---- 配当の答え合わせ ---- */
+  .actual-lead { display: flex; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 18px; }
+  .actual-card { background: var(--field); border-radius: var(--radius); padding: 13px 16px; flex: 1 1 165px; }
+  .actual-card .lbl { font-size: 11.5px; color: var(--text-2); }
+  .actual-card .val { font-size: 20px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .actual-card .sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .actual-card.is-gap .val { color: var(--accent); }
+  .actual-note { font-size: 12px; color: var(--muted); line-height: 1.85; margin: 14px 0 0; }
+
   /* ---- 配当金カレンダー ---- */
   .calendar-lead { display: flex; flex-wrap: wrap; gap: 8px 10px; font-size: 12.5px; color: var(--text-2); margin-bottom: 16px; }
   .calendar-lead span { background: var(--field); border-radius: 999px; padding: 6px 14px; }
@@ -405,6 +414,20 @@
     color: var(--text); cursor: pointer; text-align: left; font-variant-numeric: tabular-nums;
   }
   .months-cell-btn.is-empty { color: var(--muted); }
+  .detail-dialog { max-width: 400px; }
+  .detail-dialog .field { display: block; margin-bottom: 12px; font-size: 12px; color: var(--text-2); }
+  .detail-dialog .field input, .detail-dialog .field textarea {
+    display: block; width: 100%; margin-top: 5px; font-family: inherit; font-size: 13px;
+    padding: 10px 12px; border-radius: 10px; border: 1px solid transparent;
+    background: var(--field); color: var(--text); resize: vertical;
+  }
+  .detail-dialog .field input:focus, .detail-dialog .field textarea:focus {
+    border-color: var(--accent); background: var(--card);
+  }
+  .detail-dialog .field-check { display: flex; align-items: center; gap: 9px; font-size: 13px; margin-bottom: 6px; }
+  .detail-dialog .hint { margin-bottom: 14px; }
+  .row-actions .detail-btn { margin-right: 6px; }
+  tr.is-excluded td { opacity: .55; }
 
   .backup-status {
     font-size: 12px; color: var(--text-2); margin: 14px 0 0; line-height: 1.8;
@@ -461,6 +484,7 @@
     .goal-actual { grid-template-columns: 1fr; }
     .goal-actual .col + .col { margin-top: 18px; }
     #yahooPasteArea, #quickEntryArea, #divHistArea { font-size: 16px; }
+    .detail-dialog .field input, .detail-dialog .field textarea { font-size: 16px; }
     .calendar-chart { height: 170px; gap: 3px; }
     .sim-chart { height: 140px; gap: 2px; }
     .cal-value { display: none; }
@@ -618,6 +642,29 @@
       <ul class="missing-list" id="missingList"></ul>
     </div>
 
+    <dialog class="months-dialog detail-dialog" id="detailDialog">
+      <h3 id="detailTitle">銘柄の詳細</h3>
+      <label class="field">現在株価(円)
+        <input type="number" id="detailPrice" min="0" step="any" inputmode="decimal" placeholder="入れると現在利回りが出ます">
+      </label>
+      <p class="hint" id="detailYield"></p>
+      <label class="field">株主優待の年間価値(円)
+        <input type="number" id="detailPerk" min="0" step="any" inputmode="decimal" placeholder="任意">
+      </label>
+      <label class="field-check">
+        <input type="checkbox" id="detailExclude">
+        <span>配当の集計から除外する</span>
+      </label>
+      <p class="hint">除外すると、配当金額・利回り・構成・カレンダーから外れます。取得額には残ります。</p>
+      <label class="field">メモ
+        <textarea id="detailMemo" rows="3" placeholder="買った理由、次に確認すること など"></textarea>
+      </label>
+      <p class="hint" id="detailExDates"></p>
+      <div class="toolbar">
+        <button class="btn primary" id="detailDoneBtn">閉じる</button>
+      </div>
+    </dialog>
+
     <dialog class="months-dialog" id="monthsDialog">
       <h3 id="monthsDialogTitle">権利確定月</h3>
       <p class="hint">配当をもらう権利が確定する月です。年2回の銘柄が多く、その場合は6か月離れた2つになります。</p>
@@ -721,6 +768,16 @@
   var STORAGE_KEY = "haitoDashboardV1";
   var TAX_RATE = 0.20315;
 
+  // 口座区分。非課税かどうかだけが税計算に効くが、内訳を分けて持てると
+  // 「新NISAの枠をどれだけ使ったか」を口座別の構成で見られる。
+  var ACCOUNTS = ["特定", "旧NISA", "新NISA成長", "新NISAつみたて"];
+  function isTaxFree(account) { return account !== "特定" && account !== "" && account != null; }
+  // 旧データは「NISA」の一語だったので、新NISAの成長投資枠として読み替える。
+  function normalizeAccount(a) {
+    if (a === "NISA") return "新NISA成長";
+    return ACCOUNTS.indexOf(a) === -1 ? "特定" : a;
+  }
+
   var SECTOR_DEFAULT_CLASS = {
     "水産・農林業": "ディフェンシブ", "食料品": "ディフェンシブ", "パルプ・紙": "ディフェンシブ",
     "医薬品": "ディフェンシブ", "その他製品": "ディフェンシブ", "電気・ガス業": "ディフェンシブ",
@@ -772,11 +829,16 @@
     if (!raw) return defaults;
     try {
       var parsed = JSON.parse(raw);
-      return Object.assign({}, defaults, parsed, {
+      var loaded = Object.assign({}, defaults, parsed, {
         goals: Object.assign({}, defaults.goals, parsed.goals),
         guides: Object.assign({}, defaults.guides, parsed.guides),
         sim: Object.assign({}, defaults.sim, parsed.sim)
       });
+      // 口座区分を2つから4つに増やしたため、古い「NISA」を読み替える
+      if (Array.isArray(loaded.holdings)) {
+        loaded.holdings.forEach(function (h) { h.account = normalizeAccount(h.account); });
+      }
+      return loaded;
     } catch (e) { return defaults; }
   }
 
@@ -796,7 +858,7 @@
     var shares = num(h.shares), cost = num(h.cost), div = num(h.div);
     var acquisition = shares * cost;
     var divPre = shares * div;
-    var divPost = h.account === "NISA" ? divPre : divPre * (1 - TAX_RATE);
+    var divPost = isTaxFree(h.account) ? divPre : divPre * (1 - TAX_RATE);
     var trend = null;
     if (h.prevDiv !== "" && h.prevDiv != null) {
       var prev = num(h.prevDiv);
@@ -805,6 +867,57 @@
       else trend = "flat";
     }
     return { acquisition: acquisition, divPre: divPre, divPost: divPost, trend: trend };
+  }
+
+  // ---------- 権利落ち日 ----------
+  // 基準日(権利確定月の月末、休場なら直前の営業日)の1営業日前が権利落ち日。
+  // 受渡がT+2になった2019年7月以降のルール。祝日は東証の休場日を持っておく。
+  var TSE_CLOSED = (function () {
+    var set = {};
+    "20250101,20250102,20250103,20250113,20250211,20250223,20250224,20250320,20250429,20250503,20250504,20250505,20250506,20250721,20250811,20250915,20250923,20251013,20251103,20251123,20251124,20251231,20260101,20260102,20260103,20260112,20260211,20260223,20260320,20260429,20260503,20260504,20260505,20260506,20260720,20260811,20260921,20260922,20260923,20261012,20261103,20261123,20261231,20270101,20270102,20270103,20270111,20270211,20270223,20270321,20270322,20270429,20270503,20270504,20270505,20270719,20270811,20270920,20270923,20271011,20271103,20271123,20271231,20280101,20280102,20280103,20280110,20280211,20280223,20280320,20280429,20280503,20280504,20280505,20280717,20280811,20280918,20280922,20281009,20281103,20281123,20281231,20290101,20290102,20290103,20290108,20290211,20290212,20290223,20290320,20290429,20290430,20290503,20290504,20290505,20290716,20290811,20290917,20290923,20290924,20291008,20291103,20291123,20291231,20300101,20300102,20300103,20300114,20300211,20300223,20300320,20300429,20300503,20300504,20300505,20300506,20300715,20300811,20300812,20300916,20300923,20301014,20301103,20301104,20301123,20301231,20310101,20310102,20310103,20310113,20310211,20310223,20310224,20310321,20310429,20310503,20310504,20310505,20310506,20310721,20310811,20310915,20310923,20311013,20311103,20311123,20311124,20311231,20320101,20320102,20320103,20320112,20320211,20320223,20320320,20320429,20320503,20320504,20320505,20320719,20320811,20320920,20320921,20320922,20321011,20321103,20321123,20321231".split(",").forEach(function (d) { set[d] = true; });
+    return set;
+  })();
+
+  function ymd(d) {
+    return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  }
+  function isClosedDay(d) {
+    var w = d.getDay();
+    if (w === 0 || w === 6) return true;
+    return TSE_CLOSED[String(ymd(d))] === true;
+  }
+  function prevBusinessDay(d) {
+    var x = new Date(d.getTime());
+    do { x.setDate(x.getDate() - 1); } while (isClosedDay(x));
+    return x;
+  }
+
+  // 権利確定月 month(1-12) の year 年分の権利落ち日
+  function exDateOf(year, month) {
+    var base = new Date(year, month, 0); // その月の末日
+    while (isClosedDay(base)) base = prevBusinessDay(base);
+    return prevBusinessDay(base);
+  }
+
+  function fmtDate(d) {
+    return d.getFullYear() + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + ("0" + d.getDate()).slice(-2);
+  }
+
+  // 保有銘柄の、今日以降でいちばん近い権利落ち日
+  function nextExDates(h, from) {
+    var today = from || new Date();
+    today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return monthsOf(h).map(function (m) {
+      var d = exDateOf(today.getFullYear(), m);
+      if (d < today) d = exDateOf(today.getFullYear() + 1, m);
+      return d;
+    }).sort(function (a, b) { return a - b; });
+  }
+
+  function daysUntil(d, from) {
+    var today = from || new Date();
+    today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return Math.round((d - today) / 86400000);
   }
 
   function trendText(trend) {
@@ -839,6 +952,7 @@
       var c = computeRow(h);
       var tr = document.createElement("tr");
       tr.dataset.id = h.id;
+      if (h.excluded) tr.classList.add("is-excluded");
 
       var codeCell = makeInputCell(h, "code", "text");
       var nameCell = makeInputCell(h, "name", "text");
@@ -877,6 +991,12 @@
 
       var tdDel = document.createElement("td");
       tdDel.className = "row-actions";
+      var detailBtn = document.createElement("button");
+      detailBtn.className = "detail-btn";
+      detailBtn.textContent = "詳細";
+      detailBtn.title = "現在株価・優待・メモ・除外";
+      detailBtn.addEventListener("click", function () { openDetailDialog(h); });
+      tdDel.appendChild(detailBtn);
       var delBtn = document.createElement("button");
       delBtn.textContent = "削除";
       delBtn.title = "削除";
@@ -985,6 +1105,9 @@
     var own = Array.isArray(h.months) && h.months.length > 0;
     if (!own) btn.classList.add("is-empty");
     btn.textContent = monthsLabel(h);
+    var ex = nextExDates(h);
+    btn.title = ex.length === 0 ? "権利確定月を選ぶ"
+      : "次の権利落ち日: " + ex.map(fmtDate).join(" / ");
     btn.addEventListener("click", function () { openMonthsDialog(h); });
     td.appendChild(btn);
     return td;
@@ -1052,11 +1175,69 @@
     if (t) { save(); renderTable(); renderDashboard(); }
   });
 
+  function openDetailDialog(h) {
+    var dlg = document.getElementById("detailDialog");
+    var price = document.getElementById("detailPrice");
+    var perk = document.getElementById("detailPerk");
+    var exclude = document.getElementById("detailExclude");
+    var memo = document.getElementById("detailMemo");
+
+    document.getElementById("detailTitle").textContent =
+      (h.code ? h.code + " " : "") + (h.name || "銘柄の詳細");
+    price.value = h.price == null ? "" : h.price;
+    perk.value = h.perk == null ? "" : h.perk;
+    exclude.checked = !!h.excluded;
+    memo.value = h.memo == null ? "" : h.memo;
+
+    function paintYield() {
+      var p = num(h.price), d = num(h.div), pk = num(h.perk), sh = num(h.shares);
+      var el = document.getElementById("detailYield");
+      if (!(p > 0)) { el.textContent = "現在株価を入れると、今の株価に対する利回りが出ます。"; return; }
+      var base = (d / p) * 100;
+      var txt = "現在利回り " + fmtPct(base);
+      if (pk > 0 && sh > 0) txt += " / 優待を含めると " + fmtPct(base + (pk / sh / p) * 100);
+      var cost = num(h.cost);
+      if (cost > 0) txt += "(簿価利回り " + fmtPct((d / cost) * 100) + ")";
+      el.textContent = txt;
+    }
+
+    var ex = nextExDates(h);
+    document.getElementById("detailExDates").textContent = ex.length === 0
+      ? "権利確定月を入れると、次の権利落ち日が出ます。"
+      : "次の権利落ち日: " + ex.map(function (d) {
+          var n = daysUntil(d);
+          return fmtDate(d) + "(" + (n === 0 ? "本日" : "あと" + n + "日") + ")";
+        }).join(" / ");
+
+    paintYield();
+
+    function bind(el, field, isNum) {
+      el.oninput = function () {
+        var v = el.value;
+        h[field] = v === "" ? undefined : (isNum ? v : v);
+        save(); paintYield(); renderTable(); renderDashboard();
+      };
+    }
+    bind(price, "price", true);
+    bind(perk, "perk", true);
+    bind(memo, "memo", false);
+    exclude.onchange = function () {
+      h.excluded = exclude.checked ? true : undefined;
+      save(); renderTable(); renderDashboard();
+    };
+
+    dlg.showModal();
+  }
+
+  document.getElementById("detailDoneBtn").addEventListener("click", function () {
+    document.getElementById("detailDialog").close();
+  });
+
   function makeAccountCell(h) {
     var td = document.createElement("td");
     td.dataset.label = "口座";
     var sel = document.createElement("select");
-    ["特定", "NISA"].forEach(function (s) {
+    ACCOUNTS.forEach(function (s) {
       var opt = document.createElement("option");
       opt.value = s; opt.textContent = s;
       if (h.account === s) opt.selected = true;
@@ -1186,7 +1367,7 @@
       var shares = parsePasteNum(lines[7]);
       var div = parsePasteNum(lines[8]);
       var memo = lines[12];
-      var account = /nisa/i.test(memo) ? "NISA" : "特定";
+      var account = accountFromText(memo) || "特定";
       results.push({ code: code, name: name || nameFor(code) || code, sector: sectorFor(code, lines[5]), account: account, shares: shares, cost: cost, div: div });
     });
     return { results: results, skipped: skipped };
@@ -1249,7 +1430,10 @@
   }
 
   function accountFromText(text) {
-    if (/nisa|ニーサ/i.test(text)) return "NISA";
+    // 「NISA成長投資枠」「つみたて投資枠」「旧NISA」など、証券会社ごとに書き方が違う
+    if (/つみたて|積立/.test(text)) return "新NISAつみたて";
+    if (/旧\s*nisa|一般nisa|旧ニーサ/i.test(text)) return "旧NISA";
+    if (/nisa|ニーサ/i.test(text)) return "新NISA成長";
     if (/特定|一般/.test(text)) return "特定";
     return null;
   }
@@ -1354,7 +1538,7 @@
     var merged = mergePastedResults(parsed.results);
     save(); renderTable(); renderDashboard();
     // 口座の判定は誤ると税額・利回りがずれるので、内訳を出して気づけるようにする
-    var nisa = parsed.results.filter(function (r) { return r.account === "NISA"; }).length;
+    var nisa = parsed.results.filter(function (r) { return isTaxFree(r.account); }).length;
     var msg = merged.added + "件追加、" + merged.updated + "件更新しました。"
       + "(NISA " + nisa + "件 / 特定 " + (parsed.results.length - nisa) + "件)";
     if (parsed.skipped > 0) msg += " 形式が一致しない行を" + parsed.skipped + "件スキップしました。";
@@ -1372,8 +1556,8 @@
 
     var results = [], skipped = 0;
     lines.forEach(function (line) {
-      var isNisa = /nisa/i.test(line);
-      var parts = line.replace(/nisa/ig, " ").replace(/特定/g, " ")
+      var lineAccount = accountFromText(line);
+      var parts = line.replace(/つみたて|積立|旧\s*nisa|nisa|ニーサ/ig, " ").replace(/特定|一般/g, " ")
         .split(/[\s,、]+/).filter(function (p) { return p.length > 0; });
       if (parts.length === 0) return;
 
@@ -1393,7 +1577,7 @@
         code: code,
         name: nameFor(code) || code,
         sector: sectorFor(code, ""),
-        account: isNisa ? "NISA" : "特定",
+        account: lineAccount || "特定",
         shares: at(0), cost: at(1), div: div, prevDiv: prevDiv
       });
     });
@@ -1538,6 +1722,7 @@
       rows.push({
         code: code, name: rawName, per: per, qty: qty === "" ? null : qty,
         ry: ry, rm: rm, seq: ry * 12 + rm,
+        py: m[1] + "/" + ("0" + m[2]).slice(-2),
         estimated: grossCol === "" && !isNisa && parsePasteNum(cell("tax")) === ""
       });
     });
@@ -1683,6 +1868,18 @@
         }
       });
     });
+
+    // 実績は「答え合わせ」で使うので残す。同じ入金を二重に数えないよう、
+    // 銘柄+入金年月+金額 で重複を除く。
+    var keep = {};
+    (state.payouts || []).concat(parsed.rows.map(function (r) {
+      return { code: r.code, ym: r.py, gross: r.per * (r.qty || 0), qty: r.qty, per: r.per };
+    })).forEach(function (r) {
+      if (!r.code || !r.ym) return;
+      keep[r.code + "|" + r.ym + "|" + Math.round(r.gross)] = r;
+    });
+    state.payouts = Object.keys(keep).map(function (k) { return keep[k]; })
+      .sort(function (a, b) { return a.ym < b.ym ? -1 : a.ym > b.ym ? 1 : 0; });
 
     state.isSample = false;
     save(); renderTable(); renderDashboard();
@@ -1870,11 +2067,15 @@
       lastExport: null,
       isSample: false
     };
-    return Object.assign({}, defaults, parsed, {
+    var merged = Object.assign({}, defaults, parsed, {
       goals: Object.assign({}, defaults.goals, parsed.goals),
       guides: Object.assign({}, defaults.guides, parsed.guides),
       sim: Object.assign({}, defaults.sim, parsed.sim)
     });
+    if (Array.isArray(merged.holdings)) {
+      merged.holdings.forEach(function (h) { h.account = normalizeAccount(h.account); });
+    }
+    return merged;
   }
 
   // ---------- Goals inputs ----------
@@ -1935,8 +2136,11 @@
   var currentAxis = "sector";
 
   function aggregate() {
+    // 「配当の集計から除外」した銘柄は、配当だけ0として扱う(取得額には残す)
     var rows = state.holdings.map(function (h) {
-      return Object.assign({}, h, computeRow(h));
+      var c = computeRow(h);
+      if (h.excluded) { c.divPre = 0; c.divPost = 0; c.trend = null; }
+      return Object.assign({}, h, c);
     }).filter(function (r) { return r.divPre > 0 || r.acquisition > 0; });
 
     var totalDivPre = rows.reduce(function (s, r) { return s + r.divPre; }, 0);
@@ -2247,7 +2451,7 @@
         tile.style.background = mode.color ? mode.color(metric) : colorMap[gr.item.key];
         var valueText = mode.text ? mode.text(metric) : fmtPct(pct);
 
-        var nisaMark = row.account === "NISA" ? "◆ " : "";
+        var nisaMark = isTaxFree(row.account) ? "◆ " : "";
         var name = row.name || row.code || "無名銘柄";
         tile.dataset.holdingId = row.id;
         tile.tabIndex = 0;
@@ -2334,6 +2538,86 @@
     if (rest.length) {
       addRow("その他(" + rest.length + ")", restSum, useGroupColor ? cssVar("--other") : cssVar("--s3"));
     }
+  }
+
+  // ---------- 配当の答え合わせ ----------
+  // 予想を配るだけのツールにはできない見方。実際に振り込まれた額と、
+  // 今の保有から計算した年間予想を並べて、ずれを数字で見せる。
+  function renderActual(agg) {
+    var panel = document.getElementById("actualPanel");
+    var body = document.getElementById("actualBody");
+    if (!panel || !body) return;
+
+    var payouts = Array.isArray(state.payouts) ? state.payouts : [];
+    panel.hidden = payouts.length === 0;
+    if (payouts.length === 0) { body.innerHTML = ""; return; }
+
+    var now = new Date();
+    var cutoff = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+    var cutoffYm = cutoff.getFullYear() + "/" + ("0" + (cutoff.getMonth() + 1)).slice(-2);
+
+    var byYear = {}, last12 = 0, last12Codes = {};
+    payouts.forEach(function (r) {
+      var y = parseInt(r.ym.slice(0, 4), 10);
+      byYear[y] = (byYear[y] || 0) + r.gross;
+      if (r.ym > cutoffYm) { last12 += r.gross; last12Codes[r.code] = true; }
+    });
+
+    var forecast = agg.totalDivPre;
+    var diff = last12 - forecast;
+    var diffPct = forecast > 0 ? (diff / forecast) * 100 : 0;
+
+    body.innerHTML = "";
+
+    var lead = document.createElement("div");
+    lead.className = "actual-lead";
+    function card(label, value, sub, cls) {
+      var d = document.createElement("div");
+      d.className = "actual-card" + (cls ? " " + cls : "");
+      var l = document.createElement("div"); l.className = "lbl"; l.textContent = label;
+      var v = document.createElement("div"); v.className = "val"; v.textContent = value;
+      d.appendChild(l); d.appendChild(v);
+      if (sub) { var sb = document.createElement("div"); sb.className = "sub"; sb.textContent = sub; d.appendChild(sb); }
+      lead.appendChild(d);
+    }
+    card("直近1年で実際に受け取った額", fmtYen(last12), "税引前・" + Object.keys(last12Codes).length + "銘柄");
+    card("今の保有での年間予想", fmtYen(forecast), "税引前");
+    card("差", (diff >= 0 ? "+" : "−") + fmtYen(Math.abs(diff)),
+      forecast > 0 ? (diff >= 0 ? "+" : "−") + fmtPct(Math.abs(diffPct)) : "", "is-gap");
+    body.appendChild(lead);
+
+    var years = Object.keys(byYear).map(Number).sort(function (a, b) { return a - b; });
+    if (years.length > 0) {
+      var maxVal = Math.max.apply(null, years.map(function (y) { return byYear[y]; }));
+      var chart = document.createElement("div");
+      chart.className = "calendar-chart";
+      years.forEach(function (y) {
+        var col = document.createElement("div");
+        col.className = "cal-col";
+        var val = document.createElement("div");
+        val.className = "cal-value";
+        val.textContent = fmtYen(byYear[y]);
+        var slot = document.createElement("div");
+        slot.className = "cal-bar-slot";
+        var bar = document.createElement("div");
+        bar.className = "cal-bar";
+        bar.style.height = Math.max(2, (byYear[y] / maxVal) * 100) + "%";
+        slot.appendChild(bar);
+        var lab = document.createElement("div");
+        lab.className = "cal-month";
+        lab.textContent = y + "年";
+        col.appendChild(val); col.appendChild(slot); col.appendChild(lab);
+        chart.appendChild(col);
+      });
+      body.appendChild(chart);
+    }
+
+    var note = document.createElement("p");
+    note.className = "actual-note";
+    note.textContent = "入金日をもとにした暦年の集計です。期の途中で買った銘柄は満額を受け取っていないため、"
+      + "実績は予想を下回るのがふつうです。外国株と投資信託は含みません。"
+      + (years.length > 0 && years[0] === years[years.length - 1] ? " 1年分しかないため、推移はまだ比べられません。" : "");
+    body.appendChild(note);
   }
 
   function renderComposition(agg) {
@@ -2749,6 +3033,10 @@
       '  <p class="heat-note" id="heatNote"></p>' +
       '  <ul class="legend" id="axisLegend"></ul>' +
       '</div>' +
+      '<div class="panel" id="actualPanel" hidden>' +
+      '  <h2><span class="chap">†</span>配当の答え合わせ <span class="hint">証券会社の受取履歴を読み込むと出ます</span></h2>' +
+      '  <div id="actualBody"></div>' +
+      '</div>' +
       '<div class="panel">' +
       '  <h2><span class="chap">四</span>配当金カレンダー <span class="hint">権利確定月は証券コードから自動判定</span></h2>' +
       '  <div class="axis-tabs" id="calendarTabs">' +
@@ -2839,6 +3127,7 @@
 
     renderHero(agg);
     renderComposition(agg);
+    renderActual(agg);
     renderCalendar(agg);
     renderChangeSummary(agg);
     renderYields(agg);
