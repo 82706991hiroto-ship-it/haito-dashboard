@@ -1206,7 +1206,7 @@
       var el = document.getElementById("detailYield");
       if (!(p > 0)) { el.textContent = "現在株価を入れると、今の株価に対する利回りが出ます。"; return; }
       var base = (d / p) * 100;
-      var txt = "現在利回り " + fmtPct(base);
+      var txt = "現在利回り " + fmtPct(base) + (h.priceDate ? "(" + h.priceDate + "時点の株価)" : "");
       if (pk > 0 && sh > 0) txt += " / 優待を含めると " + fmtPct(base + (pk / sh / p) * 100);
       var cost = num(h.cost);
       if (cost > 0) txt += "(簿価利回り " + fmtPct((d / cost) * 100) + ")";
@@ -1231,6 +1231,11 @@
       };
     }
     bind(price, "price", true);
+    var priceOnInput = price.oninput;
+    price.oninput = function () {
+      h.priceDate = price.value === "" ? undefined : todayStamp();
+      priceOnInput();
+    };
     bind(perk, "perk", true);
     bind(payout, "payout", true);
     bind(memo, "memo", false);
@@ -1351,6 +1356,18 @@
     return info && info[4] != null ? info[4] : null;
   }
 
+  // 株価はいつの値かが大事なので、取り込んだ日(Yahooなら現在値の日付)を添えて持つ
+  function todayStamp() {
+    var d = new Date();
+    return d.getFullYear() + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + ("0" + d.getDate()).slice(-2);
+  }
+  function normalizePriceDate(s) {
+    var m = String(s || "").match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/);
+    if (m) return m[1] + "/" + ("0" + m[2]).slice(-2) + "/" + ("0" + m[3]).slice(-2);
+    // 「09/22」「15:00」のように年が無い表記は、取り込んだ日とみなす
+    return "";
+  }
+
   function parsePasteNum(s) {
     if (!s || /^-+$/.test(s)) return "";
     var cleaned = String(s).replace(/[,%円]/g, "").trim();
@@ -1384,9 +1401,12 @@
       var cost = parsePasteNum(lines[6]);
       var shares = parsePasteNum(lines[7]);
       var div = parsePasteNum(lines[8]);
+      var price = parsePasteNum(lines[3]);
+      var priceDate = normalizePriceDate(lines[4]);
       var memo = lines[12];
       var account = accountFromText(memo) || "特定";
-      results.push({ code: code, name: name || nameFor(code) || code, sector: sectorFor(code, lines[5]), account: account, shares: shares, cost: cost, div: div });
+      results.push({ code: code, name: name || nameFor(code) || code, sector: sectorFor(code, lines[5]), account: account, shares: shares, cost: cost, div: div,
+        price: price, priceDate: price === "" ? undefined : (priceDate || todayStamp()) });
     });
     return { results: results, skipped: skipped };
   }
@@ -1400,7 +1420,10 @@
     cost: ["取得単価", "平均取得単価", "平均取得価額", "平均単価", "取得価額", "取得価格", "購入価格", "買付単価", "簿価単価"],
     sector: ["業種", "業種名"],
     account: ["口座", "口座区分", "預り区分", "口座種別", "口座種類", "保管区分", "預り", "課税区分"],
-    div: ["1株配当", "予想配当", "配当金(1株)", "1株当り配当金"]
+    div: ["1株配当", "予想配当", "配当金(1株)", "1株当り配当金"],
+    // 「現在値［円］」の後ろに「現在値（前日比）［円］」が並ぶ形式がある。
+    // 括弧以降を落とすとどちらも「現在値」になるが、先に出た列を採るので現在値が入る。
+    price: ["現在値", "現在株価", "株価", "時価単価"]
   };
 
   function splitRow(line) {
@@ -1464,7 +1487,8 @@
     return accountFromText(filled.join(" "));
   }
 
-  function parseHeaderTableFormat(text) {
+  // priceDate: 株価がいつの値か。貼り付けなら今日、CSVならファイルの日付を渡す
+  function parseHeaderTableFormat(text, priceDate) {
     var lines = text.replace(/\r/g, "").split("\n").map(function (l) { return l.trim(); }).filter(function (l) { return l.length > 0; });
     if (lines.length < 2) return { results: [], skipped: 0 };
 
@@ -1509,14 +1533,16 @@
         shares: colMap.shares !== undefined ? parsePasteNum(row[colMap.shares]) : "",
         cost: colMap.cost !== undefined ? parsePasteNum(row[colMap.cost]) : "",
         div: div,
-        prevDiv: prevDiv
+        prevDiv: prevDiv,
+        price: colMap.price !== undefined ? parsePasteNum(row[colMap.price]) : "",
+        priceDate: colMap.price !== undefined ? (priceDate || todayStamp()) : undefined
       });
     });
     return { results: results, skipped: skipped };
   }
 
-  function parseHoldingsPaste(text) {
-    var generic = parseHeaderTableFormat(text);
+  function parseHoldingsPaste(text, priceDate) {
+    var generic = parseHeaderTableFormat(text, priceDate);
     if (generic.results.length > 0) return generic;
     return parseBlockFormat(text);
   }
@@ -1529,6 +1555,7 @@
         existing.name = r.name; existing.sector = r.sector;
         existing.shares = r.shares; existing.cost = r.cost; existing.div = r.div;
         if (r.months) existing.months = r.months;
+        if (r.price !== undefined && r.price !== "") { existing.price = r.price; existing.priceDate = r.priceDate; }
         // 前年配当を持たない取り込み元(貼り付け・CSV)では既存の入力値を消さない
         if (r.prevDiv !== undefined) existing.prevDiv = r.prevDiv;
         updated++;
@@ -1536,6 +1563,7 @@
         state.holdings.push({
           id: uid(), code: r.code, name: r.name, sector: r.sector, account: r.account,
           shares: r.shares, cost: r.cost, div: r.div, months: r.months,
+          price: r.price === "" ? undefined : r.price, priceDate: r.price === "" ? undefined : r.priceDate,
           prevDiv: r.prevDiv !== undefined ? r.prevDiv : ""
         });
         added++;
@@ -1544,8 +1572,8 @@
     return { added: added, updated: updated };
   }
 
-  function applyParsedHoldings(text, statusEl) {
-    applyResults(parseHoldingsPaste(text), statusEl, "読み込める行が見つかりませんでした。対応形式か確認してください。");
+  function applyParsedHoldings(text, statusEl, priceDate) {
+    applyResults(parseHoldingsPaste(text, priceDate), statusEl, "読み込める行が見つかりませんでした。対応形式か確認してください。");
   }
 
   function applyResults(parsed, statusEl, emptyMessage) {
@@ -1635,9 +1663,18 @@
     if (!file) return;
     var status = document.getElementById("csvImportStatus");
     var reader = new FileReader();
+    var stamp = (function () {
+      var m = String(file.name || "").match(/(20\d{2})(\d{2})(\d{2})/);
+      if (m) return m[1] + "/" + m[2] + "/" + m[3];
+      if (file.lastModified) {
+        var d = new Date(file.lastModified);
+        return d.getFullYear() + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + ("0" + d.getDate()).slice(-2);
+      }
+      return "";
+    })();
     reader.onload = function () {
       var text = decodeCsvBuffer(reader.result);
-      applyParsedHoldings(text, status);
+      applyParsedHoldings(text, status, stamp);
     };
     reader.onerror = function () { status.textContent = "ファイルの読み込みに失敗しました。"; };
     reader.readAsArrayBuffer(file);
@@ -2781,10 +2818,22 @@
     }
 
     var portfolioYoc = agg.totalAcq > 0 ? (agg.totalDivPre / agg.totalAcq) * 100 : 0;
+
+    // 現在利回りは、株価を取り込めた銘柄だけで計算する(時価で割るため)
+    var priced = agg.rows.filter(function (r) { return num(r.price) > 0 && num(r.shares) > 0 && r.divPre > 0; });
+    var mktVal = priced.reduce(function (s2, r) { return s2 + num(r.price) * num(r.shares); }, 0);
+    var mktDiv = priced.reduce(function (s2, r) { return s2 + r.divPre; }, 0);
+    var oldest = priced.map(function (r) { return r.priceDate || ""; }).filter(Boolean).sort()[0];
+    var currentStat = priced.length === 0 ? "" :
+      '<div class="stat"><div class="label">現在利回り(' + priced.length + '銘柄)</div><div class="value">'
+      + fmtPct(mktVal > 0 ? (mktDiv / mktVal) * 100 : 0, 2)
+      + (oldest ? '<span class="unit">' + oldest + '〜の株価</span>' : '') + '</div></div>';
+
     var summary = document.createElement("div");
     summary.className = "change-summary";
     summary.innerHTML =
       '<div class="stat"><div class="label">簿価利回り(全体)</div><div class="value">' + fmtPct(portfolioYoc, 2) + '</div></div>' +
+      currentStat +
       '<div class="stat"><div class="label">最高</div><div class="value">' + fmtPct(y.list[0].yoc, 2) + '</div></div>' +
       '<div class="stat"><div class="label">最低</div><div class="value">' + fmtPct(y.list[y.list.length - 1].yoc, 2) + '</div></div>' +
       '<div class="stat"><div class="label">上位3銘柄で占める配当</div><div class="value' + (c.top3Stock > 50 ? ' is-down' : '') + '">' + fmtPct(c.top3Stock) + '</div></div>' +
