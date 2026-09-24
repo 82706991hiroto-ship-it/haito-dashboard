@@ -358,17 +358,25 @@
     color: var(--text-2); margin: 0 0 12px; padding: 12px 14px; background: var(--field);
     border-radius: 12px; overflow-x: auto;
   }
-  #yahooPasteArea, #quickEntryArea, #divHistArea {
+  #yahooPasteArea, #quickEntryArea, #divHistArea, #priceUpdateArea {
     width: 100%; font-size: 13px; padding: 12px 14px; border-radius: 12px;
     border: 1px solid transparent; background: var(--field); color: var(--text);
     font-family: inherit; resize: vertical;
   }
   #quickEntryArea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  #yahooPasteArea:focus, #quickEntryArea:focus, #divHistArea:focus { border-color: var(--accent); background: var(--card); }
+  #yahooPasteArea:focus, #quickEntryArea:focus, #divHistArea:focus, #priceUpdateArea:focus { border-color: var(--accent); background: var(--card); }
   .paste-status { font-size: 12px; color: var(--text-2); }
 
   /* 入力が足りない項目の一覧 */
   .source-note { margin: 0 0 12px; line-height: 1.85; }
+  .price-notice {
+    display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
+    background: #fff4df; color: #7a4a00; border-radius: var(--radius);
+    padding: 12px 15px; margin-bottom: 14px; font-size: 12.5px; line-height: 1.75;
+  }
+  .price-notice span { flex: 1 1 16em; }
+  table.data-table td.is-stale { color: #b45309; }
+  #priceUpdateArea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .source-note a { color: inherit; }
   .missing-box {
     margin-top: 18px; padding: 16px 18px; border-radius: var(--radius);
@@ -490,7 +498,7 @@
 
     .goal-actual { grid-template-columns: 1fr; }
     .goal-actual .col + .col { margin-top: 18px; }
-    #yahooPasteArea, #quickEntryArea, #divHistArea { font-size: 16px; }
+    #yahooPasteArea, #quickEntryArea, #divHistArea, #priceUpdateArea { font-size: 16px; }
     .detail-dialog .field input, .detail-dialog .field textarea { font-size: 16px; }
     .calendar-chart { height: 170px; gap: 3px; }
     .sim-chart { height: 140px; gap: 2px; }
@@ -725,6 +733,22 @@
           <button class="btn" id="csvImportBtn">CSVファイルを選択して読み込む</button>
           <input type="file" id="csvImportFile" accept=".csv,.txt,text/csv,text/plain,application/vnd.ms-excel" style="display:none">
           <span class="paste-status" id="csvImportStatus"></span>
+        </div>
+      </div>
+    </details>
+
+    <details class="paste-import" id="priceUpdateBox">
+      <summary>株価だけ更新する(現在利回りの更新)</summary>
+      <div class="paste-import-body">
+        <p class="hint">
+          1行に「証券コード 株価」を並べて貼り付けると、登録済みの銘柄の株価だけを更新します。株数や取得単価は変わりません。
+          証券会社アプリの保有一覧やYahoo!ファイナンスの画面を見ながら打つ、スマホ向けの経路です。
+          CSVが落とせるなら、上の「保有証券のCSV」を読み込むほうが一度に済みます。
+        </p>
+        <textarea id="priceUpdateArea" rows="5" placeholder="8306 1820&#10;9433 2415&#10;1928 3540"></textarea>
+        <div class="toolbar">
+          <button class="btn primary" id="priceUpdateBtn">株価を更新する</button>
+          <span class="paste-status" id="priceUpdateStatus"></span>
         </div>
       </div>
     </details>
@@ -1385,6 +1409,20 @@
   }
 
   // 株主優待。手で入れた金額があればそれを、無ければ有報の記載から株数に応じた目安を使う。
+  // 株価の鮮度。月1回ほどCSVを読み込み直す運用を前提に、30日を過ぎたら知らせる
+  var PRICE_STALE_DAYS = 30;
+  function priceAgeDays(stamp) {
+    var m = String(stamp || "").match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/);
+    if (!m) return null;
+    var d = new Date(+m[1], +m[2] - 1, +m[3]);
+    var t = new Date(); t = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+    return Math.round((t - d) / 86400000);
+  }
+  function currentYieldOf(r) {
+    var p = num(r.price), d = num(r.div);
+    return p > 0 && d > 0 ? (d / p) * 100 : null;
+  }
+
   function perkEstimate(h) {
     var info = PERK_INFO[String(h.code || "").trim()];
     if (info === undefined) return { status: "unknown", yen: null };
@@ -1747,6 +1785,52 @@
     reader.onerror = function () { status.textContent = "ファイルの読み込みに失敗しました。"; };
     reader.readAsArrayBuffer(file);
     e.target.value = "";
+  });
+
+  // ---------- 株価だけ更新 ----------
+  // 「8306 1820」「8306,1,820」「8306<TAB>1820円」のような行から、コードと株価を拾う
+  function parsePriceLines(text) {
+    var out = [], skipped = 0;
+    String(text || "").replace(/\r/g, "").split("\n").forEach(function (line) {
+      var t = line.trim();
+      if (!t) return;
+      var m = t.match(/(^|[^0-9A-Za-z])([0-9][0-9A-Za-z]{3})(?![0-9A-Za-z])[^0-9]*([0-9][0-9,]*(?:\.[0-9]+)?)/);
+      if (!m) { skipped++; return; }
+      var price = parseFloat(m[3].replace(/,/g, ""));
+      if (!(price > 0)) { skipped++; return; }
+      out.push({ code: m[2].toUpperCase(), price: price });
+    });
+    return { rows: out, skipped: skipped };
+  }
+
+  function openPriceUpdate() {
+    var box = document.getElementById("priceUpdateBox");
+    box.open = true;
+    box.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(function () { document.getElementById("priceUpdateArea").focus({ preventScroll: true }); }, 350);
+  }
+
+  document.getElementById("priceUpdateBtn").addEventListener("click", function () {
+    var area = document.getElementById("priceUpdateArea");
+    var status = document.getElementById("priceUpdateStatus");
+    var parsed = parsePriceLines(area.value);
+    if (parsed.rows.length === 0) {
+      status.textContent = "「証券コード 株価」の行が見つかりませんでした。例: 8306 1820";
+      return;
+    }
+    var stamp = todayStamp(), updated = 0, unknown = [];
+    parsed.rows.forEach(function (r) {
+      var hits = state.holdings.filter(function (h) { return String(h.code || "").trim().toUpperCase() === r.code; });
+      if (hits.length === 0) { unknown.push(r.code); return; }
+      hits.forEach(function (h) { h.price = r.price; h.priceDate = stamp; });
+      updated++;
+    });
+    save(); renderTable(); renderDashboard();
+    var msg = updated + "銘柄の株価を更新しました(" + stamp + "時点)。";
+    if (unknown.length) msg += " 未登録のコード: " + unknown.slice(0, 5).join("、") + (unknown.length > 5 ? " ほか" : "") + "。";
+    if (parsed.skipped) msg += " 読めない行を" + parsed.skipped + "件飛ばしました。";
+    status.textContent = msg;
+    if (updated > 0) area.value = "";
   });
 
   // ---------- 配当金の受取履歴 ----------
@@ -2335,12 +2419,17 @@
     { label: "6%以上", min: 6, max: Infinity }
   ];
 
-  function buildYields(rows, totalDivPre) {
-    var list = rows.filter(function (r) { return r.acquisition > 0 && r.divPre > 0; })
+  // basis: "book" = 取得額で割る(簿価利回り) / "current" = 株価×株数で割る(現在利回り)
+  function buildYields(rows, totalDivPre, basis) {
+    var current = basis === "current";
+    var list = rows.filter(function (r) {
+        return r.divPre > 0 && (current ? num(r.price) > 0 && num(r.shares) > 0 : r.acquisition > 0);
+      })
       .map(function (r) {
+        var base = current ? num(r.price) * num(r.shares) : r.acquisition;
         return {
           row: r,
-          yoc: (r.divPre / r.acquisition) * 100,
+          yoc: (r.divPre / base) * 100,
           share: totalDivPre > 0 ? (r.divPre / totalDivPre) * 100 : 0
         };
       })
@@ -2476,6 +2565,18 @@
         { c: GROWTH_UP[3], t: "+20%↑" }, { c: HEAT_NA, t: "不明", sep: true }
       ]
     },
+    current: {
+      label: "現在利回り",
+      value: currentYieldOf,
+      color: function (y) { return y === null || !isFinite(y) || y <= 0 ? HEAT_NA : YIELD_RAMP[yieldStep(y)]; },
+      text: function (y) { return y === null || !isFinite(y) ? "―" : y.toFixed(1) + "%"; },
+      note: "取り込んだ株価に対する利回りです。濃いほど高利回りです。株価が無い銘柄はグレーです。",
+      scale: [
+        { c: YIELD_RAMP[0], t: "2%未満" }, { c: YIELD_RAMP[1], t: "2〜3%" },
+        { c: YIELD_RAMP[2], t: "3〜4%" }, { c: YIELD_RAMP[3], t: "4〜5%" },
+        { c: YIELD_RAMP[4], t: "5%以上" }, { c: HEAT_NA, t: "株価なし", sep: true }
+      ]
+    },
     yield: {
       label: "簿価利回り",
       value: bookYieldOf,
@@ -2497,7 +2598,7 @@
       scale: null
     }
   };
-  var COLOR_ORDER = ["growth", "yield", "group"];
+  var COLOR_ORDER = ["growth", "current", "yield", "group"];
   var currentColor = "growth";
 
   // ---------- ヒートマップ ----------
@@ -2583,6 +2684,7 @@
         tile.setAttribute("aria-label", name + " の明細へ移動");
         tile.title = group.label + " / " + name + "\n構成比 " + fmtPct(pct) + " (" + fmtYen(tr.item.value) + ")"
           + "\n増配率 " + COLOR_MODES.growth.text(growthOf(row))
+          + " / 現在利回り " + COLOR_MODES.current.text(currentYieldOf(row))
           + " / 簿価利回り " + COLOR_MODES.yield.text(bookYieldOf(row));
 
         // タイルの大きさに合わせて文字を拡縮し、市場ヒートマップの見え方に近づける
@@ -2872,18 +2974,68 @@
   }
 
   // ---------- 利回りと集中度 ----------
+  var yieldBasis = null; // null = 株価があれば現在、無ければ簿価
+
   function renderYields(agg) {
     var el = document.getElementById("yieldBody");
     el.innerHTML = "";
-    var y = agg.yields, c = agg.concentration;
+    var c = agg.concentration;
+    var anyPrice = agg.rows.some(function (r) { return num(r.price) > 0; });
+    var basis = yieldBasis || (anyPrice ? "current" : "book");
+    if (basis === "current" && !anyPrice) basis = "book";
+    var y = buildYields(agg.rows, agg.totalDivPre, basis);
+
+    // 株価の鮮度: 無い、または30日を過ぎた株価があれば知らせる
+    var withDiv = agg.rows.filter(function (r) { return r.divPre > 0; });
+    var noPrice = withDiv.filter(function (r) { return !(num(r.price) > 0); });
+    var stale = withDiv.filter(function (r) {
+      var a = num(r.price) > 0 ? priceAgeDays(r.priceDate) : null;
+      return a !== null && a > PRICE_STALE_DAYS;
+    });
+    if (withDiv.length > 0 && (noPrice.length > 0 || stale.length > 0)) {
+      var fresh = document.createElement("div");
+      fresh.className = "price-notice";
+      var msg = document.createElement("span");
+      var parts = [];
+      if (stale.length > 0) {
+        var oldestStale = stale.map(function (r) { return r.priceDate; }).sort()[0];
+        parts.push("株価が" + PRICE_STALE_DAYS + "日以上前の銘柄が" + stale.length + "件あります(いちばん古いのは" + oldestStale + ")");
+      }
+      if (noPrice.length > 0) parts.push("株価が未入力の銘柄が" + noPrice.length + "件あります");
+      msg.textContent = parts.join("。") + "。保有証券のCSVを読み込み直すか、株価だけ貼り付けると現在利回りが最新になります。";
+      fresh.appendChild(msg);
+      var go = document.createElement("button");
+      go.type = "button";
+      go.className = "btn";
+      go.textContent = "株価だけ更新する";
+      go.addEventListener("click", openPriceUpdate);
+      fresh.appendChild(go);
+      el.appendChild(fresh);
+    }
+
+    // 簿価 / 現在 の切り替え
+    if (anyPrice) {
+      var tabs = document.createElement("div");
+      tabs.className = "axis-tabs";
+      [["current", "現在利回り(株価)"], ["book", "簿価利回り(取得価格)"]].forEach(function (t) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "axis-tab" + (basis === t[0] ? " active" : "");
+        b.textContent = t[1];
+        b.addEventListener("click", function () { yieldBasis = t[0]; renderYields(aggregate()); });
+        tabs.appendChild(b);
+      });
+      el.appendChild(tabs);
+    }
 
     if (y.list.length === 0) {
       var note = document.createElement("p");
       note.className = "empty-note";
-      note.textContent = "取得額と配当が入力された銘柄がありません。";
+      note.textContent = basis === "current" ? "株価と配当が入力された銘柄がありません。" : "取得額と配当が入力された銘柄がありません。";
       el.appendChild(note);
       return;
     }
+    var basisLabel = basis === "current" ? "現在利回り" : "簿価利回り";
 
     var portfolioYoc = agg.totalAcq > 0 ? (agg.totalDivPre / agg.totalAcq) * 100 : 0;
 
@@ -2908,8 +3060,8 @@
     summary.innerHTML =
       '<div class="stat"><div class="label">簿価利回り(全体)</div><div class="value">' + fmtPct(portfolioYoc, 2) + '</div></div>' +
       currentStat + perkStat +
-      '<div class="stat"><div class="label">最高</div><div class="value">' + fmtPct(y.list[0].yoc, 2) + '</div></div>' +
-      '<div class="stat"><div class="label">最低</div><div class="value">' + fmtPct(y.list[y.list.length - 1].yoc, 2) + '</div></div>' +
+      '<div class="stat"><div class="label">最高(' + basisLabel + ')</div><div class="value">' + fmtPct(y.list[0].yoc, 2) + '</div></div>' +
+      '<div class="stat"><div class="label">最低(' + basisLabel + ')</div><div class="value">' + fmtPct(y.list[y.list.length - 1].yoc, 2) + '</div></div>' +
       '<div class="stat"><div class="label">上位3銘柄で占める配当</div><div class="value' + (c.top3Stock > 50 ? ' is-down' : '') + '">' + fmtPct(c.top3Stock) + '</div></div>' +
       '<div class="stat"><div class="label">実質的な分散銘柄数</div><div class="value">' + c.effectiveStocks.toFixed(1) + '<span class="unit">銘柄相当</span></div></div>';
     el.appendChild(summary);
@@ -2933,17 +3085,19 @@
     if (y.highShare > 0) {
       var warn = document.createElement("p");
       warn.className = "calendar-note";
-      warn.textContent = "利回り5%以上の銘柄が配当全体の " + fmtPct(y.highShare) +
+      warn.textContent = basisLabel + "5%以上の銘柄が配当全体の " + fmtPct(y.highShare) +
         " を占めています。高利回りは減配余地の小ささと表裏なので、配当性向とあわせて確認してください。";
       el.appendChild(warn);
     }
 
-    // 銘柄別の簿価利回り
+    // 銘柄別の利回り
     var wrap = document.createElement("div");
     wrap.className = "table-wrap";
     var table = document.createElement("table");
     table.className = "data-table change-table";
-    table.innerHTML = '<thead><tr><th>銘柄</th><th>簿価利回り</th><th>取得額</th><th>年間配当</th><th>配当構成比</th></tr></thead>';
+    table.innerHTML = basis === "current"
+      ? '<thead><tr><th>銘柄</th><th>現在利回り</th><th>株価(日付)</th><th>年間配当</th><th>配当構成比</th></tr></thead>'
+      : '<thead><tr><th>銘柄</th><th>簿価利回り</th><th>取得額</th><th>年間配当</th><th>配当構成比</th></tr></thead>';
     var tbody = document.createElement("tbody");
     y.list.forEach(function (x) {
       var tr = document.createElement("tr");
@@ -2955,8 +3109,14 @@
         return cell;
       }
       tr.appendChild(td("銘柄", (x.row.code ? x.row.code + " " : "") + (x.row.name || "無名銘柄")));
-      tr.appendChild(td("簿価利回り", fmtPct(x.yoc, 2), "num" + (x.yoc >= 5 ? " trend-down" : "")));
-      tr.appendChild(td("取得額", fmtYen(x.row.acquisition), "num"));
+      tr.appendChild(td(basisLabel, fmtPct(x.yoc, 2), "num" + (x.yoc >= 5 ? " trend-down" : "")));
+      if (basis === "current") {
+        var age = priceAgeDays(x.row.priceDate);
+        tr.appendChild(td("株価(日付)", fmtYen(num(x.row.price)) + (x.row.priceDate ? "(" + x.row.priceDate.slice(5) + ")" : ""),
+          "num" + (age !== null && age > PRICE_STALE_DAYS ? " is-stale" : "")));
+      } else {
+        tr.appendChild(td("取得額", fmtYen(x.row.acquisition), "num"));
+      }
       tr.appendChild(td("年間配当", fmtYen(x.row.divPre), "num"));
       tr.appendChild(td("配当構成比", fmtPct(x.share), "num"));
       tbody.appendChild(tr);
