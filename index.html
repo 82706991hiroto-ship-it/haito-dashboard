@@ -137,6 +137,21 @@
   table.data-table .months-input { width: 74px; }
   table.data-table input:focus, table.data-table select:focus { outline: none; border-color: var(--accent); background: var(--card); }
   .table-wrap { overflow-x: auto; }
+  .code-suggest {
+    position: fixed; z-index: 50; margin: 0; padding: 4px; list-style: none;
+    background: var(--card); color: var(--text); border: 1px solid var(--line);
+    border-radius: 12px; box-shadow: var(--shadow); max-height: 320px; overflow-y: auto;
+    min-width: 260px; max-width: calc(100vw - 16px);
+  }
+  .code-suggest li {
+    display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: baseline;
+    padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; line-height: 1.35;
+  }
+  .code-suggest li.is-active { background: var(--field); }
+  .code-suggest .cs-code { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .code-suggest .cs-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .code-suggest .cs-meta { grid-column: 2; font-size: 11.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .code-suggest .cs-empty { display: block; color: var(--muted); font-size: 12.5px; cursor: default; }
   .row-actions button {
     font-family: inherit; background: var(--field); border: none; border-radius: 999px;
     color: var(--text-2); cursor: pointer; font-size: 12px; padding: 6px 12px;
@@ -1068,6 +1083,13 @@
     var codeInput = codeCell.querySelector("input");
     var nameInput = nameCell.querySelector("input");
     var sectorSelect = sectorCell.querySelector("select");
+    function pickStock(e) {
+      codeInput.value = e.code;
+      // 既存の input ハンドラ(h.code の保存と自動入力)をそのまま通す
+      codeInput.dispatchEvent(new Event("input"));
+    }
+    wireSuggest(codeInput, pickStock);
+    wireSuggest(nameInput, pickStock);
     codeInput.addEventListener("input", function () {
       var info = CODE_INFO_MAP[codeInput.value.trim()];
       if (!info) return;
@@ -1087,6 +1109,138 @@
         if (prevInput && !prevInput.value && divs.length > 1) { prevInput.value = divs[1]; h.prevDiv = divs[1]; }
       }
       save(); updateRowComputedCells(h.id); renderDashboard();
+    });
+  }
+
+  // コード・銘柄名の入力途中で候補を出す。CODE_INFO_MAP(東証全銘柄)から探し、配当のある銘柄を上に並べる。
+  var suggestIndex = null;
+  function suggestKey(str) {
+    return String(str).normalize("NFKC").toLowerCase()
+      .replace(/[\u3041-\u3096]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) + 0x60); })
+      .replace(/[\s・･.,()（）]/g, "");
+  }
+  function buildSuggestIndex() {
+    suggestIndex = Object.keys(CODE_INFO_MAP).map(function (code) {
+      var info = CODE_INFO_MAP[code];
+      var divs = info[3];
+      return {
+        code: code, name: String(info[0]).normalize("NFKC"), key: suggestKey(info[0]),
+        sector: info[1], months: info[2], div: divs && divs.length ? divs[0] : 0
+      };
+    });
+  }
+  function findSuggestions(q, limit) {
+    if (!suggestIndex) buildSuggestIndex();
+    var raw = String(q).normalize("NFKC").trim().toUpperCase();
+    var key = suggestKey(q);
+    if (!key) return [];
+    var hits = [];
+    suggestIndex.forEach(function (e) {
+      var rank = -1;
+      if (e.code === raw) rank = 0;
+      else if (raw && e.code.indexOf(raw) === 0) rank = 1;
+      else if (e.key.indexOf(key) === 0) rank = 2;
+      else if (key.length >= 2 && e.key.indexOf(key) !== -1) rank = 3;
+      if (rank !== -1) hits.push({ e: e, rank: rank });
+    });
+    hits.sort(function (a, b) {
+      return a.rank - b.rank || (b.e.div > 0) - (a.e.div > 0) || (a.e.code < b.e.code ? -1 : 1);
+    });
+    return hits.slice(0, limit).map(function (x) { return x.e; });
+  }
+
+  var suggestBox = null, suggestState = null;
+  function closeSuggest() {
+    if (suggestBox) suggestBox.hidden = true;
+    suggestState = null;
+  }
+  function placeSuggest() {
+    if (!suggestState || !suggestBox) return;
+    var r = suggestState.input.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) { closeSuggest(); return; }
+    var w = Math.min(Math.max(r.width, 260), window.innerWidth - 16);
+    // 入力欄より幅が広いときは右端をそろえる(スマホでは入力欄が右寄せのため)
+    var left = w > r.width ? r.right - w : r.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+    suggestBox.style.left = left + "px";
+    suggestBox.style.width = w + "px";
+    var below = window.innerHeight - r.bottom;
+    if (below < 200 && r.top > below) {
+      suggestBox.style.top = "";
+      suggestBox.style.bottom = (window.innerHeight - r.top + 4) + "px";
+    } else {
+      suggestBox.style.bottom = "";
+      suggestBox.style.top = (r.bottom + 4) + "px";
+    }
+  }
+  function paintSuggestActive() {
+    Array.prototype.forEach.call(suggestBox.children, function (li, i) {
+      var on = i === suggestState.active;
+      li.classList.toggle("is-active", on);
+      li.setAttribute("aria-selected", on ? "true" : "false");
+      if (on) li.scrollIntoView({ block: "nearest" });
+    });
+  }
+  function openSuggest(input, items, onPick) {
+    if (!suggestBox) {
+      suggestBox = document.createElement("ul");
+      suggestBox.className = "code-suggest";
+      suggestBox.id = "codeSuggest";
+      suggestBox.setAttribute("role", "listbox");
+      suggestBox.hidden = true;
+      document.body.appendChild(suggestBox);
+      // タップでinputのフォーカスが外れる前に選べるよう、pointerdownで処理する
+      suggestBox.addEventListener("pointerdown", function (ev) {
+        ev.preventDefault();
+        var li = ev.target.closest("li[data-i]");
+        if (li && suggestState) suggestState.pick(suggestState.items[Number(li.dataset.i)]);
+      });
+      window.addEventListener("scroll", placeSuggest, true);
+      window.addEventListener("resize", placeSuggest);
+    }
+    suggestBox.innerHTML = "";
+    if (items.length === 0) { closeSuggest(); return; }
+    items.forEach(function (e, i) {
+      var li = document.createElement("li");
+      li.dataset.i = String(i);
+      li.setAttribute("role", "option");
+      var c = document.createElement("span"); c.className = "cs-code"; c.textContent = e.code;
+      var n = document.createElement("span"); n.className = "cs-name"; n.textContent = e.name;
+      var m = document.createElement("span"); m.className = "cs-meta";
+      var bits = [e.sector];
+      if (e.div > 0) bits.push("年" + e.div + "円");
+      if (e.months && e.months.length) bits.push(e.months.join(",") + "月");
+      m.textContent = bits.join(" ・ ");
+      li.appendChild(c); li.appendChild(n); li.appendChild(m);
+      suggestBox.appendChild(li);
+    });
+    suggestState = { input: input, items: items, active: -1, pick: function (e) { closeSuggest(); onPick(e); } };
+    input.setAttribute("aria-controls", "codeSuggest");
+    suggestBox.hidden = false;
+    placeSuggest();
+  }
+  function wireSuggest(input, onPick) {
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("role", "combobox");
+    function refresh() {
+      var q = input.value;
+      // 候補を選んでコード・名前が確定した状態では出さない
+      if (!q.trim() || (CODE_INFO_MAP[q.trim()] && input.dataset.field === "code")) { closeSuggest(); return; }
+      openSuggest(input, findSuggestions(q, 8), onPick);
+    }
+    input.addEventListener("input", function (ev) { if (!ev.isTrusted) return; refresh(); });
+    input.addEventListener("focus", function () { if (input.value.trim()) refresh(); });
+    input.addEventListener("blur", function () { if (suggestState && suggestState.input === input) closeSuggest(); });
+    input.addEventListener("keydown", function (ev) {
+      if (!suggestState || suggestState.input !== input) return;
+      var n = suggestState.items.length;
+      if (ev.key === "ArrowDown") { suggestState.active = (suggestState.active + 1) % n; paintSuggestActive(); ev.preventDefault(); }
+      else if (ev.key === "ArrowUp") { suggestState.active = (suggestState.active - 1 + n) % n; paintSuggestActive(); ev.preventDefault(); }
+      else if (ev.key === "Enter" && !ev.isComposing) {
+        var pickIdx = suggestState.active >= 0 ? suggestState.active : (n === 1 ? 0 : -1);
+        if (pickIdx >= 0) { suggestState.pick(suggestState.items[pickIdx]); ev.preventDefault(); }
+      }
+      else if (ev.key === "Escape") { closeSuggest(); ev.preventDefault(); }
     });
   }
 
