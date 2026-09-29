@@ -251,6 +251,28 @@
   .buy-preview { background: var(--field); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
   .buy-preview .r { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-variant-numeric: tabular-nums; }
   .buy-preview .r b { font-weight: 700; }
+  .perk-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .perk-summary .stat { background: var(--field); border-radius: 10px; padding: 9px 11px; }
+  .perk-summary .k { font-size: 11px; color: var(--text-2); }
+  .perk-summary .v { white-space: nowrap; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .perk-summary .v.is-alert { color: var(--crit); }
+  .perk-sub { font-size: 13px; font-weight: 700; margin: 18px 0 4px; }
+  .perk-hint { font-size: 12px; color: var(--text-2); margin: 0 0 4px; line-height: 1.7; }
+  .perk-list { list-style: none; margin: 0; padding: 0; }
+  .perk-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .perk-list li:first-child { border-top: none; }
+  .perk-list .pn { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .perk-list .pd { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .perk-list .pd.is-soon { color: var(--crit); font-weight: 700; }
+  .perk-list .pd.is-past { color: var(--muted); text-decoration: line-through; }
+  .perk-list .pa { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 6px; align-items: center; }
+  .perk-list .pa button {
+    font-family: inherit; font-size: 12px; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+  }
+  .perk-list .pa button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .perk-list .pa .plink { font-size: 11px; color: var(--muted); background: none; border: none; padding: 4px; text-decoration: underline; }
+  .perk-empty { font-size: 12.5px; color: var(--text-2); padding: 8px 0; }
   .hero-actions { margin-top: 14px; display: flex; justify-content: flex-end; }
   .months-dialog.report-dialog { max-width: 420px; max-height: calc(100dvh - 24px); overflow-y: auto; padding-bottom: 0; }
   .report-dialog .field-check { display: flex; align-items: center; gap: 9px; font-size: 13px; margin-bottom: 10px; }
@@ -821,6 +843,26 @@
       </div>
     </dialog>
 
+    <dialog class="months-dialog detail-dialog" id="perkDialog">
+      <h3 id="perkDialogTitle">優待が届いた</h3>
+      <label class="field">中身
+        <input type="text" id="perkKind" placeholder="例: QUOカード、食事券、カタログギフト">
+      </label>
+      <label class="field">金額相当(円)
+        <input type="number" id="perkValue" min="0" step="any" inputmode="decimal">
+      </label>
+      <label class="field">有効期限
+        <input type="date" id="perkExpires">
+      </label>
+      <label class="field">申込期限(カタログなど、あれば)
+        <input type="date" id="perkApplyBy">
+      </label>
+      <div class="toolbar">
+        <button class="btn primary" id="perkSaveBtn" type="button">記録する</button>
+        <button class="btn" id="perkCancelBtn" type="button">やめる</button>
+      </div>
+    </dialog>
+
     <dialog class="months-dialog" id="monthsDialog">
       <h3 id="monthsDialogTitle">権利確定月</h3>
       <p class="hint">配当をもらう権利が確定する月です。年2回の銘柄が多く、その場合は6か月離れた2つになります。</p>
@@ -937,6 +979,19 @@
     </div>
     <p class="paste-status" id="watchStatus"></p>
     <ul class="watch-list" id="watchList"></ul>
+  </section>
+
+  <section class="panel" id="perkPanel">
+    <h2>株主優待 <span class="hint">届いた優待と有効期限</span></h2>
+    <div id="perkSummary" class="perk-summary"></div>
+    <h3 class="perk-sub">手元の優待(期限の近い順)</h3>
+    <ul class="perk-list" id="perkHeld"></ul>
+    <div class="toolbar" id="perkIcsBar">
+      <button class="btn" id="perkIcsBtn" type="button">期限をカレンダーに登録(.ics)</button>
+    </div>
+    <h3 class="perk-sub">届く予定の優待</h3>
+    <p class="hint perk-hint">届く月は権利確定月の3か月後を目安にしています。届いたら「届いた」を押して有効期限を入れてください。</p>
+    <ul class="perk-list" id="perkComing"></ul>
   </section>
 
   <section id="dashboardSection"></section>
@@ -2394,6 +2449,162 @@
     h.buys.push({ date: todayIso(), shares: n, price: p });
     document.getElementById("buyDialog").close();
     save(); renderTable(); renderDashboard();
+  });
+
+  // ---------- 株主優待の受取と期限 ----------
+  // 優待の有無と金額の目安は有報から内蔵しているが、届く時期と有効期限は分からないので記録してもらう。
+  // 届く月は「権利確定月の3か月後」を目安にする。
+  var PERK_ARRIVAL_LAG = 3;
+  var PERK_SOON_DAYS = 30;
+  var perkTarget = null;
+
+  function perkDeadline(p) {
+    var ds = [p.expiresAt, p.applyBy].filter(Boolean).sort();
+    return ds[0] || null;
+  }
+
+  function perkComing() {
+    var logs = Array.isArray(state.perks) ? state.perks : [];
+    var today = todayIso(), nowM = new Date().getMonth() + 1;
+    return state.holdings.map(function (h) {
+      if (!h.code || h.excluded) return null;
+      var e = perkEstimate(h);
+      if (e.status !== "has") return null;
+      if (e.minShares && num(h.shares) < e.minShares) return null;
+      // 直近90日に受け取りを記録した銘柄は、次の回まで出さない
+      var recent = logs.some(function (l) { return l.code === h.code && daysBetween(l.receivedAt, today) <= 90; });
+      if (recent) return null;
+      var months = monthsOf(h).map(function (m) { return ((m - 1 + PERK_ARRIVAL_LAG) % 12) + 1; });
+      var next = months.length ? months.map(function (m) { return (m - nowM + 12) % 12; }).sort(function (a, b) { return a - b; })[0] : 99;
+      return { h: h, months: months, next: next, yen: num(h.perk) > 0 ? num(h.perk) : e.yen };
+    }).filter(Boolean).sort(function (a, b) { return a.next - b.next; });
+  }
+
+  function renderPerks() {
+    var held = document.getElementById("perkHeld");
+    if (!held) return;
+    var logs = Array.isArray(state.perks) ? state.perks : [];
+    var today = todayIso(), year = today.slice(0, 4);
+
+    var open = logs.filter(function (l) { return !l.usedAt; });
+    open.sort(function (a, b) {
+      var da = perkDeadline(a) || "9999", db = perkDeadline(b) || "9999";
+      return da < db ? -1 : da > db ? 1 : 0;
+    });
+    var soon = open.filter(function (l) { var d = perkDeadline(l); return d && d >= today && daysBetween(today, d) <= PERK_SOON_DAYS; });
+    var yearTotal = logs.filter(function (l) { return (l.receivedAt || "").slice(0, 4) === year; })
+      .reduce(function (s, l) { return s + num(l.value); }, 0);
+    document.getElementById("perkSummary").innerHTML =
+      '<div class="stat"><div class="k">今年の優待(円相当)</div><div class="v">' + fmtYen(yearTotal) + '</div></div>' +
+      '<div class="stat"><div class="k">手元の優待</div><div class="v">' + open.length + '件</div></div>' +
+      '<div class="stat"><div class="k">期限' + PERK_SOON_DAYS + '日以内</div><div class="v' + (soon.length ? " is-alert" : "") + '">' + soon.length + '件</div></div>';
+
+    held.innerHTML = "";
+    document.getElementById("perkIcsBar").hidden = !open.some(perkDeadline);
+    if (open.length === 0) {
+      held.innerHTML = '<li class="perk-empty">まだありません。下の「届く予定の優待」から記録できます。</li>';
+    }
+    open.forEach(function (l) {
+      var li = document.createElement("li");
+      var pn = document.createElement("span"); pn.className = "pn";
+      pn.textContent = String(l.name || l.code).normalize("NFKC") + (l.kind ? " ・ " + l.kind : "") + (num(l.value) > 0 ? " ・ " + fmtYen(l.value) + "相当" : "");
+      var pd = document.createElement("span"); pd.className = "pd";
+      var d = perkDeadline(l);
+      if (!d) pd.textContent = "期限なし ・ " + mdOf(l.receivedAt) + " 受取";
+      else {
+        var left = daysBetween(today, d);
+        var what = l.applyBy && d === l.applyBy ? "申込期限 " : "有効期限 ";
+        pd.textContent = what + d.replace(/-/g, "/") + (left >= 0 ? "(あと" + left + "日)" : "(期限切れ)");
+        if (left < 0) pd.classList.add("is-past"); else if (left <= PERK_SOON_DAYS) pd.classList.add("is-soon");
+      }
+      var pa = document.createElement("span"); pa.className = "pa";
+      var used = document.createElement("button"); used.type = "button"; used.textContent = "使った";
+      used.addEventListener("click", function () { l.usedAt = todayIso(); save(); renderPerks(); });
+      var del = document.createElement("button"); del.type = "button"; del.className = "plink"; del.textContent = "消す";
+      del.addEventListener("click", function () {
+        state.perks = state.perks.filter(function (x) { return x.id !== l.id; }); save(); renderPerks();
+      });
+      pa.appendChild(used); pa.appendChild(del);
+      li.appendChild(pn); li.appendChild(pa); li.appendChild(pd);
+      held.appendChild(li);
+    });
+
+    var coming = document.getElementById("perkComing");
+    coming.innerHTML = "";
+    var list = perkComing();
+    if (list.length === 0) {
+      var anyPerk = state.holdings.some(function (h) { return h.code && perkEstimate(h).status === "has"; });
+      coming.innerHTML = '<li class="perk-empty">' + (anyPerk
+        ? "直近の優待はすべて記録済みです。次の回が近づくとまた出します。"
+        : "優待のある保有銘柄はありません(必要株数に届いていない銘柄は出していません)。") + '</li>';
+    }
+    list.forEach(function (x) {
+      var li = document.createElement("li");
+      var pn = document.createElement("span"); pn.className = "pn";
+      pn.textContent = x.h.code + " " + String(x.h.name || nameFor(x.h.code)).normalize("NFKC");
+      var pd = document.createElement("span"); pd.className = "pd";
+      pd.textContent = (x.months.length ? x.months.join("・") + "月ごろ" : "時期不明") + (x.yen ? " ・ 年" + fmtYen(x.yen) + "相当(目安)" : "");
+      var pa = document.createElement("span"); pa.className = "pa";
+      var got = document.createElement("button"); got.type = "button"; got.className = "primary"; got.textContent = "届いた";
+      got.addEventListener("click", function () { openPerkDialog(x.h, x.yen && x.months.length ? Math.round(x.yen / x.months.length) : ""); });
+      pa.appendChild(got);
+      li.appendChild(pn); li.appendChild(pa); li.appendChild(pd);
+      coming.appendChild(li);
+    });
+  }
+
+  function openPerkDialog(h, yen) {
+    perkTarget = h;
+    document.getElementById("perkDialogTitle").textContent = (h.name || h.code) + " の優待が届いた";
+    document.getElementById("perkKind").value = "";
+    document.getElementById("perkValue").value = yen || "";
+    document.getElementById("perkExpires").value = "";
+    document.getElementById("perkApplyBy").value = "";
+    document.getElementById("perkDialog").showModal();
+  }
+  document.getElementById("perkCancelBtn").addEventListener("click", function () {
+    document.getElementById("perkDialog").close();
+  });
+  document.getElementById("perkSaveBtn").addEventListener("click", function () {
+    var h = perkTarget;
+    if (!h) return;
+    if (!Array.isArray(state.perks)) state.perks = [];
+    state.perks.push({
+      id: uid(), code: h.code, name: h.name || nameFor(h.code), receivedAt: todayIso(),
+      kind: document.getElementById("perkKind").value.trim(),
+      value: num(document.getElementById("perkValue").value) || undefined,
+      expiresAt: document.getElementById("perkExpires").value || undefined,
+      applyBy: document.getElementById("perkApplyBy").value || undefined
+    });
+    document.getElementById("perkDialog").close();
+    save(); renderPerks();
+  });
+
+  // 期限を .ics に書き出す。通知と家族との共有はカレンダーアプリに任せる。
+  document.getElementById("perkIcsBtn").addEventListener("click", function () {
+    var open = (state.perks || []).filter(function (l) { return !l.usedAt && perkDeadline(l); });
+    function esc(t) { return String(t).replace(/[\;,]/g, function (c) { return "\\" + c; }).replace(/\n/g, "\\n"); }
+    var stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+    var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//haito-dashboard//perks//JA", "CALSCALE:GREGORIAN"];
+    open.forEach(function (l) {
+      [["expiresAt", "有効期限"], ["applyBy", "申込期限"]].forEach(function (k) {
+        if (!l[k[0]]) return;
+        var d = l[k[0]].replace(/-/g, "");
+        var end = new Date(l[k[0]] + "T00:00:00"); end.setDate(end.getDate() + 1);
+        lines.push("BEGIN:VEVENT", "UID:" + l.id + "-" + k[0] + "@haito-dashboard", "DTSTAMP:" + stamp,
+          "DTSTART;VALUE=DATE:" + d, "DTEND;VALUE=DATE:" + isoOf(end).replace(/-/g, ""),
+          "SUMMARY:" + esc("【優待" + k[1] + "】" + String(l.name || l.code).normalize("NFKC") + (l.kind ? " " + l.kind : "")),
+          "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + esc("優待の" + k[1] + "まであと7日"), "TRIGGER:-P7D", "END:VALARM",
+          "END:VEVENT");
+      });
+    });
+    lines.push("END:VCALENDAR");
+    var blob = new Blob([lines.join("\r\n") + "\r\n"], { type: "text/calendar" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "yutai-kigen.ics";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
   });
 
   // ---------- 株価だけ更新 ----------
@@ -4665,6 +4876,7 @@
 
   function renderDashboard() {
     renderWatchList();
+    renderPerks();
     var section = document.getElementById("dashboardSection");
     if (!section.dataset.built) {
       section.innerHTML = dashboardTemplate();
