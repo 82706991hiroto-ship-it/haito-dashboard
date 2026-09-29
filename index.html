@@ -779,6 +779,7 @@
 
     <dialog class="months-dialog detail-dialog" id="detailDialog">
       <h3 id="detailTitle">銘柄の詳細</h3>
+      <p class="hint" id="detailStreak"></p>
       <label class="field">現在株価(円)
         <input type="number" id="detailPrice" min="0" step="any" inputmode="decimal" placeholder="入れると現在利回りが出ます">
       </label>
@@ -1602,6 +1603,11 @@
 
     document.getElementById("detailTitle").textContent =
       (h.code ? h.code + " " : "") + (h.name || "銘柄の詳細");
+    var dstk = dividendStreak(String(h.code || "").trim());
+    var dser = dividendsFor(String(h.code || "").trim());
+    document.getElementById("detailStreak").textContent = dstk
+      ? dstk.text + " ・ 1株配当 " + dser.slice().reverse().map(function (v) { return fmtPerShare(v); }).join(" → ")
+      : "";
     price.value = h.price == null ? "" : h.price;
     perk.value = h.perk == null ? "" : h.perk;
     payout.value = h.payout == null ? "" : h.payout;
@@ -1776,6 +1782,27 @@
   function dividendsFor(code) {
     var info = CODE_INFO_MAP[code];
     return info && Array.isArray(info[3]) && info[3].length > 0 ? info[3] : null;
+  }
+
+  // 内蔵の1株配当(新しい順)から、直近で何期続けて増配しているかと、期間中の減配の有無を出す。
+  // 系列の長さは銘柄ごとに違うので、何期分を見たかも一緒に返して表示に添える。
+  function dividendStreak(code) {
+    var s = dividendsFor(code);
+    if (!s || s.length < 2) return null;
+    var up = 0;
+    while (up < s.length - 1 && s[up] > s[up + 1]) up++;
+    var cut = -1;
+    for (var i = 0; i < s.length - 1; i++) { if (s[i] < s[i + 1]) { cut = i; break; } }
+    var years = s.length;
+    var label, kind;
+    // データの最初の期まで増配が続いていれば、実際の連続記録はもっと長いかもしれない
+    if (up === years - 1) { label = up + "期以上連続増配"; kind = "up"; }
+    else if (up > 0) { label = up + "期連続増配"; kind = "up"; }
+    else if (cut === 0) { label = "直近で減配"; kind = "down"; }
+    else if (cut === -1) { label = "減配なし"; kind = "flat"; }
+    else { label = "据え置き"; kind = "flat"; }
+    return { up: up, years: years, cutAgo: cut, kind: kind,
+             text: label + "(直近" + years + "期のデータ)" + (kind !== "down" && cut > 0 ? "・" + (cut + 1) + "期前に減配" : "") };
   }
 
   // 株主優待。手で入れた金額があればそれを、無ければ有報の記載から株数に応じた目安を使う。
@@ -2301,7 +2328,9 @@
       var top = document.createElement("div");
       top.className = "watch-top";
       var nm = document.createElement("span"); nm.className = "watch-name"; nm.textContent = "☆ " + v.w.code + " " + v.name;
-      var sc = document.createElement("span"); sc.className = "watch-sector"; sc.textContent = v.sector;
+      var sc = document.createElement("span"); sc.className = "watch-sector";
+      var stk = dividendStreak(v.w.code);
+      sc.textContent = v.sector + (stk ? " ・ " + stk.text : "");
       var gap = document.createElement("span"); gap.className = "watch-gap";
       if (v.gapPct === null) { gap.textContent = v.price > 0 ? "" : "株価を入力"; gap.classList.add("is-far"); }
       else if (v.gapPct >= 0) { gap.textContent = "目標利回りに到達"; gap.classList.add("is-hit"); }
@@ -4771,7 +4800,8 @@
         return cell;
       }
 
-      tr.appendChild(td("銘柄", (c.row.code ? c.row.code + " " : "") + (c.row.name || "無名銘柄")));
+      var cstk = dividendStreak(String(c.row.code || "").trim());
+      tr.appendChild(td("銘柄", (c.row.code ? c.row.code + " " : "") + (c.row.name || "無名銘柄") + (cstk ? "(" + cstk.text + ")" : "")));
       tr.appendChild(td("1株配当", fmtPerShare(c.perSharePrev) + " → " + fmtPerShare(c.perShareNow) + " (" + fmtSignedPerShare(c.perShareDiff) + ")", "num"));
       tr.appendChild(td("増減率", fmtSignedPct(c.ratePct), "num " + cls));
       tr.appendChild(td("保有株数", num(c.row.shares).toLocaleString("ja-JP"), "num"));
