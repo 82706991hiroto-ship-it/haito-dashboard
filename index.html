@@ -191,6 +191,25 @@
   .gauge-tick-label { position: absolute; top: 30px; font-size: 10px; color: var(--muted); transform: translateX(-50%); font-variant-numeric: tabular-nums; }
   .gauge-stamp { position: absolute; top: 5px; width: 32px; height: 32px; transform: translateX(-50%); filter: url(#inkRough); }
   .hero-substats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 18px; }
+  .ledger { background: var(--field); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+  .ledger-title { font-size: 12.5px; font-weight: 700; color: var(--text-2); }
+  .ledger-note { font-size: 12px; color: var(--text-2); line-height: 1.8; margin: 8px 0 0; }
+  .ledger-lead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 8px 0 4px; }
+  .ledger-total { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ledger-lead.is-down .ledger-total { color: var(--crit); }
+  .ledger-sub { font-size: 12px; color: var(--text-2); }
+  .ledger-list { list-style: none; margin: 8px 0 0; padding: 0; }
+  .ledger-list li {
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline;
+    padding: 9px 0; border-top: 1px solid var(--line);
+  }
+  .ledger-name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ledger-amt { font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+  .ledger-per { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .ledger-del {
+    justify-self: end; font-family: inherit; font-size: 11px; color: var(--muted); background: none;
+    border: none; padding: 2px 0; cursor: pointer; text-decoration: underline;
+  }
   .hero-actions { margin-top: 14px; display: flex; justify-content: flex-end; }
   .months-dialog.report-dialog { max-width: 420px; max-height: calc(100dvh - 24px); overflow-y: auto; padding-bottom: 0; }
   .report-dialog .field-check { display: flex; align-items: center; gap: 9px; font-size: 13px; margin-bottom: 10px; }
@@ -1291,6 +1310,14 @@
       if (autoDivs && autoDivs.length > idx) input.placeholder = String(autoDivs[idx]);
     }
     input.value = h[field] == null ? "" : h[field];
+    if (field === "div") {
+      var divBefore = h.div;
+      input.addEventListener("focus", function () { divBefore = h.div; });
+      input.addEventListener("change", function () {
+        if (recordDivChange(h, divBefore, h.div)) { save(); renderDashboard(); }
+        divBefore = h.div;
+      });
+    }
     input.addEventListener("input", function () {
       h[field] = type === "number" ? input.value : input.value;
       save();
@@ -1844,6 +1871,7 @@
       var existing = state.holdings.find(function (h) { return h.code === r.code && h.account === r.account; });
       if (existing) {
         existing.name = r.name; existing.sector = r.sector;
+        recordDivChange(existing, existing.div, r.div);
         existing.shares = r.shares; existing.cost = r.cost; existing.div = r.div;
         if (r.months) existing.months = r.months;
         if (r.price !== undefined && r.price !== "") { existing.price = r.price; existing.priceDate = r.priceDate; }
@@ -3164,7 +3192,9 @@
     }
     var month = cur[m - 1], prevMonth = prev[m - 1];
     var goalAnnual = num(state.goals.monthly) * 12;
+    var ledger = divLogSummary(y + "-01-01", y + "-" + ("0" + m).slice(-2) + "-31");
     return {
+      ledger: ledger,
       y: y, m: m, month: month, prevMonth: prevMonth, cur: cur, prev: prev,
       yoy: prevMonth && prevMonth.v > 0 && month.actual ? (month.v / prevMonth.v - 1) * 100 : null,
       ytd: ytd, ytdYoy: prevYtdOk && prevYtd > 0 && forecastMonths.length === 0 ? (ytd / prevYtd - 1) * 100 : null,
@@ -3237,7 +3267,15 @@
       rr(L, gy, pw, 22, 11, C.accent);
       font(500, 24);
       text(hide ? "年間目標" : "年間目標 " + fmtYen(d.goalAnnual), L, gy + 64, C.muted);
-      text("年始からの累計 ÷ 年間目標", R, gy + 64, C.muted, "right");
+      if (d.ledger.items.length > 0) {
+        font(700, 26);
+        var lt = hide
+          ? "今年 増配" + d.ledger.up + "・減配" + d.ledger.down + "銘柄"
+          : "今年の配当変更で年間 " + fmtSignedYen(d.ledger.total);
+        text(lt, R, gy + 64, d.ledger.total < 0 ? C.crit : C.accent, "right");
+      } else {
+        text("年始からの累計 ÷ 年間目標", R, gy + 64, C.muted, "right");
+      }
     }
 
     // 月別の棒グラフ(今年と前年)
@@ -3694,7 +3732,122 @@
     return (v > 0 ? "+" : v < 0 ? "−" : "±") + "¥" + Math.abs(v).toLocaleString("ja-JP");
   }
 
+  // ---------- 配当金台帳(1株配当の書き換え記録) ----------
+  // 内蔵データは有価証券報告書の実績なので、会社の配当予想の変更は利用者の書き換えでしか分からない。
+  // 書き換えを日付つきで残し、決算シーズンに「増配で年間いくら増えたか」を振り返れるようにする。
+  var DIV_LOG_DAYS = 90;
+
+  function todayIso() {
+    var d = new Date();
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  }
+
+  function recordDivChange(h, from, to) {
+    var a = round2(num(from)), b = round2(num(to));
+    if (!(a > 0) || !(b > 0) || a === b) return false;
+    if (!Array.isArray(state.divLog)) state.divLog = [];
+    var today = todayIso();
+    // 同じ日に同じ銘柄を何度か直したときは1件にまとめ、元に戻したら記録ごと消す
+    var last = state.divLog.filter(function (e) { return e.hid === h.id && e.date === today; })[0];
+    if (last) {
+      last.to = b;
+      if (last.from === last.to) state.divLog.splice(state.divLog.indexOf(last), 1);
+    } else {
+      state.divLog.push({ id: uid(), hid: h.id, code: h.code || "", name: h.name || "", date: today, from: a, to: b });
+    }
+    return true;
+  }
+
+  // 期間内の書き換えを銘柄ごとに「最初の値 → 最後の値」にまとめ、今の株数で年間の増減額を出す
+  function divLogSummary(since, until) {
+    var log = Array.isArray(state.divLog) ? state.divLog : [];
+    var byHolding = {};
+    log.forEach(function (e) {
+      if (e.date < since || e.date > until) return;
+      (byHolding[e.hid] = byHolding[e.hid] || []).push(e);
+    });
+    var items = [];
+    Object.keys(byHolding).forEach(function (hid) {
+      var h = state.holdings.filter(function (x) { return x.id === hid; })[0];
+      if (!h || h.excluded) return;
+      var list = byHolding[hid].sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+      var from = list[0].from, to = list[list.length - 1].to;
+      if (from === to) return;
+      items.push({ h: h, from: from, to: to, date: list[list.length - 1].date, entries: list,
+                   diff: (to - from) * num(h.shares) });
+    });
+    items.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+    return {
+      items: items,
+      total: items.reduce(function (s, i) { return s + i.diff; }, 0),
+      up: items.filter(function (i) { return i.to > i.from; }).length,
+      down: items.filter(function (i) { return i.to < i.from; }).length
+    };
+  }
+
+  function renderDivLedger() {
+    var el = document.getElementById("divLedger");
+    if (!el) return;
+    el.innerHTML = "";
+    var since = new Date(); since.setDate(since.getDate() - DIV_LOG_DAYS);
+    var sinceIso = since.getFullYear() + "-" + ("0" + (since.getMonth() + 1)).slice(-2) + "-" + ("0" + since.getDate()).slice(-2);
+    var sum = divLogSummary(sinceIso, todayIso());
+
+    var head = document.createElement("div");
+    head.className = "ledger-head";
+    var title = document.createElement("div");
+    title.className = "ledger-title";
+    title.textContent = "配当金台帳 ・ 直近" + DIV_LOG_DAYS + "日の書き換え";
+    head.appendChild(title);
+    el.appendChild(head);
+
+    if (sum.items.length === 0) {
+      var p = document.createElement("p");
+      p.className = "ledger-note";
+      p.textContent = "決算で配当予想が変わったら、保有銘柄の「年間配当/株」を新しい値に書き換えてください。いつ・いくらから・いくらへ変えたかがここに残り、年間配当の増減が集計されます。";
+      el.appendChild(p);
+      return;
+    }
+
+    var lead = document.createElement("div");
+    lead.className = "ledger-lead" + (sum.total < 0 ? " is-down" : "");
+    lead.innerHTML = '<span class="ledger-total">' + fmtSignedYen(sum.total) + '</span>' +
+      '<span class="ledger-sub">年間配当の見込み ・ 増配 ' + sum.up + '銘柄 ・ 減配 ' + sum.down + '銘柄</span>';
+    el.appendChild(lead);
+
+    var list = document.createElement("ul");
+    list.className = "ledger-list";
+    sum.items.forEach(function (it) {
+      var li = document.createElement("li");
+      var up = it.to > it.from;
+      var name = document.createElement("span");
+      name.className = "ledger-name";
+      name.textContent = (it.h.code ? it.h.code + " " : "") + (it.h.name || "無名銘柄");
+      var per = document.createElement("span");
+      per.className = "ledger-per";
+      per.textContent = it.date.slice(5).replace("-", "/") + " ・ " + fmtPerShare(it.from) + " → " + fmtPerShare(it.to) +
+        " (" + fmtSignedPct((it.to / it.from - 1) * 100) + ")";
+      var amt = document.createElement("span");
+      amt.className = "ledger-amt " + (up ? "trend-up" : "trend-down");
+      amt.textContent = (up ? "▲ " : "▽ ") + fmtSignedYen(it.diff);
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "ledger-del";
+      del.textContent = "記録を消す";
+      del.title = "書き換えの記録だけを消します。1株配当の値はそのままです。";
+      del.addEventListener("click", function () {
+        var ids = it.entries.map(function (e) { return e.id; });
+        state.divLog = state.divLog.filter(function (e) { return ids.indexOf(e.id) === -1; });
+        save(); renderDashboard();
+      });
+      li.appendChild(name); li.appendChild(amt); li.appendChild(per); li.appendChild(del);
+      list.appendChild(li);
+    });
+    el.appendChild(list);
+  }
+
   function renderChangeSummary(agg) {
+    renderDivLedger();
     var el = document.getElementById("changeSummary");
     el.innerHTML = "";
 
@@ -3810,6 +3963,7 @@
       '</div>' +
       '<div class="panel">' +
       '  <h2><span class="chap">五</span>増配・減配の状況 <span class="hint">前年配当を入力した銘柄が対象</span></h2>' +
+      '  <div id="divLedger" class="ledger"></div>' +
       '  <div id="changeSummary"></div>' +
       '</div>' +
       '<div class="panel">' +
