@@ -456,8 +456,26 @@
   }
   .detail-dialog .field-check { display: flex; align-items: center; gap: 9px; font-size: 13px; margin-bottom: 6px; }
   .detail-dialog .hint { margin-bottom: 14px; }
-  .row-actions .detail-btn { margin-right: 6px; }
+  .row-actions .detail-btn, .row-actions .buy-btn { margin-right: 6px; }
   tr.is-excluded td { opacity: .55; }
+  /* 口座区分と証券会社は同じセルに縦に積む(列を増やすと横幅が足りない) */
+  .acct-stack { display: flex; flex-direction: column; gap: 5px; }
+  table.data-table .acct-stack { min-width: 118px; }
+  table.data-table .acct-stack input { font-size: 12.5px; padding: 6px 10px; }
+  .detail-dialog .field select {
+    display: block; width: 100%; margin-top: 5px; font-family: inherit; font-size: 13px;
+    padding: 10px 12px; border-radius: 10px; border: 1px solid transparent;
+    background: var(--field); color: var(--text);
+  }
+  .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .buy-preview { background: var(--field); border-radius: 10px; padding: 11px 13px; font-size: 12.5px; line-height: 1.8; margin-bottom: 12px; }
+  .buy-preview strong { font-variant-numeric: tabular-nums; }
+  .buy-preview:empty { display: none; }
+  .import-broker { display: block; font-size: 12px; color: var(--text-2); margin: 0 0 10px; }
+  .import-broker input {
+    display: block; margin-top: 5px; width: 100%; max-width: 260px; font-family: inherit; font-size: 13px;
+    padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text);
+  }
 
   .backup-status {
     font-size: 12px; color: var(--text-2); margin: 14px 0 0; line-height: 1.8;
@@ -498,6 +516,10 @@
     #holdingsTable td.row-actions { justify-content: flex-end; padding-top: 10px; }
     #holdingsTable td.row-actions::before { content: none; }
     #holdingsTable td.row-actions button { font-size: 13px; padding: 8px 16px; background: var(--card); }
+    #holdingsTable td .acct-stack { width: 58%; }
+    #holdingsTable td .acct-stack input, #holdingsTable td .acct-stack select { width: 100%; font-size: 16px; }
+    .field-pair { grid-template-columns: 1fr; gap: 0; }
+    .detail-dialog .field select, .import-broker input { font-size: 16px; }
 
     .change-table thead { display: none; }
     .change-table, .change-table tbody, .change-table tr, .change-table td { display: block; width: 100%; }
@@ -702,6 +724,49 @@
       </div>
     </dialog>
 
+    <dialog class="months-dialog detail-dialog" id="buyDialog">
+      <h3 id="buyTitle">買い増し</h3>
+      <p class="hint">買った株数と約定単価を入れると、株数と平均取得単価を計算し直します。</p>
+      <div class="field-pair">
+        <label class="field">買った株数
+          <input type="number" id="buyShares" min="0" step="any" inputmode="decimal" placeholder="例: 10">
+        </label>
+        <label class="field">約定単価(円)
+          <input type="number" id="buyPrice" min="0" step="any" inputmode="decimal" placeholder="1株あたり">
+        </label>
+      </div>
+      <div class="field-pair">
+        <label class="field">口座
+          <select id="buyAccount"></select>
+        </label>
+        <label class="field">証券会社
+          <input type="text" id="buyBroker" list="brokerList" placeholder="任意" autocomplete="off">
+        </label>
+      </div>
+      <div class="buy-preview" id="buyPreview"></div>
+      <p class="hint" id="buyLast"></p>
+      <p class="hint">手数料は含めていません。証券会社が表示する平均取得単価とは、1円未満の端数がずれることがあります。</p>
+      <div class="toolbar">
+        <button class="btn primary" id="buyApplyBtn" disabled>反映する</button>
+        <button class="btn" id="buyCancelBtn">やめる</button>
+      </div>
+    </dialog>
+
+    <datalist id="brokerList">
+      <option value="SBI証券"></option>
+      <option value="楽天証券"></option>
+      <option value="マネックス証券"></option>
+      <option value="松井証券"></option>
+      <option value="三菱UFJ eスマート証券"></option>
+      <option value="SBIネオトレード証券"></option>
+      <option value="PayPay証券"></option>
+      <option value="moomoo証券"></option>
+      <option value="GMOクリック証券"></option>
+      <option value="SMBC日興証券"></option>
+      <option value="野村證券"></option>
+      <option value="大和証券"></option>
+    </datalist>
+
     <dialog class="months-dialog" id="monthsDialog">
       <h3 id="monthsDialogTitle">権利確定月</h3>
       <p class="hint">配当をもらう権利が確定する月です。年2回の銘柄が多く、その場合は6か月離れた2つになります。</p>
@@ -734,8 +799,11 @@
       <summary>証券会社の保有証券画面から貼り付けて読み込む</summary>
       <div class="paste-import-body">
         <p class="hint">
-          証券会社サイトの保有証券一覧を、見出し行を含めて選択・コピーし、下に貼り付けてください。「コード」「保有数」「取得単価」などの列名から自動で判別します(列の並び順は問いません)。業種の列が無くても、証券コードから東証33業種を自動補完します。同じコード・口座の組み合わせは上書き更新されます。Yahoo!ファイナンスのポートフォリオ(コード・市場・名称/現在値/業種/購入価格/保有数/1株配当/配当利回り/メモ/前日比の表示設定)にも対応しています。メモ・口座欄に「NISA」と入っていればNISA口座として取り込みます。
+          証券会社サイトの保有証券一覧を、見出し行を含めて選択・コピーし、下に貼り付けてください。「コード」「保有数」「取得単価」などの列名から自動で判別します(列の並び順は問いません)。業種の列が無くても、証券コードから東証33業種を自動補完します。同じコード・口座・証券会社の組み合わせは上書き更新されます。複数の証券会社で同じ銘柄を持っている場合は、下で証券会社を選んでから読み込むと、証券会社ごとに別の行として管理できます。Yahoo!ファイナンスのポートフォリオ(コード・市場・名称/現在値/業種/購入価格/保有数/1株配当/配当利回り/メモ/前日比の表示設定)にも対応しています。メモ・口座欄に「NISA」と入っていればNISA口座として取り込みます。
         </p>
+        <label class="import-broker">どの証券会社のデータですか(任意。貼り付けとCSVの両方に使います)
+          <input type="text" id="importBroker" list="brokerList" placeholder="例: SBI証券" autocomplete="off">
+        </label>
         <textarea id="yahooPasteArea" rows="5" placeholder="ここに証券会社の保有証券一覧からコピーした内容を貼り付け"></textarea>
         <div class="toolbar">
           <button class="btn primary" id="yahooImportBtn">貼り付け内容を読み込む</button>
@@ -1054,6 +1122,12 @@
 
       var tdDel = document.createElement("td");
       tdDel.className = "row-actions";
+      var buyBtn = document.createElement("button");
+      buyBtn.className = "buy-btn";
+      buyBtn.textContent = "買い増し";
+      buyBtn.title = "買った株数と単価から平均取得単価を計算し直す";
+      buyBtn.addEventListener("click", function () { openBuyDialog(h); });
+      tdDel.appendChild(buyBtn);
       var detailBtn = document.createElement("button");
       detailBtn.className = "detail-btn";
       detailBtn.textContent = "詳細";
@@ -1467,6 +1541,146 @@
     document.getElementById("detailDialog").close();
   });
 
+  // ---------- 買い増し ----------
+  // 買い増しのたびに平均取得単価を自分で計算するのは手間なので、株数と約定単価から計算し直す。
+  // 口座や証券会社が違えば取得単価は別々に管理されるため、その組み合わせの行に足す(無ければ行を作る)。
+  function fmtUnit(n) { return "¥" + (Math.round(n * 100) / 100).toLocaleString("ja-JP", { maximumFractionDigits: 2 }); }
+
+  function findHolding(code, account, broker) {
+    var c = String(code || "").trim().toUpperCase();
+    return state.holdings.find(function (x) {
+      return String(x.code || "").trim().toUpperCase() === c && (x.account || "特定") === account && brokerOf(x) === broker;
+    }) || null;
+  }
+
+  // 総平均で新しい株数と取得単価を出す。今の取得単価が空欄なら平均は出せないので株数だけ足す。
+  function averageIn(shares, cost, addShares, addPrice) {
+    if (!(shares > 0)) return { shares: addShares, cost: addPrice, averaged: true };
+    if (!(cost > 0)) return { shares: shares + addShares, cost: null, averaged: false };
+    var total = shares + addShares;
+    return { shares: total, cost: Math.round(((shares * cost + addShares * addPrice) / total) * 100) / 100, averaged: true };
+  }
+
+  var buyTarget = null;
+
+  function openBuyDialog(h) {
+    buyTarget = h;
+    var dlg = document.getElementById("buyDialog");
+    document.getElementById("buyTitle").textContent =
+      "買い増し: " + (h.code ? h.code + " " : "") + (h.name || "無名銘柄");
+    var shares = document.getElementById("buyShares");
+    var price = document.getElementById("buyPrice");
+    var account = document.getElementById("buyAccount");
+    var broker = document.getElementById("buyBroker");
+    shares.value = "";
+    price.value = "";
+    price.placeholder = num(h.price) > 0 ? "現在株価 " + fmtNum(num(h.price)) + " 円" : "1株あたり";
+    account.innerHTML = "";
+    ACCOUNTS.forEach(function (a) {
+      var opt = document.createElement("option");
+      opt.value = a; opt.textContent = a;
+      if ((h.account || "特定") === a) opt.selected = true;
+      account.appendChild(opt);
+    });
+    broker.value = brokerOf(h);
+
+    var last = (h.buys || [])[(h.buys || []).length - 1];
+    document.getElementById("buyLast").textContent = last
+      ? "前回の買い増し: " + last.date + " " + fmtNum(last.shares) + "株 @" + fmtUnit(last.price)
+      : "";
+
+    paintBuyPreview();
+    dlg.showModal();
+    shares.focus();
+  }
+
+  // 入力中の内容で、どの行にどう反映されるかを組み立てる(画面の説明と反映の両方で使う)
+  function planBuy() {
+    var h = buyTarget;
+    if (!h) return null;
+    var addShares = num(document.getElementById("buyShares").value);
+    var addPrice = num(document.getElementById("buyPrice").value);
+    var account = document.getElementById("buyAccount").value;
+    var broker = document.getElementById("buyBroker").value.trim();
+    if (!(addShares > 0) || !(addPrice > 0)) return { ready: false };
+    var sameRow = (h.account || "特定") === account && brokerOf(h) === broker;
+    var target = sameRow ? h : findHolding(h.code, account, broker);
+    var before = target ? { shares: num(target.shares), cost: num(target.cost) } : { shares: 0, cost: 0 };
+    var after = averageIn(before.shares, before.cost, addShares, addPrice);
+    return {
+      ready: true, source: h, target: target, isNew: !target, account: account, broker: broker,
+      addShares: addShares, addPrice: addPrice, before: before, after: after
+    };
+  }
+
+  function paintBuyPreview() {
+    var el = document.getElementById("buyPreview");
+    var btn = document.getElementById("buyApplyBtn");
+    var p = planBuy();
+    el.innerHTML = "";
+    btn.disabled = !p || !p.ready;
+    if (!p || !p.ready) return;
+
+    var where = document.createElement("div");
+    var label = p.account + (p.broker ? "・" + p.broker : "");
+    where.textContent = p.isNew
+      ? label + "の行はまだ無いので、新しい行として登録します。"
+      : (p.target === p.source ? "この行に足します。" : label + "の行(" + fmtNum(p.before.shares) + "株)に足します。");
+    el.appendChild(where);
+
+    var line = document.createElement("div");
+    var afterText = fmtNum(p.after.shares) + "株" + (p.after.cost != null ? "・平均取得単価 " + fmtUnit(p.after.cost) : "");
+    if (p.isNew || !(p.before.shares > 0)) {
+      line.innerHTML = "反映後: <strong></strong>";
+      line.querySelector("strong").textContent = afterText;
+    } else {
+      line.innerHTML = "<strong></strong> → <strong></strong>";
+      var s = line.querySelectorAll("strong");
+      s[0].textContent = fmtNum(p.before.shares) + "株" + (p.before.cost > 0 ? "・" + fmtUnit(p.before.cost) : "");
+      s[1].textContent = afterText;
+    }
+    el.appendChild(line);
+
+    if (!p.after.averaged) {
+      var warn = document.createElement("div");
+      warn.textContent = "今の取得単価が空欄なので平均は出せません。株数だけ足します。";
+      el.appendChild(warn);
+    }
+  }
+
+  ["buyShares", "buyPrice", "buyAccount", "buyBroker"].forEach(function (id) {
+    var el = document.getElementById(id);
+    el.addEventListener("input", paintBuyPreview);
+    el.addEventListener("change", paintBuyPreview);
+  });
+
+  document.getElementById("buyApplyBtn").addEventListener("click", function () {
+    var p = planBuy();
+    if (!p || !p.ready) return;
+    var target = p.target;
+    if (!target) {
+      var src = p.source;
+      target = {
+        id: uid(), code: src.code, name: src.name, sector: src.sector, account: p.account,
+        broker: p.broker || undefined, shares: "", cost: "", div: src.div, prevDiv: src.prevDiv,
+        months: src.months, price: src.price, priceDate: src.priceDate, payout: src.payout
+      };
+      state.holdings.push(target);
+    }
+    target.shares = p.after.shares;
+    if (p.after.cost != null) target.cost = p.after.cost;
+    // 最後にいくらで買ったかは、次の買い増しの判断(買値からの下落率)に使える
+    (target.buys = target.buys || []).push({ date: todayStamp(), shares: p.addShares, price: p.addPrice });
+    state.isSample = false;
+    save(); renderTable(); renderDashboard();
+    document.getElementById("buyDialog").close();
+    focusHolding(target.id);
+  });
+
+  document.getElementById("buyCancelBtn").addEventListener("click", function () {
+    document.getElementById("buyDialog").close();
+  });
+
   function makeAccountCell(h) {
     var td = document.createElement("td");
     td.dataset.label = "口座";
@@ -1481,8 +1695,32 @@
     sel.addEventListener("change", function () {
       h.account = sel.value; save(); renderDashboard();
     });
-    td.appendChild(sel);
+    // 同じ銘柄を複数の証券会社で持つ人がいるので、口座区分とは別に証券会社も持てるようにする
+    var broker = document.createElement("input");
+    broker.type = "text";
+    broker.dataset.field = "broker";
+    broker.setAttribute("list", "brokerList");
+    broker.autocomplete = "off";
+    broker.placeholder = "証券会社";
+    broker.value = h.broker || "";
+    broker.addEventListener("input", function () {
+      h.broker = broker.value.trim() || undefined; save();
+    });
+    var stack = document.createElement("div");
+    stack.className = "acct-stack";
+    stack.appendChild(sel);
+    stack.appendChild(broker);
+    td.appendChild(stack);
     return td;
+  }
+
+  function brokerOf(h) { return String((h && h.broker) || "").trim(); }
+
+  // 銘柄単位の集計(銘柄数・1銘柄の上限・集中度)に使うキー。
+  // 同じ銘柄を特定とNISA、あるいは複数の証券会社に分けて持っていても1銘柄と数える。
+  function stockKey(r) {
+    var c = String(r.code || "").trim().toUpperCase();
+    return c ? "c:" + c : "id:" + r.id;
   }
 
   // ヒートマップから明細の行を指す。見つけたあと見失わないよう一拍光らせる。
@@ -1807,11 +2045,32 @@
     return parseBlockFormat(text);
   }
 
-  function mergePastedResults(results) {
-    var added = 0, updated = 0;
+  // 取り込んだ行を、どの既存の行に上書きするか決める。
+  // 証券会社を指定したとき: 同じコード・口座・証券会社の行。無ければ、証券会社が空欄の行が
+  //   1つだけあればそれを引き継ぐ(証券会社を後から使い始めた人のデータを二重にしないため)。
+  // 指定しないとき: 証券会社が空欄の行。無くて、同じコード・口座の行が1つだけならそれ。
+  //   複数の証券会社に分かれていてどれか決められなければ、上書きせず読み飛ばす。
+  function matchForImport(r, broker) {
+    var same = state.holdings.filter(function (h) { return h.code === r.code && h.account === r.account; });
+    var exact = same.filter(function (h) { return brokerOf(h) === broker; });
+    if (exact.length > 0) return { row: exact[0] };
+    if (broker) {
+      var blank = same.filter(function (h) { return brokerOf(h) === ""; });
+      return { row: blank.length === 1 ? blank[0] : null };
+    }
+    if (same.length === 1) return { row: same[0] };
+    return { row: null, ambiguous: same.length > 1 };
+  }
+
+  function mergePastedResults(results, broker) {
+    broker = String(broker || "").trim();
+    var added = 0, updated = 0, ambiguous = [];
     results.forEach(function (r) {
-      var existing = state.holdings.find(function (h) { return h.code === r.code && h.account === r.account; });
+      var m = matchForImport(r, broker);
+      if (m.ambiguous) { ambiguous.push(r.code); return; }
+      var existing = m.row;
       if (existing) {
+        if (broker) existing.broker = broker;
         existing.name = r.name; existing.sector = r.sector;
         existing.shares = r.shares; existing.cost = r.cost; existing.div = r.div;
         if (r.months) existing.months = r.months;
@@ -1821,7 +2080,7 @@
         updated++;
       } else {
         state.holdings.push({
-          id: uid(), code: r.code, name: r.name, sector: r.sector, account: r.account,
+          id: uid(), code: r.code, name: r.name, sector: r.sector, account: r.account, broker: broker || undefined,
           shares: r.shares, cost: r.cost, div: r.div, months: r.months,
           price: r.price === "" ? undefined : r.price, priceDate: r.price === "" ? undefined : r.priceDate,
           prevDiv: r.prevDiv !== undefined ? r.prevDiv : ""
@@ -1829,26 +2088,34 @@
         added++;
       }
     });
-    return { added: added, updated: updated };
+    return { added: added, updated: updated, ambiguous: ambiguous };
+  }
+
+  function importBroker() {
+    return document.getElementById("importBroker").value.trim();
   }
 
   function applyParsedHoldings(text, statusEl, priceDate) {
-    applyResults(parseHoldingsPaste(text, priceDate), statusEl, "読み込める行が見つかりませんでした。対応形式か確認してください。");
+    applyResults(parseHoldingsPaste(text, priceDate), statusEl, "読み込める行が見つかりませんでした。対応形式か確認してください。", importBroker());
   }
 
-  function applyResults(parsed, statusEl, emptyMessage) {
+  function applyResults(parsed, statusEl, emptyMessage, broker) {
     if (parsed.results.length === 0) {
       statusEl.textContent = emptyMessage;
       return false;
     }
     state.isSample = false;
-    var merged = mergePastedResults(parsed.results);
+    var merged = mergePastedResults(parsed.results, broker);
     save(); renderTable(); renderDashboard();
     // 口座の判定は誤ると税額・利回りがずれるので、内訳を出して気づけるようにする
     var nisa = parsed.results.filter(function (r) { return isTaxFree(r.account); }).length;
-    var msg = merged.added + "件追加、" + merged.updated + "件更新しました。"
+    var msg = (broker ? broker + "として" : "") + merged.added + "件追加、" + merged.updated + "件更新しました。"
       + "(NISA " + nisa + "件 / 特定 " + (parsed.results.length - nisa) + "件)";
     if (parsed.skipped > 0) msg += " 形式が一致しない行を" + parsed.skipped + "件スキップしました。";
+    if (merged.ambiguous.length > 0) {
+      msg += " " + merged.ambiguous.slice(0, 5).join("、") + (merged.ambiguous.length > 5 ? " ほか" : "")
+        + " は複数の証券会社の行があり、どれを更新するか決められないので読み飛ばしました。証券会社を選んでから読み込み直してください。";
+    }
     statusEl.textContent = msg;
     return true;
   }
@@ -2490,7 +2757,7 @@
   // ---------- Aggregation ----------
   var AXIS_CONFIG = {
     sector: { label: "業種別", groupKey: function (r) { return r.sector || "未分類"; } },
-    stock: { label: "銘柄別", groupKey: function (r) { return r.id; } },
+    stock: { label: "銘柄別", groupKey: function (r) { return stockKey(r); } },
     sensitivity: { label: "景気感応度別", groupKey: function (r) { return sectorClassOf(r.sector); } },
     account: { label: "口座別", groupKey: function (r) { return r.account || "特定"; } }
   };
@@ -2508,8 +2775,8 @@
     var totalDivPre = rows.reduce(function (s, r) { return s + r.divPre; }, 0);
     var totalDivPost = rows.reduce(function (s, r) { return s + r.divPost; }, 0);
     var totalAcq = rows.reduce(function (s, r) { return s + r.acquisition; }, 0);
-    var sectorSet = {};
-    rows.forEach(function (r) { if (r.sector) sectorSet[r.sector] = true; });
+    var sectorSet = {}, stockSet = {};
+    rows.forEach(function (r) { if (r.sector) sectorSet[r.sector] = true; stockSet[stockKey(r)] = true; });
 
     function groupBy(keyFn) {
       var map = {};
@@ -2544,10 +2811,10 @@
       totalDivPre: totalDivPre,
       totalDivPost: totalDivPost,
       totalAcq: totalAcq,
-      stockCount: rows.length,
+      stockCount: Object.keys(stockSet).length,
       sectorCount: Object.keys(sectorSet).length,
       bySector: groupBy(function (r) { return r.sector || "未分類"; }),
-      byStock: groupBy(function (r) { return (r.code ? r.code + " " : "") + (r.name || "無名銘柄") + "|" + r.id; }),
+      byStock: groupBy(function (r) { return (r.code ? r.code + " " : "") + (r.name || "無名銘柄") + "|" + stockKey(r); }),
       bySensitivity: groupBy(function (r) { return sectorClassOf(r.sector); }),
       byAccount: groupBy(function (r) { return r.account || "特定"; }),
       changes: changes,
@@ -2611,7 +2878,7 @@
       if (totalDivPre <= 0) return 0;
       return entries.slice(0, n).reduce(function (s, e) { return s + e.value; }, 0) / totalDivPre * 100;
     }
-    var byStock = groupBy(function (r) { return r.id; });
+    var byStock = groupBy(stockKey);
     var bySector = groupBy(function (r) { return r.sector || "未分類"; });
     // ハーフィンダール指数(構成比の二乗和)。1銘柄集中=10000、均等分散ほど小さい。
     var hhi = totalDivPre > 0
@@ -2836,7 +3103,7 @@
         tile.tabIndex = 0;
         tile.setAttribute("role", "button");
         tile.setAttribute("aria-label", name + " の明細へ移動");
-        tile.title = group.label + " / " + name + "\n構成比 " + fmtPct(pct) + " (" + fmtYen(tr.item.value) + ")"
+        tile.title = group.label + " / " + name + "(" + (row.account || "特定") + (brokerOf(row) ? "・" + brokerOf(row) : "") + ")\n構成比 " + fmtPct(pct) + " (" + fmtYen(tr.item.value) + ")"
           + "\n増配率 " + COLOR_MODES.growth.text(growthOf(row))
           + " / 現在利回り " + COLOR_MODES.current.text(currentYieldOf(row))
           + " / 簿価利回り " + COLOR_MODES.yield.text(bookYieldOf(row));
