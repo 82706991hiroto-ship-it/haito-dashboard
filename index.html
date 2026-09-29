@@ -821,7 +821,7 @@
           保有銘柄の決算発表日が過ぎると、配当予想を見直すようお知らせします。ファイルは締めの月ごとに分かれているので、何枚でも追加で読み込めます。
         </p>
         <p class="hint">
-          読み込まなくても、権利確定月の末日から45日(決算発表の期限の目安)を過ぎた銘柄はお知らせします。ファイルの中身はこの端末のブラウザの中だけで使います。
+          読み込まなくても、権利確定月の末日から30日(決算発表が集中しはじめる目安)を過ぎた銘柄はお知らせします。ファイルの中身はこの端末のブラウザの中だけで使います。
         </p>
         <div class="toolbar">
           <button class="btn primary" id="earningsXlsxBtn">Excelファイルを選択して読み込む</button>
@@ -2380,8 +2380,10 @@
   // 内蔵の配当は有価証券報告書の実績なので、会社の予想が変わっても自動では追いつかない。
   // 決算発表が済んだ銘柄のうち、その後に配当を見直していないものを知らせる。
   // 発表日は JPX の「決算発表予定日」Excel を利用者が読み込んだときだけ正確に分かる(再配布はしない)。
-  // 読み込みが無い銘柄は、権利確定月の末日から45日(東証が求める開示期限の目安)で推定する。
+  // 読み込みが無い銘柄は権利確定月の末日から推定する。東証の開示期限は締めから45日だが、
+  // 発表はその2週間ほど前から集中するので、30日を過ぎたら「発表の時期に入った」として知らせる。
   var REVIEW_DAYS = 100;
+  var EARNINGS_SEASON_DAYS = 30;
   var EARNINGS_DUE_DAYS = 45;
 
   function isoOf(d) {
@@ -2400,12 +2402,14 @@
     var y0 = parseInt(today.slice(0, 4), 10);
     months.forEach(function (m) {
       [y0 - 1, y0].forEach(function (y) {
-        var due = new Date(y, m, 0);               // その月の末日
+        var start = new Date(y, m, 0);             // その月の末日
+        start.setDate(start.getDate() + EARNINGS_SEASON_DAYS);
+        var due = new Date(y, m, 0);
         due.setDate(due.getDate() + EARNINGS_DUE_DAYS);
-        var iso = isoOf(due);
+        var iso = isoOf(start);
         // 正確な発表日が近くにあれば、そちらを優先する
         var near = exact.some(function (e) { return Math.abs(daysBetween(e.d, iso)) <= 60; });
-        if (!near) list.push({ date: iso, exact: false, closeMonth: m });
+        if (!near) list.push({ date: iso, due: isoOf(due), exact: false, closeMonth: m });
       });
     });
     var past = list.filter(function (c) { return c.date <= today && daysBetween(c.date, today) <= REVIEW_DAYS; });
@@ -2451,7 +2455,7 @@
       when.className = "mlack";
       when.textContent = c.exact
         ? mdOf(c.date) + " " + (c.kind || "決算") + "の発表予定日"
-        : c.closeMonth + "月末の締め ・ " + mdOf(c.date) + "ごろまでに発表(目安)";
+        : c.closeMonth + "月末の締め ・ 決算発表の時期(" + mdOf(c.date) + "〜" + mdOf(c.due) + "ごろ・目安)";
       li.appendChild(when);
 
       var a = document.createElement("a");
