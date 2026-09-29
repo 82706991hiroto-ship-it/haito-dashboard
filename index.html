@@ -210,6 +210,44 @@
     justify-self: end; font-family: inherit; font-size: 11px; color: var(--muted); background: none;
     border: none; padding: 2px 0; cursor: pointer; text-decoration: underline;
   }
+  .watch-add { display: flex; gap: 8px; }
+  .watch-add input {
+    flex: 1; min-width: 0; font-family: inherit; font-size: 14px; padding: 10px 12px;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--field); color: var(--text);
+  }
+  .watch-empty { font-size: 12.5px; color: var(--text-2); line-height: 1.8; margin: 12px 0 0; }
+  .watch-list { list-style: none; margin: 10px 0 0; padding: 0; }
+  .watch-item { border-top: 1px solid var(--line); padding: 14px 0; }
+  .watch-top { display: flex; align-items: baseline; gap: 4px 8px; flex-wrap: wrap; }
+  .watch-name { font-weight: 700; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .watch-sector { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .watch-gap { flex-basis: 100%; font-size: 13px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .watch-gap.is-hit { color: var(--accent); }
+  .watch-gap.is-far { color: var(--text-2); }
+  .watch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-top: 10px; }
+  .watch-cell { background: var(--field); border-radius: 10px; padding: 8px 10px; }
+  .watch-cell .k { font-size: 11px; color: var(--text-2); }
+  .watch-cell .v { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .watch-cell .v.is-down { color: var(--crit); }
+  .watch-cell input {
+    width: 100%; font-family: inherit; font-size: 14px; font-weight: 700; padding: 3px 6px; margin-top: 2px;
+    border-radius: 7px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-variant-numeric: tabular-nums;
+  }
+  .watch-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  .watch-actions .btn { font-size: 12.5px; padding: 7px 14px; }
+  .watch-del { margin-left: auto; font-family: inherit; font-size: 11.5px; color: var(--muted); background: none; border: none; cursor: pointer; text-decoration: underline; }
+  .watch-sim { background: var(--field); border-radius: 12px; padding: 12px 14px; margin-top: 10px; }
+  .watch-sim-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); flex-wrap: wrap; }
+  .watch-sim-head input {
+    width: 90px; font-family: inherit; font-size: 14px; padding: 5px 8px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text); font-variant-numeric: tabular-nums;
+  }
+  .watch-sim-rows { margin-top: 10px; font-size: 13px; }
+  .watch-sim-rows .r { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px dashed var(--line); font-variant-numeric: tabular-nums; }
+  .watch-sim-rows .r:first-child { border-top: none; }
+  .watch-sim-rows .ok { color: var(--good); font-weight: 700; }
+  .watch-sim-rows .ng { color: var(--crit); font-weight: 700; }
+  .watch-sim-rows .mid { color: var(--warn); font-weight: 700; }
   .hero-actions { margin-top: 14px; display: flex; justify-content: flex-end; }
   .months-dialog.report-dialog { max-width: 420px; max-height: calc(100dvh - 24px); overflow-y: auto; padding-bottom: 0; }
   .report-dialog .field-check { display: flex; align-items: center; gap: 9px; font-size: 13px; margin-bottom: 10px; }
@@ -835,7 +873,7 @@
       <summary>株価だけ更新する(現在利回りの更新)</summary>
       <div class="paste-import-body">
         <p class="hint">
-          1行に「証券コード 株価」を並べて貼り付けると、登録済みの銘柄の株価だけを更新します。株数や取得単価は変わりません。
+          1行に「証券コード 株価」を並べて貼り付けると、登録済みの銘柄と買い増し候補の株価だけを更新します。株数や取得単価は変わりません。
           証券会社アプリの保有一覧やYahoo!ファイナンスの画面を見ながら打つ、スマホ向けの経路です。
           CSVが落とせるなら、上の「保有証券のCSV」を読み込むほうが一度に済みます。
         </p>
@@ -869,6 +907,16 @@
         </div>
       </div>
     </details>
+  </section>
+
+  <section class="panel" id="watchPanel">
+    <h2>買い増し候補 <span class="hint">目標利回りに近い順</span></h2>
+    <div class="watch-add">
+      <input type="text" id="watchAddInput" placeholder="コードか銘柄名で追加(例: 8306、KDDI)" autocomplete="off">
+      <button class="btn primary" id="watchAddBtn" type="button">☆ 追加</button>
+    </div>
+    <p class="paste-status" id="watchStatus"></p>
+    <ul class="watch-list" id="watchList"></ul>
   </section>
 
   <section id="dashboardSection"></section>
@@ -2030,6 +2078,234 @@
     e.target.value = "";
   });
 
+  // ---------- 買い増し候補(監視銘柄と目標利回り) ----------
+  // 「目標利回りになる株価」まであと何%下がればよいかで並べ、買ったときの分散の変化を試算する。
+  var WATCH_DEFAULT_YIELD = 4.0;
+  var watchSimOpen = {};
+
+  function heldOf(code) {
+    return state.holdings.filter(function (h) { return String(h.code || "").trim().toUpperCase() === code; });
+  }
+
+  function watchView(w) {
+    var held = heldOf(w.code);
+    var info = CODE_INFO_MAP[w.code];
+    var divs = dividendsFor(w.code);
+    // 予想配当は、保有していれば自分で入れた値(決算で書き換えた値)を使う
+    var heldDiv = held.map(function (h) { return num(h.div); }).filter(function (v) { return v > 0; })[0];
+    var div = heldDiv || (divs ? divs[0] : 0);
+    // 株価は監視側と保有側のうち新しいほう
+    var price = num(w.price), priceDate = w.priceDate || "";
+    held.forEach(function (h) {
+      if (num(h.price) > 0 && String(h.priceDate || "") > priceDate) { price = num(h.price); priceDate = h.priceDate; }
+    });
+    var shares = held.reduce(function (s, h) { return s + num(h.shares); }, 0);
+    var costTotal = held.reduce(function (s, h) { return s + num(h.shares) * num(h.cost); }, 0);
+    var target = num(w.targetYield);
+    var targetPrice = target > 0 && div > 0 ? div / (target / 100) : null;
+    return {
+      w: w, name: info ? String(info[0]).normalize("NFKC") : w.code, sector: info ? info[1] : "",
+      div: div, divFromHolding: !!heldDiv, price: price, priceDate: priceDate,
+      yieldNow: price > 0 && div > 0 ? (div / price) * 100 : null,
+      targetPrice: targetPrice,
+      gapPct: targetPrice && price > 0 ? (targetPrice / price - 1) * 100 : null,
+      heldShares: shares, avgCost: shares > 0 ? costTotal / shares : null
+    };
+  }
+
+  // 分散ガイドラインの物差し(年間配当に占める割合)で、指定の銘柄・業種と景気敏感の比率を測る
+  function guideShares(agg, code, sector) {
+    var total = agg.totalDivPre;
+    var stock = agg.rows.filter(function (r) { return String(r.code || "").toUpperCase() === code; })
+      .reduce(function (s, r) { return s + r.divPre; }, 0);
+    var sec = agg.bySector.filter(function (x) { return x.label === sector; })[0];
+    var sens = agg.bySensitivity.filter(function (x) { return x.label === "景気敏感"; })[0];
+    return {
+      total: total,
+      stockPct: total > 0 ? stock / total * 100 : 0,
+      sectorPct: total > 0 && sec ? sec.value / total * 100 : 0,
+      sensPct: total > 0 && sens ? sens.value / total * 100 : 0
+    };
+  }
+
+  function simulateBuy(v, shares) {
+    var before = aggregate();
+    var temp = { id: "__sim__", code: v.w.code, name: v.name, sector: sectorFor(v.w.code, v.sector),
+                 account: "特定", shares: shares, cost: v.price, div: v.div, prevDiv: "" };
+    state.holdings.push(temp);
+    var after;
+    try { after = aggregate(); } finally { state.holdings.pop(); }
+    return {
+      before: guideShares(before, v.w.code, temp.sector),
+      after: guideShares(after, v.w.code, temp.sector),
+      sector: temp.sector,
+      addDiv: v.div * shares,
+      cash: v.price * shares
+    };
+  }
+
+  function renderWatchSim(box, v) {
+    box.innerHTML = "";
+    var head = document.createElement("div");
+    head.className = "watch-sim-head";
+    var lbl = document.createElement("span"); lbl.textContent = "買う株数";
+    var inp = document.createElement("input");
+    inp.type = "number"; inp.min = "1"; inp.step = "1"; inp.inputMode = "numeric";
+    inp.value = watchSimOpen[v.w.id] || 100;
+    head.appendChild(lbl); head.appendChild(inp);
+    var rows = document.createElement("div");
+    rows.className = "watch-sim-rows";
+    box.appendChild(head); box.appendChild(rows);
+
+    function paint() {
+      var n = Math.max(0, Math.floor(num(inp.value)));
+      watchSimOpen[v.w.id] = n || 100;
+      rows.innerHTML = "";
+      if (!(v.price > 0) || !(v.div > 0) || n === 0) {
+        rows.textContent = !(v.price > 0) ? "株価を入れると試算できます。" : !(v.div > 0) ? "1株配当が分からないため試算できません。" : "";
+        return;
+      }
+      var r = simulateBuy(v, n), g = state.guides;
+      function line(k, val, cls) {
+        var d = document.createElement("div"); d.className = "r";
+        var a = document.createElement("span"); a.textContent = k;
+        var b = document.createElement("span"); b.textContent = val; if (cls) b.className = cls;
+        d.appendChild(a); d.appendChild(b); rows.appendChild(d);
+      }
+      function arrow(a, b) { return fmtPct(a) + " → " + fmtPct(b); }
+      line("必要な資金", fmtYen(r.cash));
+      line("年間配当", "+" + fmtYen(r.addDiv) + "(税引後 +" + fmtYen(r.addDiv * (1 - TAX_RATE)) + ")");
+      line("この銘柄の比率(上限" + g.maxStockPct + "%)", arrow(r.before.stockPct, r.after.stockPct),
+        r.after.stockPct <= g.maxStockPct ? "ok" : "ng");
+      line(r.sector + "の比率(上限" + g.maxSectorPct + "%)", arrow(r.before.sectorPct, r.after.sectorPct),
+        r.after.sectorPct <= g.maxSectorPct ? "ok" : "ng");
+      var sensDiffBefore = Math.abs(r.before.sensPct - g.sensitiveTarget), sensDiffAfter = Math.abs(r.after.sensPct - g.sensitiveTarget);
+      line("景気敏感の比率(目標" + g.sensitiveTarget + "%)", arrow(r.before.sensPct, r.after.sensPct),
+        sensDiffAfter <= 5 ? "ok" : sensDiffAfter < sensDiffBefore ? "mid" : "ng");
+    }
+    inp.addEventListener("input", paint);
+    paint();
+  }
+
+  function renderWatchList() {
+    var list = document.getElementById("watchList");
+    if (!list) return;
+    var items = (Array.isArray(state.watch) ? state.watch : []).map(watchView);
+    items.sort(function (a, b) {
+      var ga = a.gapPct === null ? Infinity : -a.gapPct, gb = b.gapPct === null ? Infinity : -b.gapPct;
+      return ga - gb;
+    });
+    list.innerHTML = "";
+    if (items.length === 0) {
+      var p = document.createElement("p");
+      p.className = "watch-empty";
+      p.textContent = "気になる銘柄を☆で追加すると、目標の利回りになる株価と、今の株価からあと何%下がれば届くかを出します。買ったときに分散ガイドラインがどう変わるかも試算できます。";
+      list.appendChild(p);
+      return;
+    }
+    items.forEach(function (v) {
+      var li = document.createElement("li");
+      li.className = "watch-item";
+
+      var top = document.createElement("div");
+      top.className = "watch-top";
+      var nm = document.createElement("span"); nm.className = "watch-name"; nm.textContent = "☆ " + v.w.code + " " + v.name;
+      var sc = document.createElement("span"); sc.className = "watch-sector"; sc.textContent = v.sector;
+      var gap = document.createElement("span"); gap.className = "watch-gap";
+      if (v.gapPct === null) { gap.textContent = v.price > 0 ? "" : "株価を入力"; gap.classList.add("is-far"); }
+      else if (v.gapPct >= 0) { gap.textContent = "目標利回りに到達"; gap.classList.add("is-hit"); }
+      else { gap.textContent = "あと " + fmtPct(-v.gapPct) + " 下落で到達"; gap.classList.add("is-far"); }
+      top.appendChild(nm); top.appendChild(sc); top.appendChild(gap);
+      li.appendChild(top);
+
+      var grid = document.createElement("div");
+      grid.className = "watch-grid";
+      function cell(k, valueOrEl, cls) {
+        var c = document.createElement("div"); c.className = "watch-cell";
+        var kk = document.createElement("div"); kk.className = "k"; kk.textContent = k;
+        c.appendChild(kk);
+        if (typeof valueOrEl === "string") {
+          var vv = document.createElement("div"); vv.className = "v" + (cls ? " " + cls : ""); vv.textContent = valueOrEl; c.appendChild(vv);
+        } else c.appendChild(valueOrEl);
+        grid.appendChild(c);
+      }
+      var priceIn = document.createElement("input");
+      priceIn.type = "number"; priceIn.min = "0"; priceIn.step = "any"; priceIn.inputMode = "decimal";
+      priceIn.value = v.price > 0 ? v.price : ""; priceIn.placeholder = "株価";
+      priceIn.addEventListener("change", function () {
+        v.w.price = priceIn.value === "" ? undefined : num(priceIn.value);
+        v.w.priceDate = priceIn.value === "" ? undefined : todayStamp();
+        save(); renderWatchList();
+      });
+      cell("株価" + (v.priceDate ? "(" + v.priceDate.slice(5) + ")" : ""), priceIn);
+      cell("1株配当" + (v.divFromHolding ? "(保有の値)" : "(直近実績)"), v.div > 0 ? fmtPerShare(v.div) : "—");
+      cell("今の利回り", v.yieldNow !== null ? fmtPct(v.yieldNow, 2) : "—");
+      var tIn = document.createElement("input");
+      tIn.type = "number"; tIn.min = "0"; tIn.step = "0.1"; tIn.inputMode = "decimal";
+      tIn.value = v.w.targetYield == null ? "" : v.w.targetYield;
+      tIn.addEventListener("change", function () {
+        v.w.targetYield = tIn.value === "" ? undefined : num(tIn.value);
+        save(); renderWatchList();
+      });
+      cell("目標利回り(%)", tIn);
+      cell("目標の株価", v.targetPrice ? fmtYen(v.targetPrice) + "以下" : "—");
+      if (v.heldShares > 0 && v.avgCost > 0 && v.price > 0) {
+        var d = (v.price / v.avgCost - 1) * 100;
+        cell("平均取得単価 " + fmtYen(v.avgCost) + " から", fmtSignedPct(d), d < 0 ? "is-down" : "");
+      }
+      li.appendChild(grid);
+
+      var act = document.createElement("div");
+      act.className = "watch-actions";
+      var simBtn = document.createElement("button");
+      simBtn.type = "button"; simBtn.className = "btn";
+      var open = watchSimOpen[v.w.id] !== undefined;
+      simBtn.textContent = open ? "試算を閉じる" : "買ったら?を試算";
+      simBtn.addEventListener("click", function () {
+        if (watchSimOpen[v.w.id] !== undefined) delete watchSimOpen[v.w.id]; else watchSimOpen[v.w.id] = 100;
+        renderWatchList();
+      });
+      var del = document.createElement("button");
+      del.type = "button"; del.className = "watch-del"; del.textContent = "候補から外す";
+      del.addEventListener("click", function () {
+        state.watch = state.watch.filter(function (x) { return x.id !== v.w.id; });
+        save(); renderWatchList();
+      });
+      act.appendChild(simBtn); act.appendChild(del);
+      li.appendChild(act);
+
+      if (open) {
+        var sim = document.createElement("div");
+        sim.className = "watch-sim";
+        li.appendChild(sim);
+        renderWatchSim(sim, v);
+      }
+      list.appendChild(li);
+    });
+  }
+
+  function addWatch(code) {
+    var status = document.getElementById("watchStatus");
+    code = String(code || "").normalize("NFKC").trim().toUpperCase();
+    if (!CODE_INFO_MAP[code]) { status.textContent = "候補から銘柄を選んでください。"; return false; }
+    if (!Array.isArray(state.watch)) state.watch = [];
+    if (state.watch.some(function (w) { return w.code === code; })) { status.textContent = code + " はすでに候補にあります。"; return false; }
+    state.watch.push({ id: uid(), code: code, targetYield: WATCH_DEFAULT_YIELD, addedAt: todayIso() });
+    status.textContent = "";
+    save(); renderWatchList();
+    return true;
+  }
+
+  (function () {
+    var input = document.getElementById("watchAddInput");
+    wireSuggest(input, function (e) { if (addWatch(e.code)) input.value = ""; });
+    document.getElementById("watchAddBtn").addEventListener("click", function () {
+      var q = input.value.trim();
+      var hit = CODE_INFO_MAP[q.toUpperCase()] ? q.toUpperCase() : (findSuggestions(q, 1)[0] || {}).code;
+      if (addWatch(hit)) input.value = "";
+    });
+  })();
+
   // ---------- 株価だけ更新 ----------
   // 「8306 1820」「8306,1,820」「8306<TAB>1820円」のような行から、コードと株価を拾う
   function parsePriceLines(text) {
@@ -2064,11 +2340,13 @@
     var stamp = todayStamp(), updated = 0, unknown = [];
     parsed.rows.forEach(function (r) {
       var hits = state.holdings.filter(function (h) { return String(h.code || "").trim().toUpperCase() === r.code; });
-      if (hits.length === 0) { unknown.push(r.code); return; }
+      var watched = (state.watch || []).filter(function (w) { return w.code === r.code; });
+      if (hits.length === 0 && watched.length === 0) { unknown.push(r.code); return; }
       hits.forEach(function (h) { h.price = r.price; h.priceDate = stamp; });
+      watched.forEach(function (w) { w.price = r.price; w.priceDate = stamp; });
       updated++;
     });
-    save(); renderTable(); renderDashboard();
+    save(); renderTable(); renderDashboard(); renderWatchList();
     var msg = updated + "銘柄の株価を更新しました(" + stamp + "時点)。";
     if (unknown.length) msg += " 未登録のコード: " + unknown.slice(0, 5).join("、") + (unknown.length > 5 ? " ほか" : "") + "。";
     if (parsed.skipped) msg += " 読めない行を" + parsed.skipped + "件飛ばしました。";
@@ -4296,6 +4574,7 @@
   }
 
   function renderDashboard() {
+    renderWatchList();
     var section = document.getElementById("dashboardSection");
     if (!section.dataset.built) {
       section.innerHTML = dashboardTemplate();
@@ -4508,6 +4787,7 @@
   function renderAll() {
     bindGoalInputs();
     renderTable();
+    renderWatchList();
     renderSectorTable();
     renderDashboard();
     renderBackupStatus();
