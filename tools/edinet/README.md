@@ -1,36 +1,38 @@
-# 1株配当の長期履歴(10年前後)を作る
+# 1株配当の長期履歴(EDINET)
 
 `index.html` の `CODE_INFO_MAP[code][3]` は、1株配当を新しい順に並べた配列。
-今は直近の有価証券報告書1本から最大3期分しか入っていない。これを10〜15期に延ばす。
-画面側(`dividendStreak`)は配列の長さに合わせて判定するので、データを差し替えるだけで
-「◯期連続増配」が延びる。
+`fetch_history.py` で、有価証券報告書から約13期分(直近の期から12年前まで)に延ばす。
+画面側(`dividendStreak`)は配列の長さに合わせて「◯期連続増配」を出す。
 
 ## 必要なもの
 
-- ネットワーク: `api.edinet-fsa.go.jp` への接続許可(クラウド環境の設定)
+- ネットワーク: `api.edinet-fsa.go.jp` への接続許可
 - APIキー: 環境変数 `EDINET_API_KEY`(EDINET API v2 の Subscription-Key)
 
-## 方針
+## 手順
 
-- 有報の「主要な経営指標等の推移」には5期分の1株配当が載る。
-  2026年・2021年・2016年ごろ提出の有報を1社3本ずつ取れば、約15期分をつなげられる
-  (約3,900社 × 3本 ≒ 1.2万件)。
-- 書類一覧: `GET /api/v2/documents.json?date=YYYY-MM-DD&type=2&Subscription-Key=…`
-  を日付ごとに回し、`docTypeCode == "120"`(有価証券報告書)を集める。
-  3月決算の提出が集中する6月下旬を中心に、各年の全期間を回す。
-- 本文: `GET /api/v2/documents/{docID}?type=5`(XBRLをCSVにしたzip)。
-  経営指標の1株配当(`DividendPaidPerShareSummaryOfBusinessResults`)と
-  発行済株式総数(`TotalNumberOfIssuedSharesSummaryOfBusinessResults`)を、
-  `CurrentYearDuration` 〜 `Prior4YearDuration` の各コンテキスト(個別)から読む。
-  要素名・コンテキスト名は実データで要確認。
+```sh
+C=/tmp/edcache   # 取得結果の置き場(リポジトリには入れない)
+python3 tools/edinet/fetch_history.py --cache $C list    # 書類一覧(約1,200営業日、数分)
+python3 tools/edinet/fetch_history.py --cache $C fetch   # 有報のCSV(約1万件、45分ほど)
+python3 tools/edinet/fetch_history.py --cache $C build --out $C/history.json
+python3 tools/edinet/fetch_history.py --cache $C apply --history $C/history.json --html index.html
+```
 
-## 年をつなぐときの注意(既存の取り込みと同じ扱い)
+EDINETは提出から約10年で書類を消すため、提出日の範囲(`WINDOWS`)は毎年1年ずつ進める。
 
-- 株式分割: 発行済株式数の比を、きりのいい倍率(1.5, 2, 3, 5, 10…)に寄せて割り戻す。
-- 期の途中の分割でその年度が分割前後の混在になる場合は、その期を捨てる。
-- 前年比が −40% より大きく減る、または3倍を超えて増える年があれば、それより古い期は捨てる
-  (上場前の年度や株式併合の混入)。
-- 2本の有報で重なる期の値が食い違うときは、新しい有報の値を採る。
+## つなぎ方
+
+- 1社につき、最新・期末が4年前・8年前の有報を1本ずつ取る。各有報に5期分の1株配当と発行済株式数が載る。
+- 1本の中では、株数の比をきりのいい倍率に寄せ、分割の前後で配当が倍率ぶん下がっていれば割り戻す
+  (過去期を修正済みで載せている会社はそのまま)。
+- 有報どうしは重なる1期で倍率を合わせる。合わなければ古い有報はつながない。
+- 期の途中で分割した年(中間は分割前・期末は分割後の混在。トヨタ148円など)は、
+  株数が跳ねた期の近くで40%を超えて下がっていれば、その年より古い期を外す。
+- 3倍を超える増配は上場前の年度の混入とみなし、それより古い期を外す。
+- `apply` は、既存の値(直近3期)と一致する銘柄だけを延ばす。一致しない銘柄は既存のまま。
+
+2026年9月の実行結果: 2,207銘柄を延長(うち約1,100銘柄が13期)、184銘柄は不一致で据え置き。
 
 ## 出典表示
 

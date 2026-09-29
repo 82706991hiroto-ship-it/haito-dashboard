@@ -233,11 +233,14 @@ def fy_key(fyend, back):
 def build_code(docs_parsed):
     """最新→4年前→8年前の順に並んだ解析結果から、新しい順の系列を作る。"""
     series = {}  # fy -> value (最新の有報の株数基準)
+    shares = {}  # fy -> その期末の発行済株式数(生の値)
     for i, doc in enumerate(docs_parsed):
         if not doc or doc.get("error") or not doc.get("fyend"):
             break
         rows = within_filing(doc["periods"])
         vals = {fy_key(doc["fyend"], back): v for back, v, _ in rows if v is not None}
+        for back, _, sh in rows:
+            shares.setdefault(fy_key(doc["fyend"], back), sh)
         if not vals:
             break
         if i == 0:
@@ -269,6 +272,20 @@ def build_code(docs_parsed):
             if (y0 - y1) * 12 + (m0 - m1) != 12:
                 break
         out.append(round(series[fy], 2))
+    # 期の途中で分割した年は、中間(分割前)と期末(分割後)の混ざった値になる(トヨタ148円など)。
+    # 株数が跳ねた期の前後1期以内で40%を超えて下がっていたら、その混在年より古い期を外す。
+    def split_near(j):
+        for a in range(max(1, j - 1), min(len(keys), j + 2)):
+            s_new, s_old = shares.get(keys[a - 1]), shares.get(keys[a])
+            if s_new and s_old:
+                f = snap(s_new / s_old)
+                if f is None or f > 1:
+                    return True
+        return False
+    for j in range(1, len(out)):
+        if out[j] > 0 and out[j - 1] / out[j] < 0.6 and split_near(j):
+            out = out[:j]
+            break
     # 3倍を超える増配は上場前の年度などの混入とみなし、それより古い期を外す
     for j in range(1, len(out)):
         if out[j] > 0 and out[j - 1] / out[j] > 3:
