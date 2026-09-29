@@ -248,6 +248,9 @@
   .watch-sim-rows .ok { color: var(--good); font-weight: 700; }
   .watch-sim-rows .ng { color: var(--crit); font-weight: 700; }
   .watch-sim-rows .mid { color: var(--warn); font-weight: 700; }
+  .buy-preview { background: var(--field); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+  .buy-preview .r { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-variant-numeric: tabular-nums; }
+  .buy-preview .r b { font-weight: 700; }
   .hero-actions { margin-top: 14px; display: flex; justify-content: flex-end; }
   .months-dialog.report-dialog { max-width: 420px; max-height: calc(100dvh - 24px); overflow-y: auto; padding-bottom: 0; }
   .report-dialog .field-check { display: flex; align-items: center; gap: 9px; font-size: 13px; margin-bottom: 10px; }
@@ -801,6 +804,23 @@
       </div>
     </dialog>
 
+    <dialog class="months-dialog detail-dialog" id="buyDialog">
+      <h3 id="buyTitle">買い増し</h3>
+      <p class="hint">買った株数と約定単価を入れると、平均取得単価と簿価利回りを計算し直します。S株(単元未満株)の積み立てにも使えます。</p>
+      <label class="field">買った株数
+        <input type="number" id="buyShares" min="0" step="any" inputmode="decimal">
+      </label>
+      <label class="field">約定単価(円)
+        <input type="number" id="buyPrice" min="0" step="any" inputmode="decimal">
+      </label>
+      <div class="buy-preview" id="buyPreview"></div>
+      <p class="hint" id="buyHistory"></p>
+      <div class="toolbar">
+        <button class="btn primary" id="buyApplyBtn" type="button">記録する</button>
+        <button class="btn" id="buyCancelBtn" type="button">やめる</button>
+      </div>
+    </dialog>
+
     <dialog class="months-dialog" id="monthsDialog">
       <h3 id="monthsDialogTitle">権利確定月</h3>
       <p class="hint">配当をもらう権利が確定する月です。年2回の銘柄が多く、その場合は6か月離れた2つになります。</p>
@@ -1186,6 +1206,12 @@
       detailBtn.textContent = "詳細";
       detailBtn.title = "現在株価・優待・メモ・除外";
       detailBtn.addEventListener("click", function () { openDetailDialog(h); });
+      var buyBtn = document.createElement("button");
+      buyBtn.className = "detail-btn";
+      buyBtn.textContent = "＋買い増し";
+      buyBtn.title = "買った株数と単価から平均取得単価を計算し直す";
+      buyBtn.addEventListener("click", function () { openBuyDialog(h); });
+      tdDel.appendChild(buyBtn);
       tdDel.appendChild(detailBtn);
       var delBtn = document.createElement("button");
       delBtn.textContent = "削除";
@@ -2185,6 +2211,16 @@
     }
     inp.addEventListener("input", paint);
     paint();
+    var held = heldOf(v.w.code);
+    if (held.length > 0) {
+      var rec = document.createElement("button");
+      rec.type = "button"; rec.className = "btn"; rec.style.marginTop = "10px";
+      rec.textContent = "買ったので保有に記録する";
+      rec.addEventListener("click", function () {
+        openBuyDialog(held[0], { shares: Math.max(0, Math.floor(num(inp.value))), price: v.price > 0 ? v.price : "" });
+      });
+      box.appendChild(rec);
+    }
   }
 
   function renderWatchList() {
@@ -2305,6 +2341,60 @@
       if (addWatch(hit)) input.value = "";
     });
   })();
+
+  // ---------- 買い増し(平均取得単価の計算し直し) ----------
+  // 平均取得単価 = (今の株数×今の単価 + 買った株数×約定単価) ÷ 合計株数。買った記録は銘柄ごとに残す。
+  var buyTarget = null;
+
+  function openBuyDialog(h, preset) {
+    buyTarget = h;
+    var dlg = document.getElementById("buyDialog");
+    document.getElementById("buyTitle").textContent = (h.code ? h.code + " " : "") + (h.name || "") + " を買い増し";
+    var sh = document.getElementById("buyShares"), pr = document.getElementById("buyPrice");
+    sh.value = preset && preset.shares ? preset.shares : "";
+    pr.value = preset && preset.price ? preset.price : (num(h.price) > 0 ? h.price : "");
+    var hist = Array.isArray(h.buys) ? h.buys.slice(-5).reverse() : [];
+    document.getElementById("buyHistory").textContent = hist.length === 0 ? ""
+      : "最近の買い増し: " + hist.map(function (b) {
+          return b.date.slice(5).replace("-", "/") + " " + b.shares + "株@" + fmtPerShare(b.price);
+        }).join(" / ");
+    function paint() {
+      var s0 = num(h.shares), c0 = num(h.cost), n = num(sh.value), p = num(pr.value), d = num(h.div);
+      var box = document.getElementById("buyPreview");
+      if (!(n > 0) || !(p > 0)) {
+        box.innerHTML = '<div class="r"><span>今の保有</span><b>' + s0.toLocaleString("ja-JP") + "株 @ " + fmtPerShare(c0) + "</b></div>";
+        return;
+      }
+      var s1 = s0 + n, c1 = (s0 * c0 + n * p) / s1;
+      function row(k, a, b) { return '<div class="r"><span>' + k + "</span><b>" + a + " → " + b + "</b></div>"; }
+      box.innerHTML =
+        row("株数", s0.toLocaleString("ja-JP"), s1.toLocaleString("ja-JP")) +
+        row("平均取得単価", fmtPerShare(c0), fmtPerShare(c1)) +
+        (d > 0 && c0 > 0 ? row("簿価利回り", fmtPct(d / c0 * 100, 2), fmtPct(d / c1 * 100, 2)) : "") +
+        (d > 0 ? '<div class="r"><span>年間配当</span><b>+' + fmtYen(d * n) + "</b></div>" : "") +
+        '<div class="r"><span>支払額</span><b>' + fmtYen(n * p) + "</b></div>";
+    }
+    sh.oninput = paint; pr.oninput = paint;
+    paint();
+    dlg.showModal();
+    setTimeout(function () { (sh.value ? pr : sh).focus(); }, 50);
+  }
+
+  document.getElementById("buyCancelBtn").addEventListener("click", function () {
+    document.getElementById("buyDialog").close();
+  });
+  document.getElementById("buyApplyBtn").addEventListener("click", function () {
+    var h = buyTarget;
+    var n = num(document.getElementById("buyShares").value), p = num(document.getElementById("buyPrice").value);
+    if (!h || !(n > 0) || !(p > 0)) return;
+    var s0 = num(h.shares), c0 = num(h.cost), s1 = s0 + n;
+    h.cost = round2((s0 * c0 + n * p) / s1);
+    h.shares = s1;
+    if (!Array.isArray(h.buys)) h.buys = [];
+    h.buys.push({ date: todayIso(), shares: n, price: p });
+    document.getElementById("buyDialog").close();
+    save(); renderTable(); renderDashboard();
+  });
 
   // ---------- 株価だけ更新 ----------
   // 「8306 1820」「8306,1,820」「8306<TAB>1820円」のような行から、コードと株価を拾う
