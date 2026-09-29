@@ -427,6 +427,11 @@
     margin-top: 18px; padding: 16px 18px; border-radius: var(--radius);
     background: var(--field);
   }
+  .review-box .mlack { color: var(--text-2); }
+  .review-box .mok {
+    font-family: inherit; font-size: 11.5px; padding: 3px 10px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--text-2);
+  }
   .missing-box h3 { font-size: 13.5px; font-weight: 700; margin: 0 0 6px; }
   .missing-box .hint { font-size: 12px; color: var(--text-2); margin: 0 0 12px; line-height: 1.8; }
   .missing-list { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
@@ -703,6 +708,12 @@
       <ul class="missing-list" id="missingList"></ul>
     </div>
 
+    <div class="missing-box review-box" id="reviewBox" hidden>
+      <h3>配当予想を見直す時期の銘柄</h3>
+      <p class="hint" id="reviewHint"></p>
+      <ul class="missing-list" id="reviewList"></ul>
+    </div>
+
     <dialog class="months-dialog detail-dialog" id="detailDialog">
       <h3 id="detailTitle">銘柄の詳細</h3>
       <label class="field">現在株価(円)
@@ -798,6 +809,24 @@
           <button class="btn" id="csvImportBtn">CSVファイルを選択して読み込む</button>
           <input type="file" id="csvImportFile" accept=".csv,.txt,text/csv,text/plain,application/vnd.ms-excel" style="display:none">
           <span class="paste-status" id="csvImportStatus"></span>
+        </div>
+      </div>
+    </details>
+
+    <details class="paste-import">
+      <summary>決算発表予定日を読み込む(配当予想の見直しのお知らせ)</summary>
+      <div class="paste-import-body">
+        <p class="hint">
+          日本取引所グループ(JPX)の<a href="https://www.jpx.co.jp/listing/event-schedules/financial-announcement/index.html" target="_blank" rel="noopener noreferrer">決算発表予定日</a>のページから、Excelファイル(.xlsx)をダウンロードして選んでください。
+          保有銘柄の決算発表日が過ぎると、配当予想を見直すようお知らせします。ファイルは締めの月ごとに分かれているので、何枚でも追加で読み込めます。
+        </p>
+        <p class="hint">
+          読み込まなくても、権利確定月の末日から45日(決算発表の期限の目安)を過ぎた銘柄はお知らせします。ファイルの中身はこの端末のブラウザの中だけで使います。
+        </p>
+        <div class="toolbar">
+          <button class="btn primary" id="earningsXlsxBtn">Excelファイルを選択して読み込む</button>
+          <input type="file" id="earningsXlsxFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none">
+          <span class="paste-status" id="earningsStatus"></span>
         </div>
       </div>
     </details>
@@ -1314,7 +1343,7 @@
       var divBefore = h.div;
       input.addEventListener("focus", function () { divBefore = h.div; });
       input.addEventListener("change", function () {
-        if (recordDivChange(h, divBefore, h.div)) { save(); renderDashboard(); }
+        if (recordDivChange(h, divBefore, h.div)) { save(); renderDashboard(); renderReviewList(); }
         divBefore = h.div;
       });
     }
@@ -1579,7 +1608,7 @@
   document.getElementById("addRowBtn").addEventListener("click", function () {
     var newId = uid();
     state.isSample = false;
-    state.holdings.push({ id: newId, code: "", name: "", sector: SECTOR_NAMES[0], account: "特定", shares: "", cost: "", div: "", prevDiv: "" });
+    state.holdings.push({ id: newId, code: "", name: "", sector: SECTOR_NAMES[0], account: "特定", shares: "", cost: "", div: "", prevDiv: "", addedAt: todayIso() });
     save(); renderTable(); renderDashboard();
     var newRow = document.querySelector('#holdingsBody tr[data-id="' + newId + '"]');
     if (newRow) {
@@ -1883,7 +1912,8 @@
           id: uid(), code: r.code, name: r.name, sector: r.sector, account: r.account,
           shares: r.shares, cost: r.cost, div: r.div, months: r.months,
           price: r.price === "" ? undefined : r.price, priceDate: r.price === "" ? undefined : r.priceDate,
-          prevDiv: r.prevDiv !== undefined ? r.prevDiv : ""
+          prevDiv: r.prevDiv !== undefined ? r.prevDiv : "",
+          addedAt: todayIso()
         });
         added++;
       }
@@ -2346,7 +2376,272 @@
     return lack;
   }
 
+  // ---------- 決算発表と配当予想の見直し ----------
+  // 内蔵の配当は有価証券報告書の実績なので、会社の予想が変わっても自動では追いつかない。
+  // 決算発表が済んだ銘柄のうち、その後に配当を見直していないものを知らせる。
+  // 発表日は JPX の「決算発表予定日」Excel を利用者が読み込んだときだけ正確に分かる(再配布はしない)。
+  // 読み込みが無い銘柄は、権利確定月の末日から45日(東証が求める開示期限の目安)で推定する。
+  var REVIEW_DAYS = 100;
+  var EARNINGS_DUE_DAYS = 45;
+
+  function isoOf(d) {
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  }
+  function daysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
+  function mdOf(iso) { return parseInt(iso.slice(5, 7), 10) + "/" + parseInt(iso.slice(8, 10), 10); }
+
+  function reviewCheckpoint(h, today) {
+    var list = [];
+    var exact = (state.earnings && state.earnings[h.code]) || [];
+    exact.forEach(function (e) { list.push({ date: e.d, exact: true, kind: e.t }); });
+    var months = monthsOf(h).slice();
+    // 年1回配当でも中間決算の発表はあるので、半年後の締めも加える
+    if (months.length === 1) months.push(((months[0] + 5) % 12) + 1);
+    var y0 = parseInt(today.slice(0, 4), 10);
+    months.forEach(function (m) {
+      [y0 - 1, y0].forEach(function (y) {
+        var due = new Date(y, m, 0);               // その月の末日
+        due.setDate(due.getDate() + EARNINGS_DUE_DAYS);
+        var iso = isoOf(due);
+        // 正確な発表日が近くにあれば、そちらを優先する
+        var near = exact.some(function (e) { return Math.abs(daysBetween(e.d, iso)) <= 60; });
+        if (!near) list.push({ date: iso, exact: false, closeMonth: m });
+      });
+    });
+    var past = list.filter(function (c) { return c.date <= today && daysBetween(c.date, today) <= REVIEW_DAYS; });
+    past.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    return past[0] || null;
+  }
+
+  function reviewTargets() {
+    var today = todayIso();
+    return state.holdings.map(function (h) {
+      if (h.excluded || !(num(h.div) > 0) || !h.code) return null;
+      var c = reviewCheckpoint(h, today);
+      if (!c) return null;
+      if (h.divCheckedAt && h.divCheckedAt >= c.date) return null;
+      // 決算より後に登録した銘柄は、登録時に確かめた値として扱う
+      if (h.addedAt && h.addedAt >= c.date) return null;
+      return { h: h, c: c };
+    }).filter(Boolean);
+  }
+
+  function renderReviewList() {
+    var box = document.getElementById("reviewBox");
+    var list = document.getElementById("reviewList");
+    if (!box || !list) return;
+    var rows = reviewTargets();
+    box.hidden = rows.length === 0;
+    list.innerHTML = "";
+    if (rows.length === 0) return;
+    var exactCount = rows.filter(function (x) { return x.c.exact; }).length;
+    document.getElementById("reviewHint").textContent =
+      (exactCount === rows.length ? "決算発表の予定日を過ぎた銘柄です。" : "決算発表が済んだ(「目安」は済んだ可能性がある)銘柄です。") +
+      "配当予想が変わっていれば「年間配当/株」を書き換えてください(配当金台帳に記録されます)。変わっていなければ「変更なし」を押すと消えます。";
+
+    rows.forEach(function (x) {
+      var h = x.h, c = x.c;
+      var li = document.createElement("li");
+      var name = document.createElement("span");
+      name.className = "mname";
+      name.textContent = (h.name || "無名銘柄") + "(" + h.code + ")";
+      li.appendChild(name);
+
+      var when = document.createElement("span");
+      when.className = "mlack";
+      when.textContent = c.exact
+        ? mdOf(c.date) + " " + (c.kind || "決算") + "の発表予定日"
+        : c.closeMonth + "月末の締め ・ " + mdOf(c.date) + "ごろまでに発表(目安)";
+      li.appendChild(when);
+
+      var a = document.createElement("a");
+      a.className = "mlink";
+      a.href = "https://kabutan.jp/stock/finance?code=" + encodeURIComponent(h.code);
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = "株探で配当予想を見る";
+      li.appendChild(a);
+
+      var ok = document.createElement("button");
+      ok.type = "button";
+      ok.className = "mok";
+      ok.textContent = "変更なし";
+      ok.addEventListener("click", function () {
+        h.divCheckedAt = todayIso();
+        save(); renderReviewList();
+      });
+      li.appendChild(ok);
+
+      var jump = document.createElement("button");
+      jump.type = "button";
+      jump.className = "mjump";
+      jump.textContent = "配当を直す";
+      jump.addEventListener("click", function () {
+        focusHolding(h.id);
+        var inp = document.querySelector('#holdingsBody tr[data-id="' + h.id + '"] input[data-field="div"]');
+        if (inp) setTimeout(function () { inp.focus({ preventScroll: true }); inp.select(); }, 450);
+      });
+      li.appendChild(jump);
+      list.appendChild(li);
+    });
+  }
+
+  // ---- .xlsx の読み込み(ライブラリを使わず、zipを展開してシートのXMLを読む) ----
+  function inflateRaw(bytes) {
+    var ds = new DecompressionStream("deflate-raw");
+    var stream = new Blob([bytes]).stream().pipeThrough(ds);
+    return new Response(stream).arrayBuffer().then(function (b) { return new Uint8Array(b); });
+  }
+
+  function unzipEntries(buf) {
+    var dv = new DataView(buf), u8 = new Uint8Array(buf);
+    var eocd = -1;
+    for (var i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65557); i--) {
+      if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    }
+    if (eocd < 0) return Promise.reject(new Error("not zip"));
+    var count = dv.getUint16(eocd + 10, true), p = dv.getUint32(eocd + 16, true);
+    var entries = {};
+    for (var n = 0; n < count; n++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      var method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+      var nlen = dv.getUint16(p + 28, true), elen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+      var local = dv.getUint32(p + 42, true);
+      var name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nlen));
+      var start = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
+      entries[name] = { method: method, data: u8.subarray(start, start + csize) };
+      p += 46 + nlen + elen + clen;
+    }
+    return Promise.resolve(entries);
+  }
+
+  function readXlsxRows(buf) {
+    return unzipEntries(buf).then(function (entries) {
+      function text(name) {
+        var e = entries[name];
+        if (!e) return Promise.resolve(null);
+        var bytes = e.method === 0 ? Promise.resolve(e.data) : inflateRaw(e.data);
+        return bytes.then(function (b) { return new TextDecoder().decode(b); });
+      }
+      var sheetName = entries["xl/worksheets/sheet1.xml"] ? "xl/worksheets/sheet1.xml"
+        : Object.keys(entries).filter(function (k) { return /^xl\/worksheets\/sheet\d+\.xml$/.test(k); }).sort()[0];
+      return Promise.all([text("xl/sharedStrings.xml"), text(sheetName)]);
+    }).then(function (xml) {
+      var parser = new DOMParser();
+      var strings = [];
+      if (xml[0]) {
+        var sdoc = parser.parseFromString(xml[0], "application/xml");
+        Array.prototype.forEach.call(sdoc.getElementsByTagName("si"), function (si) {
+          var ts = si.getElementsByTagName("t"), t = "";
+          for (var i = 0; i < ts.length; i++) t += ts[i].textContent;
+          strings.push(t);
+        });
+      }
+      var doc = parser.parseFromString(xml[1] || "", "application/xml");
+      var rows = [];
+      Array.prototype.forEach.call(doc.getElementsByTagName("row"), function (row) {
+        var out = [];
+        Array.prototype.forEach.call(row.getElementsByTagName("c"), function (c) {
+          var ref = c.getAttribute("r") || "", col = 0;
+          var letters = ref.replace(/[0-9]/g, "");
+          for (var i = 0; i < letters.length; i++) col = col * 26 + (letters.charCodeAt(i) - 64);
+          var v = c.getElementsByTagName("v")[0], type = c.getAttribute("t");
+          var val = v ? v.textContent : "";
+          if (type === "s" && val !== "") val = strings[parseInt(val, 10)] || "";
+          else if (type === "inlineStr") val = c.textContent;
+          out[Math.max(0, col - 1)] = val;
+        });
+        rows.push(out);
+      });
+      return rows;
+    });
+  }
+
+  function excelDateIso(v) {
+    var s = String(v == null ? "" : v).trim();
+    if (/^\d{5}(\.\d+)?$/.test(s)) {
+      var d = new Date(Date.UTC(1899, 11, 30) + Math.floor(parseFloat(s)) * 86400000);
+      return d.getUTCFullYear() + "-" + ("0" + (d.getUTCMonth() + 1)).slice(-2) + "-" + ("0" + d.getUTCDate()).slice(-2);
+    }
+    var m = s.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    return m ? m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2) : null;
+  }
+
+  function parseEarningsRows(rows) {
+    var col = null, out = [], asOf = null;
+    rows.forEach(function (r) {
+      var cells = (r || []).map(function (x) { return String(x == null ? "" : x); });
+      if (!asOf) {
+        var a = cells.join(" ").match(/(\d{4})年(\d{1,2})月(\d{1,2})日\s*現在/);
+        if (a) asOf = a[1] + "/" + a[2] + "/" + a[3];
+      }
+      if (!col) {
+        var di = -1, ci = -1, ti = -1;
+        cells.forEach(function (c, i) {
+          if (c.indexOf("決算発表予定日") !== -1) di = i;
+          else if (/^コード/.test(c)) ci = i;
+          else if (c.indexOf("種別") === 0) ti = i;
+        });
+        if (di !== -1 && ci !== -1) col = { d: di, c: ci, t: ti };
+        return;
+      }
+      var code = (cells[col.c] || "").trim().toUpperCase();
+      var date = excelDateIso(cells[col.d]);
+      if (!/^[0-9][0-9A-Z]{3}$/.test(code) || !date) return;
+      out.push({ code: code, d: date, t: col.t !== -1 ? (cells[col.t] || "").trim() : "" });
+    });
+    return { rows: out, headerFound: col !== null, asOf: asOf };
+  }
+
+  function importEarningsFile(file) {
+    var status = document.getElementById("earningsStatus");
+    if (typeof DecompressionStream === "undefined") {
+      status.textContent = "このブラウザではExcelを読み込めません。ブラウザを最新にしてお試しください。";
+      return;
+    }
+    status.textContent = "読み込み中…";
+    file.arrayBuffer().then(readXlsxRows).then(function (rows) {
+      var parsed = parseEarningsRows(rows);
+      if (!parsed.headerFound || parsed.rows.length === 0) {
+        status.textContent = "決算発表予定日の表が見つかりませんでした。JPXの「決算発表予定日」のExcelか確認してください。";
+        return;
+      }
+      if (!state.earnings) state.earnings = {};
+      parsed.rows.forEach(function (r) {
+        var list = state.earnings[r.code] = state.earnings[r.code] || [];
+        if (!list.some(function (e) { return e.d === r.d; })) list.push({ d: r.d, t: r.t });
+      });
+      // 古い予定日は使わないので、1年以上前のものは捨てる
+      var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 400);
+      var cut = isoOf(cutoff);
+      Object.keys(state.earnings).forEach(function (k) {
+        state.earnings[k] = state.earnings[k].filter(function (e) { return e.d >= cut; });
+        if (state.earnings[k].length === 0) delete state.earnings[k];
+      });
+      var held = {};
+      state.holdings.forEach(function (h) { if (h.code) held[h.code] = true; });
+      var hits = parsed.rows.filter(function (r) { return held[r.code]; });
+      var dates = parsed.rows.map(function (r) { return r.d; }).sort();
+      status.textContent = parsed.rows.length + "社の予定日(" + mdOf(dates[0]) + "〜" + mdOf(dates[dates.length - 1]) + ")を読み込みました。" +
+        "保有銘柄のうち " + Object.keys(hits.reduce(function (m, r) { m[r.code] = 1; return m; }, {})).length + "銘柄が含まれています。" +
+        (parsed.asOf ? "(" + parsed.asOf + "現在の情報)" : "");
+      save(); renderReviewList();
+    }).catch(function () {
+      status.textContent = "Excelファイルを読めませんでした。ダウンロードしたままの.xlsxファイルか確認してください。";
+    });
+  }
+
+  document.getElementById("earningsXlsxBtn").addEventListener("click", function () {
+    document.getElementById("earningsXlsxFile").click();
+  });
+  document.getElementById("earningsXlsxFile").addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (f) importEarningsFile(f);
+    e.target.value = "";
+  });
+
   function renderMissingList() {
+    renderReviewList();
     var box = document.getElementById("missingBox");
     var list = document.getElementById("missingList");
     if (!box || !list) return;
@@ -3747,6 +4042,7 @@
     if (!(a > 0) || !(b > 0) || a === b) return false;
     if (!Array.isArray(state.divLog)) state.divLog = [];
     var today = todayIso();
+    h.divCheckedAt = today;
     // 同じ日に同じ銘柄を何度か直したときは1件にまとめ、元に戻したら記録ごと消す
     var last = state.divLog.filter(function (e) { return e.hid === h.id && e.date === today; })[0];
     if (last) {
