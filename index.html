@@ -191,6 +191,17 @@
   .gauge-tick-label { position: absolute; top: 30px; font-size: 10px; color: var(--muted); transform: translateX(-50%); font-variant-numeric: tabular-nums; }
   .gauge-stamp { position: absolute; top: 5px; width: 32px; height: 32px; transform: translateX(-50%); filter: url(#inkRough); }
   .hero-substats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 18px; }
+  .hero-actions { margin-top: 14px; display: flex; justify-content: flex-end; }
+  .months-dialog.report-dialog { max-width: 420px; max-height: calc(100dvh - 24px); overflow-y: auto; padding-bottom: 0; }
+  .report-dialog .field-check { display: flex; align-items: center; gap: 9px; font-size: 13px; margin-bottom: 10px; }
+  .report-dialog .toolbar { position: sticky; bottom: 0; background: var(--card); padding: 10px 0 18px; margin: 0; flex-wrap: nowrap; gap: 8px; }
+  .report-dialog .toolbar .btn { padding-left: 14px; padding-right: 14px; white-space: nowrap; }
+  .report-dialog .field { display: block; margin-bottom: 10px; font-size: 12px; color: var(--text-2); }
+  .report-dialog select {
+    display: block; width: 100%; margin-top: 5px; font-family: inherit; font-size: 14px; padding: 9px 10px;
+    border-radius: 10px; border: 1px solid var(--line); background: var(--field); color: var(--text);
+  }
+  .report-preview { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); margin: 4px 0 10px; }
   .hero-substats .stat { background: var(--field); border-radius: 12px; padding: 12px 14px; }
   .hero-substats .label { font-size: 11px; color: var(--text-2); margin-bottom: 5px; }
   .hero-substats .value { font-size: 18px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
@@ -615,6 +626,7 @@
     </div>
     <div class="hero-gauge" id="heroGauge"></div>
     <div class="hero-substats" id="heroSubstats"></div>
+    <div class="hero-actions"><button class="btn" id="reportBtn" type="button">月の配当レポートを画像にする</button></div>
   </section>
 
   <section class="panel" id="goalsPanel">
@@ -699,6 +711,25 @@
       <p class="hint" id="detailExDates"></p>
       <div class="toolbar">
         <button class="btn primary" id="detailDoneBtn">閉じる</button>
+      </div>
+    </dialog>
+
+    <dialog class="months-dialog report-dialog" id="reportDialog">
+      <h3>配当レポート</h3>
+      <p class="hint">毎月の配当報告にそのまま使える画像です。金額を出したくないときは隠せます。</p>
+      <label class="field">対象の月
+        <select id="reportMonth"></select>
+      </label>
+      <label class="field-check">
+        <input type="checkbox" id="reportHide">
+        <span>金額を隠して%だけにする</span>
+      </label>
+      <p class="hint" id="reportSource"></p>
+      <img class="report-preview" id="reportPreview" alt="配当レポートの画像">
+      <div class="toolbar">
+        <button class="btn primary" id="reportShareBtn" type="button">共有する</button>
+        <button class="btn" id="reportSaveBtn" type="button">画像を保存</button>
+        <button class="btn" id="reportCloseBtn" type="button">閉じる</button>
       </div>
     </dialog>
 
@@ -2085,6 +2116,7 @@
         code: code, name: rawName, per: per, qty: qty === "" ? null : qty,
         ry: ry, rm: rm, seq: ry * 12 + rm,
         py: m[1] + "/" + ("0" + m[2]).slice(-2),
+        nisa: isNisa,
         estimated: grossCol === "" && !isNisa && parsePasteNum(cell("tax")) === ""
       });
     });
@@ -2235,7 +2267,7 @@
     // 銘柄+入金年月+金額 で重複を除く。
     var keep = {};
     (state.payouts || []).concat(parsed.rows.map(function (r) {
-      return { code: r.code, ym: r.py, gross: r.per * (r.qty || 0), qty: r.qty, per: r.per };
+      return { code: r.code, ym: r.py, gross: r.per * (r.qty || 0), qty: r.qty, per: r.per, nisa: r.nisa };
     })).forEach(function (r) {
       if (!r.code || !r.ym) return;
       keep[r.code + "|" + r.ym + "|" + Math.round(r.gross)] = r;
@@ -3067,6 +3099,281 @@
       return '<div class="stat"><div class="label">' + s.label + '</div><div class="value">' + s.value + '</div></div>';
     }).join("");
   }
+
+  // ---------- 配当レポート(SNS共有用の画像) ----------
+  // 受取履歴(state.payouts)がある月は実績、無い月は今の保有と権利確定月からの予想で埋める。
+  // 金額は税引後。NISAで受け取った配当は非課税として扱う。
+  var REPORT_URL = "82706991hiroto-ship-it.github.io/haito-dashboard";
+
+  function ymKey(y, m) { return y + "/" + ("0" + m).slice(-2); }
+
+  function payoutNet(r) {
+    var gross = num(r.gross);
+    var free;
+    if (r.nisa === true) free = true;
+    else if (r.nisa === false) free = false;
+    else {
+      // 取り込んだ時期が古く口座が記録されていない入金は、今の保有の口座で判断する
+      var h = state.holdings.filter(function (x) { return x.code === r.code; })[0];
+      free = h ? isTaxFree(h.account) : false;
+    }
+    return free ? gross : gross * (1 - TAX_RATE);
+  }
+
+  function reportSeries(agg) {
+    var payouts = Array.isArray(state.payouts) ? state.payouts : [];
+    var actual = {}, actualCodes = {}, minYm = null, maxYm = null;
+    payouts.forEach(function (r) {
+      if (!r.ym) return;
+      actual[r.ym] = (actual[r.ym] || 0) + payoutNet(r);
+      (actualCodes[r.ym] = actualCodes[r.ym] || {})[r.code] = true;
+      if (minYm === null || r.ym < minYm) minYm = r.ym;
+      if (maxYm === null || r.ym > maxYm) maxYm = r.ym;
+    });
+    var forecast = [], forecastN = [];
+    for (var i = 0; i < 12; i++) { forecast.push(0); forecastN.push(0); }
+    agg.rows.forEach(function (r) {
+      if (!(r.divPost > 0)) return;
+      var months = monthsOf(r);
+      if (months.length === 0) return;
+      months.forEach(function (m) {
+        var pi = (m - 1 + PAYOUT_LAG_MONTHS) % 12;
+        forecast[pi] += r.divPost / months.length;
+        forecastN[pi]++;
+      });
+    });
+    function covered(ym) { return minYm !== null && ym >= minYm && ym <= maxYm; }
+    // allowForecast=false の月(前年)は、実績が無ければ null を返す
+    function value(y, m, allowForecast) {
+      var k = ymKey(y, m);
+      if (covered(k)) return { v: actual[k] || 0, n: Object.keys(actualCodes[k] || {}).length, actual: true };
+      return allowForecast ? { v: forecast[m - 1], n: forecastN[m - 1], actual: false } : null;
+    }
+    return { value: value, maxYm: maxYm, hasActual: minYm !== null };
+  }
+
+  function reportData(agg, y, m) {
+    var ser = reportSeries(agg);
+    var cur = [], prev = [], ytd = 0, prevYtd = 0, prevYtdOk = true, forecastMonths = [];
+    for (var i = 1; i <= 12; i++) {
+      var c = i <= m ? ser.value(y, i, true) : null;
+      var p = ser.value(y - 1, i, false);
+      cur.push(c); prev.push(p);
+      if (c) { ytd += c.v; if (!c.actual) forecastMonths.push(i); }
+      if (i <= m) { if (p) prevYtd += p.v; else prevYtdOk = false; }
+    }
+    var month = cur[m - 1], prevMonth = prev[m - 1];
+    var goalAnnual = num(state.goals.monthly) * 12;
+    return {
+      y: y, m: m, month: month, prevMonth: prevMonth, cur: cur, prev: prev,
+      yoy: prevMonth && prevMonth.v > 0 && month.actual ? (month.v / prevMonth.v - 1) * 100 : null,
+      ytd: ytd, ytdYoy: prevYtdOk && prevYtd > 0 && forecastMonths.length === 0 ? (ytd / prevYtd - 1) * 100 : null,
+      goalAnnual: goalAnnual, goalPct: goalAnnual > 0 ? (ytd / goalAnnual) * 100 : null,
+      forecastMonths: forecastMonths, hasPrev: prev.some(function (p) { return p !== null; })
+    };
+  }
+
+  function signedPct(v) { return (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1) + "%"; }
+
+  function drawReport(canvas, d, hide) {
+    var W = 1080, H = 1350;
+    canvas.width = W; canvas.height = H;
+    var g = canvas.getContext("2d");
+    var FONT = '"Noto Sans JP", "Hiragino Sans", system-ui, sans-serif';
+    var C = { page: "#f6f7fb", card: "#ffffff", text: "#23282e", text2: "#5a6470", muted: "#97a0ad",
+              line: "#e5e8ef", field: "#f3f5f9", accent: "#e8543f", prev: "#cbd3de", good: "#16a34a", crit: "#dc2626" };
+    function font(w, px) { g.font = w + " " + px + "px " + FONT; }
+    function rr(x, y, w, h, r, fill) {
+      r = Math.min(r, w / 2, h / 2);
+      g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+      g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); g.fillStyle = fill; g.fill();
+    }
+    function text(t, x, y, color, align) { g.fillStyle = color; g.textAlign = align || "left"; g.fillText(t, x, y); }
+
+    g.fillStyle = C.page; g.fillRect(0, 0, W, H);
+    rr(40, 40, W - 80, H - 80, 44, C.card);
+    var L = 100, R = W - 100;
+
+    g.textBaseline = "alphabetic";
+    font(700, 44); text(d.y + "年" + d.m + "月の配当金", L, 158, C.text);
+    font(500, 26); text(d.month.actual ? "税引後・受取実績" : "税引後・予想", R, 156, C.text2, "right");
+    g.fillStyle = C.accent; g.beginPath(); g.arc(L - 26, 143, 9, 0, Math.PI * 2); g.fill();
+
+    // 主役の数字
+    if (!hide) {
+      font(700, 150); text(fmtYen(d.month.v), L - 6, 330, C.text);
+    } else if (d.yoy !== null) {
+      font(500, 34); text("前年同月比", L, 240, C.text2);
+      font(700, 130); text(signedPct(d.yoy), L - 6, 370, d.yoy >= 0 ? C.text : C.crit);
+    } else {
+      font(500, 34); text("年間目標に対して", L, 240, C.text2);
+      font(700, 130); text(d.goalPct !== null ? d.goalPct.toFixed(1) + "%" : "—", L - 6, 370, C.text);
+    }
+
+    // 3つの小さい数字
+    var bYoy = { label: "前年同月比", value: d.yoy !== null ? signedPct(d.yoy) : "—", color: d.yoy !== null && d.yoy < 0 ? C.crit : C.text };
+    var bYtdYoy = { label: "年始から・前年比", value: d.ytdYoy !== null ? signedPct(d.ytdYoy) : "—", color: d.ytdYoy !== null && d.ytdYoy < 0 ? C.crit : C.text };
+    var bGoal = { label: "年間目標の達成率", value: d.goalPct !== null ? d.goalPct.toFixed(1) + "%" : "—", color: C.accent };
+    var bCount = { label: "受け取った銘柄", value: d.month.n + "銘柄", color: C.text };
+    // 金額を隠すときは、主役に出した数字を小さい枠で繰り返さない
+    var boxes = !hide ? [bYoy, { label: "年始からの累計", value: fmtYen(d.ytd), color: C.text }, bGoal]
+      : d.yoy !== null ? [bYtdYoy, bGoal, bCount] : [bYoy, bYtdYoy, bCount];
+    var by = 420, bw = (R - L - 40) / 3, bh = 170;
+    boxes.forEach(function (b, i) {
+      var x = L + i * (bw + 20);
+      rr(x, by, bw, bh, 24, C.field);
+      font(500, 26); text(b.label, x + 26, by + 58, C.text2);
+      var size = 54;
+      font(700, size);
+      while (g.measureText(b.value).width > bw - 44 && size > 30) { size -= 2; font(700, size); }
+      text(b.value, x + 26, by + 132, b.color);
+    });
+
+    // 目標ゲージ
+    var gy = 650;
+    if (d.goalPct !== null) {
+      rr(L, gy, R - L, 22, 11, C.field);
+      var pw = Math.max(22, Math.min(1, d.goalPct / 100) * (R - L));
+      rr(L, gy, pw, 22, 11, C.accent);
+      font(500, 24);
+      text(hide ? "年間目標" : "年間目標 " + fmtYen(d.goalAnnual), L, gy + 64, C.muted);
+      text("年始からの累計 ÷ 年間目標", R, gy + 64, C.muted, "right");
+    }
+
+    // 月別の棒グラフ(今年と前年)
+    var cy0 = 790, ch = 270, cx0 = L, cw = R - L;
+    font(700, 30); text("月別の受取額", L, cy0, C.text);
+    font(500, 24);
+    var lx = R;
+    if (d.hasPrev) {
+      var t2 = (d.y - 1) + "年"; var w2 = g.measureText(t2).width;
+      text(t2, lx, cy0 - 2, C.text2, "right"); lx -= w2 + 12; rr(lx - 22, cy0 - 20, 22, 22, 5, C.prev); lx -= 44;
+    }
+    var t1 = d.y + "年"; var w1 = g.measureText(t1).width;
+    text(t1, lx, cy0 - 2, C.text2, "right"); lx -= w1 + 12; rr(lx - 22, cy0 - 20, 22, 22, 5, C.accent);
+
+    var top = cy0 + 40, base = top + ch;
+    var max = 0;
+    for (var i = 0; i < 12; i++) {
+      if (d.cur[i]) max = Math.max(max, d.cur[i].v);
+      if (d.prev[i]) max = Math.max(max, d.prev[i].v);
+    }
+    g.strokeStyle = C.line; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(cx0, base + 1); g.lineTo(cx0 + cw, base + 1); g.stroke();
+    var slot = cw / 12, bwid = d.hasPrev ? slot * 0.3 : slot * 0.5;
+    for (var k = 0; k < 12; k++) {
+      var sx = cx0 + k * slot + slot / 2;
+      if (d.hasPrev && d.prev[k] && d.prev[k].v > 0 && max > 0) {
+        var ph = Math.max(3, d.prev[k].v / max * ch);
+        rr(sx - bwid - 3, base - ph, bwid, ph, 6, C.prev);
+      }
+      if (d.cur[k] && d.cur[k].v > 0 && max > 0) {
+        var h = Math.max(3, d.cur[k].v / max * ch);
+        var x0 = d.hasPrev ? sx + 3 : sx - bwid / 2;
+        g.globalAlpha = d.cur[k].actual ? 1 : 0.4;
+        rr(x0, base - h, bwid, h, 6, C.accent);
+        g.globalAlpha = 1;
+      }
+      font(k + 1 === d.m ? 700 : 500, 24);
+      text((k + 1) + "月", sx, base + 40, k + 1 === d.m ? C.text : C.muted, "center");
+    }
+
+    // 注記とURL
+    font(500, 22);
+    var note = d.forecastMonths.length > 0
+      ? "薄い棒は受取履歴が無い月の予想(今の保有と権利確定月から計算)"
+      : "受取履歴の実績から作成";
+    text(note, L, base + 84, C.muted);
+    g.strokeStyle = C.line; g.beginPath(); g.moveTo(L, H - 150); g.lineTo(R, H - 150); g.stroke();
+    font(700, 26); text("高配当株ポートフォリオダッシュボード", L, H - 102, C.text);
+    font(500, 22); text(REPORT_URL, L, H - 66, C.text2);
+  }
+
+  var reportBlob = null;
+
+  function reportMonthOptions(agg) {
+    var ser = reportSeries(agg), now = new Date(), opts = [];
+    for (var i = 0; i < 13; i++) {
+      var dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      var y = dt.getFullYear(), m = dt.getMonth() + 1;
+      var v = ser.value(y, m, true);
+      opts.push({ y: y, m: m, actual: v.actual });
+    }
+    return opts;
+  }
+
+  function paintReport() {
+    var agg = aggregate();
+    var sel = document.getElementById("reportMonth");
+    var parts = sel.value.split("/");
+    var d = reportData(agg, parseInt(parts[0], 10), parseInt(parts[1], 10));
+    var hide = document.getElementById("reportHide").checked;
+    var canvas = document.createElement("canvas");
+    drawReport(canvas, d, hide);
+    var img = document.getElementById("reportPreview");
+    img.src = canvas.toDataURL("image/png");
+    reportBlob = null;
+    canvas.toBlob(function (b) { reportBlob = b; }, "image/png");
+    document.getElementById("reportSource").textContent = d.forecastMonths.length === 0
+      ? "配当受取履歴の実績から作っています。"
+      : "配当受取履歴が無い月(" + d.forecastMonths.join("・") + "月)は、今の保有と権利確定月からの予想です。受取履歴のCSVを読み込むと実績に置き換わります。";
+    state.reportHide = hide;
+    save();
+  }
+
+  function openReportDialog() {
+    var agg = aggregate();
+    var sel = document.getElementById("reportMonth");
+    var opts = reportMonthOptions(agg);
+    sel.innerHTML = "";
+    // 初期値は、直近3か月で実績のある最新の月。無ければ今月。
+    var pick = opts.slice(0, 3).filter(function (o) { return o.actual; })[0] || opts[0];
+    opts.forEach(function (o) {
+      var op = document.createElement("option");
+      op.value = o.y + "/" + o.m;
+      op.textContent = o.y + "年" + o.m + "月" + (o.actual ? "(実績)" : "(予想)");
+      if (o === pick) op.selected = true;
+      sel.appendChild(op);
+    });
+    document.getElementById("reportHide").checked = !!state.reportHide;
+    document.getElementById("reportDialog").showModal();
+    var fontsReady = document.fonts && document.fonts.load
+      ? document.fonts.load('700 40px "Noto Sans JP"').catch(function () {}) : Promise.resolve();
+    paintReport();
+    fontsReady.then(paintReport);
+  }
+
+  function reportFileName() {
+    return "haito-report-" + document.getElementById("reportMonth").value.replace("/", "-") + ".png";
+  }
+
+  function saveReportImage() {
+    var a = document.createElement("a");
+    a.href = document.getElementById("reportPreview").src;
+    a.download = reportFileName();
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  document.getElementById("reportBtn").addEventListener("click", openReportDialog);
+  document.getElementById("reportMonth").addEventListener("change", paintReport);
+  document.getElementById("reportHide").addEventListener("change", paintReport);
+  document.getElementById("reportCloseBtn").addEventListener("click", function () {
+    document.getElementById("reportDialog").close();
+  });
+  document.getElementById("reportSaveBtn").addEventListener("click", saveReportImage);
+  document.getElementById("reportShareBtn").addEventListener("click", function () {
+    var parts = document.getElementById("reportMonth").value.split("/");
+    var msg = parts[0] + "年" + parts[1] + "月の配当金 #配当金報告\nhttps://" + REPORT_URL + "/";
+    var file = reportBlob ? new File([reportBlob], reportFileName(), { type: "image/png" }) : null;
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], text: msg }).catch(function () {});
+    } else {
+      // PCなど画像付き共有ができない環境では、画像を保存してから投稿してもらう
+      saveReportImage();
+      document.getElementById("reportSource").textContent =
+        "この端末では画像付きで共有できないため、画像を保存しました。投稿の文面には「" + msg.replace("\n", " ") + "」が使えます。";
+    }
+  });
 
   // ---------- Dashboard ----------
   // ---------- 配当金カレンダー ----------
