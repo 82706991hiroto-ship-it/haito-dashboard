@@ -2,7 +2,7 @@
 """EDINET の有価証券報告書から、1株配当の長期系列(約13期)を作る。
 
 有報の「主要な経営指標等の推移」には5期分の1株配当と発行済株式数が載る。
-1社につき、最新・4年前・8年前の有報を1本ずつ取り、重なる1期で倍率を合わせてつなぐ。
+1社につき、最新・4年前・8年前・9年前の有報を1本ずつ取り、重なる期で倍率を合わせてつなぐ。
 
   EDINET_API_KEY=... python3 tools/edinet/fetch_history.py --cache DIR list
   EDINET_API_KEY=... python3 tools/edinet/fetch_history.py --cache DIR fetch
@@ -20,11 +20,13 @@ API = "https://api.edinet-fsa.go.jp/api/v2"
 RELS = ["CurrentYear", "Prior1Year", "Prior2Year", "Prior3Year", "Prior4Year"]
 NICE = [1.1, 1.2, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 20, 25, 30, 40, 50, 100]
 
-# 最新・4年前・8年前の有報を拾うための提出日の範囲
+# 最新・4年前・8年前・9年前の有報を拾うための提出日の範囲
 WINDOWS = {
     "latest": ("2025-06-01", None),
     "back4": ("2021-06-01", "2022-12-31"),
     "back8": ("2017-06-01", "2018-12-31"),
+    # EDINETは約10年で書類を消すので、9年前の有報で取れるのはこのあたりまで
+    "back9": ("2016-10-01", "2017-12-31"),
 }
 
 
@@ -98,7 +100,7 @@ def code_of(sec):
 
 
 def select(cache):
-    """銘柄ごとに、最新の有報と、その期末から4年前・8年前の期末の有報を選ぶ。"""
+    """銘柄ごとに、最新の有報と、その期末から4年前・8年前・9年前の期末の有報を選ぶ。"""
     by = {}
     for x in load_lists(cache):
         if not x.get("periodEnd"):
@@ -112,7 +114,7 @@ def select(cache):
             continue
         le = dt.date.fromisoformat(latest["periodEnd"])
         chosen = [latest]
-        for back in (4, 8):
+        for back in (4, 8, 9):
             target = le.replace(year=le.year - back) if not (le.month == 2 and le.day == 29) else le.replace(year=le.year - back, day=28)
             cands = [x for x in docs if abs((dt.date.fromisoformat(x["periodEnd"]) - target).days) <= 20]
             if not cands:

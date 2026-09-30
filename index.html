@@ -233,8 +233,10 @@
     width: 100%; font-family: inherit; font-size: 14px; font-weight: 700; padding: 3px 6px; margin-top: 2px;
     border-radius: 7px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-variant-numeric: tabular-nums;
   }
-  .watch-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  .watch-actions { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 10px; align-items: center; }
+  .watch-actions > * { white-space: nowrap; }
   .watch-actions .btn { font-size: 12.5px; padding: 7px 14px; }
+  .watch-ir { font-size: 12px; color: var(--text-2); }
   .watch-del { margin-left: auto; font-family: inherit; font-size: 11.5px; color: var(--muted); background: none; border: none; cursor: pointer; text-decoration: underline; }
   .watch-sim { background: var(--field); border-radius: 12px; padding: 12px 14px; margin-top: 10px; }
   .watch-sim-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); flex-wrap: wrap; }
@@ -780,6 +782,7 @@
     <dialog class="months-dialog detail-dialog" id="detailDialog">
       <h3 id="detailTitle">銘柄の詳細</h3>
       <p class="hint" id="detailStreak"></p>
+      <p class="hint"><a id="detailIrLink" target="_blank" rel="noopener noreferrer" hidden>もっと長い配当の推移をIR BANKで見る</a></p>
       <label class="field">現在株価(円)
         <input type="number" id="detailPrice" min="0" step="any" inputmode="decimal" placeholder="入れると現在利回りが出ます">
       </label>
@@ -1605,6 +1608,11 @@
       (h.code ? h.code + " " : "") + (h.name || "銘柄の詳細");
     var dstk = dividendStreak(String(h.code || "").trim());
     var dser = dividendsFor(String(h.code || "").trim());
+    // 内蔵の系列はEDINETの保存期間(約10年)まで。それより前はリンク先で見てもらう
+    var irLink = document.getElementById("detailIrLink");
+    var irCode = String(h.code || "").trim();
+    irLink.hidden = !CODE_INFO_MAP[irCode];
+    if (!irLink.hidden) irLink.href = "https://irbank.net/" + encodeURIComponent(irCode) + "/dividend";
     document.getElementById("detailStreak").textContent = dstk
       ? dstk.text + " ・ 1株配当 " + dser.slice().reverse().map(function (v) { return fmtPerShare(v); }).join(" → ")
       : "";
@@ -2391,7 +2399,12 @@
         state.watch = state.watch.filter(function (x) { return x.id !== v.w.id; });
         save(); renderWatchList();
       });
-      act.appendChild(simBtn); act.appendChild(del);
+      var ir = document.createElement("a");
+      ir.className = "watch-ir";
+      ir.href = "https://irbank.net/" + encodeURIComponent(v.w.code) + "/dividend";
+      ir.target = "_blank"; ir.rel = "noopener noreferrer";
+      ir.textContent = "配当の推移(IR BANK)";
+      act.appendChild(simBtn); act.appendChild(ir); act.appendChild(del);
       li.appendChild(act);
 
       if (open) {
