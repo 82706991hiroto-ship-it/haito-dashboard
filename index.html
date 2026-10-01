@@ -240,6 +240,15 @@
   .watch-actions > * { white-space: nowrap; }
   .watch-actions .btn { font-size: 12.5px; padding: 7px 14px; }
   .watch-ir { font-size: 12px; color: var(--text-2); }
+  .watch-check { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 8px 0 2px; font-size: 12px; color: var(--text-2); }
+  .watch-check .chk { font-weight: 700; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; }
+  .watch-check .chk.is-good { color: var(--accent); background: var(--accent-soft); }
+  .watch-check .chk.is-mid { color: #8a5a00; background: #fbf1dc; }
+  .watch-check .chk.is-bad { color: #b0262d; background: #fbe9ea; }
+  .watch-check a { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .watch-check a:hover { text-decoration: underline; }
+  .watch-item.is-new { animation: watchNew 2.4s ease; }
+  @keyframes watchNew { 0%, 40% { background: var(--accent-soft); } 100% { background: transparent; } }
   .watch-del { margin-left: auto; font-family: inherit; font-size: 11.5px; color: var(--muted); background: none; border: none; cursor: pointer; text-decoration: underline; }
   .watch-sim { background: var(--field); border-radius: 12px; padding: 12px 14px; margin-top: 10px; }
   .watch-sim-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); flex-wrap: wrap; }
@@ -1170,9 +1179,9 @@
     <p class="paste-status" id="watchStatus"></p>
     <ul class="watch-list" id="watchList"></ul>
   </section>
-  <a class="sibling" href="../ir-check/" data-view="extras" target="_blank" rel="noopener">
+  <a class="sibling" href="../ir-check/" data-view="extras">
     <span class="ico">✓</span>
-    <span class="txt"><span class="ttl">候補を買う前に：高配当株チェックシート</span><span class="sub">別サイトで開きます。1銘柄をIRバンクの10項目で採点</span></span>
+    <span class="txt"><span class="ttl">候補を買う前に：高配当株チェックシート</span><span class="sub">1銘柄を10項目で採点して、そのまま買い増し候補に入れられます</span></span>
     <span class="arw">›</span>
   </a>
 
@@ -2571,6 +2580,72 @@
     }
   }
 
+  // 高配当株チェックシート(同じサイトの ../ir-check/)が端末に保存した採点を読む。
+  // 同じドメインなので localStorage を共有している。読むだけで書き換えない。
+  var CHECK_URL = "../ir-check/";
+  function latestCheck(code) {
+    var saved = [];
+    try { saved = (JSON.parse(localStorage.getItem("irCheckV1") || "{}").saved) || []; } catch (e) { saved = []; }
+    var hit = null;
+    saved.forEach(function (x) {
+      if (String(x.code || "").normalize("NFKC").trim().toUpperCase() === code && x.counts) hit = x;
+    });
+    return hit;
+  }
+  function checkLine(code, price) {
+    var box = document.createElement("div");
+    box.className = "watch-check";
+    var c = latestCheck(code);
+    var a = document.createElement("a");
+    a.href = CHECK_URL + "?code=" + encodeURIComponent(code) + (price > 0 ? "&price=" + encodeURIComponent(price) : "");
+    if (c) {
+      var verdict = c.counts.bad > 0 ? "is-bad" : (c.starPassing === c.starTotal ? "is-good" : "is-mid");
+      var tag = document.createElement("span");
+      tag.className = "chk " + verdict;
+      tag.textContent = c.counts.bad > 0 ? "❌" + c.counts.bad + "項目" : (c.starPassing === c.starTotal ? "基準内" : "要確認");
+      var t = document.createElement("span");
+      t.textContent = "チェック " + String(c.date || "").slice(5).replace("-", "/") + " ・ ◎" + c.counts.good + " ○" + c.counts.ok +
+        " △" + c.counts.mid + " ❌" + c.counts.bad + " ・ 重要4項目 " + c.starPassing + "/" + c.starTotal;
+      box.appendChild(tag); box.appendChild(t);
+      a.textContent = "見直す";
+    } else {
+      var t2 = document.createElement("span");
+      t2.className = "chk-none";
+      t2.textContent = "まだチェックしていません";
+      box.appendChild(t2);
+      a.textContent = "チェックシートで採点する";
+    }
+    box.appendChild(a);
+    return box;
+  }
+
+  // チェックシートの「買い増し候補へ」から来たとき(?watch=コード&price=株価)、候補に入れて候補タブを開く
+  var justAddedWatch = null;
+  function takeWatchFromUrl() {
+    var q;
+    try { q = new URLSearchParams(location.search); } catch (e) { return; }
+    var code = String(q.get("watch") || "").normalize("NFKC").trim().toUpperCase();
+    if (!code) return;
+    try { history.replaceState(null, "", location.pathname + "#extras"); } catch (e) {}
+    document.body.dataset.tab = "extras";
+    var info = CODE_INFO_MAP[code];
+    if (!info) { showToast(code + " は内蔵の銘柄一覧にないため、候補に入れられませんでした。"); return; }
+    if (!Array.isArray(state.watch)) state.watch = [];
+    var w = state.watch.filter(function (x) { return x.code === code; })[0];
+    var isNew = !w;
+    if (isNew) {
+      w = { id: uid(), code: code, targetYield: WATCH_DEFAULT_YIELD, addedAt: todayIso() };
+      state.watch.push(w);
+    }
+    var price = num(q.get("price"));
+    if (price > 0) { w.price = price; w.priceDate = todayStamp(); }
+    save();
+    justAddedWatch = code;
+    var label = code + " " + String(info[0]).normalize("NFKC");
+    showToast(isNew ? "チェックシートから " + label + " を買い増し候補に入れました。"
+                    : label + " はすでに候補にあります。チェックの結果を更新しました。");
+  }
+
   function renderWatchList() {
     var list = document.getElementById("watchList");
     if (!list) return;
@@ -2603,6 +2678,7 @@
       else { gap.textContent = "あと " + fmtPct(-v.gapPct) + " 下落で到達"; gap.classList.add("is-far"); }
       top.appendChild(nm); top.appendChild(sc); top.appendChild(gap);
       li.appendChild(top);
+      li.appendChild(checkLine(v.w.code, v.price));
 
       var grid = document.createElement("div");
       grid.className = "watch-grid";
@@ -2671,8 +2747,13 @@
         li.appendChild(sim);
         renderWatchSim(sim, v);
       }
+      if (justAddedWatch === v.w.code) {
+        li.classList.add("is-new");
+        setTimeout(function () { li.scrollIntoView({ block: "center", behavior: "smooth" }); }, 250);
+      }
       list.appendChild(li);
     });
+    justAddedWatch = null;
   }
 
   function addWatch(code) {
@@ -5611,7 +5692,11 @@
     }
   }
 
+  takeWatchFromUrl();
   renderAll();
+  // チェックシートで採点して戻ってきたときに結果を出し直す
+  window.addEventListener("pageshow", function (e) { if (e.persisted) renderWatchList(); });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) renderWatchList(); });
 })();
 </script>
 </body>
