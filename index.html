@@ -1189,8 +1189,11 @@
     "石油・石炭製品": "景気敏感", "ゴム製品": "景気敏感", "ガラス・土石製品": "景気敏感",
     "鉄鋼": "景気敏感", "非鉄金属": "景気敏感", "機械": "景気敏感", "電気機器": "景気敏感",
     "輸送用機器": "景気敏感", "精密機器": "景気敏感", "海運業": "景気敏感", "空運業": "景気敏感",
-    "銀行業": "景気敏感", "証券、商品先物取引業": "景気敏感", "その他金融業": "景気敏感", "卸売業": "景気敏感"
+    "銀行業": "景気敏感", "証券、商品先物取引業": "景気敏感", "その他金融業": "景気敏感", "卸売業": "景気敏感",
+    // ETF・REITなど、内蔵データに業種が無いもの。区分は業種の区分表で変えられる
+    "未分類": "景気敏感"
   };
+  var UNCLASSIFIED = "未分類";
   var SECTOR_NAMES = Object.keys(SECTOR_DEFAULT_CLASS);
 
   // 東証上場銘柄の証券コード→[銘柄名, 33業種, 権利確定月[], 1株配当(新しい順)[], 配当性向] 対応表。
@@ -1257,19 +1260,35 @@
 
   function num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
 
+  // 前年配当: 手入力があればそれ、空欄なら内蔵データ(有価証券報告書)から補う。
+  // 年間配当/株が内蔵の直近実績と同じなら、その1期前と比べる(直近の決算の増減)。
+  // 違う値(決算で書き換えた今期予想など)なら、直近実績と比べる(今期の増減)。
+  function prevDivOf(h) {
+    if (h.prevDiv !== "" && h.prevDiv != null) return { v: num(h.prevDiv), auto: false };
+    var d = num(h.div);
+    var series = dividendsFor(String(h.code || "").trim().toUpperCase());
+    if (!(d > 0) || !series) return null;
+    var latest = series[0];
+    if (Math.abs(d - latest) <= Math.max(0.011, latest * 0.005)) {
+      return series.length > 1 ? { v: series[1], auto: true } : null;
+    }
+    return { v: latest, auto: true };
+  }
+
   function computeRow(h) {
     var shares = num(h.shares), cost = num(h.cost), div = num(h.div);
     var acquisition = shares * cost;
     var divPre = shares * div;
     var divPost = isTaxFree(h.account) ? divPre : divPre * (1 - TAX_RATE);
     var trend = null;
-    if (h.prevDiv !== "" && h.prevDiv != null) {
-      var prev = num(h.prevDiv);
-      if (div > prev) trend = "up";
-      else if (div < prev) trend = "down";
+    var p = prevDivOf(h);
+    if (p) {
+      if (div > p.v) trend = "up";
+      else if (div < p.v) trend = "down";
       else trend = "flat";
     }
-    return { acquisition: acquisition, divPre: divPre, divPost: divPost, trend: trend };
+    return { acquisition: acquisition, divPre: divPre, divPost: divPost, trend: trend,
+             prevEff: p ? p.v : null, prevAuto: !!(p && p.auto) };
   }
 
   // ---------- 権利落ち日 ----------
@@ -1603,8 +1622,12 @@
     if (type === "number") { input.min = "0"; input.step = "any"; input.inputMode = "decimal"; }
     if (field === "div" || field === "prevDiv") {
       var autoDivs = dividendsFor(h.code);
-      var idx = field === "div" ? 0 : 1;
-      if (autoDivs && autoDivs.length > idx) input.placeholder = String(autoDivs[idx]);
+      if (field === "div") {
+        if (autoDivs) input.placeholder = String(autoDivs[0]);
+      } else {
+        var pa = prevDivOf(h);
+        if (pa && pa.auto) input.placeholder = pa.v + "(自動)";
+      }
     }
     input.value = h[field] == null ? "" : h[field];
     if (field === "div") {
@@ -1635,7 +1658,7 @@
       if (h.sector === s) opt.selected = true;
       sel.appendChild(opt);
     });
-    if (!h.sector) { h.sector = SECTOR_NAMES[0]; }
+    if (!h.sector) { h.sector = UNCLASSIFIED; }
     sel.addEventListener("change", function () {
       h.sector = sel.value; save(); renderDashboard();
     });
@@ -1886,7 +1909,7 @@
   document.getElementById("addRowBtn").addEventListener("click", function () {
     var newId = uid();
     state.isSample = false;
-    state.holdings.push({ id: newId, code: "", name: "", sector: SECTOR_NAMES[0], account: "特定", shares: "", cost: "", div: "", prevDiv: "", addedAt: todayIso() });
+    state.holdings.push({ id: newId, code: "", name: "", sector: UNCLASSIFIED, account: "特定", shares: "", cost: "", div: "", prevDiv: "", addedAt: todayIso() });
     save(); renderTable(); renderDashboard();
     var newRow = document.querySelector('#holdingsBody tr[data-id="' + newId + '"]');
     if (newRow) {
@@ -1906,7 +1929,7 @@
     if (candidate && SECTOR_NAMES.indexOf(candidate) !== -1) return candidate;
     var info = CODE_INFO_MAP[code];
     if (info && SECTOR_NAMES.indexOf(info[1]) !== -1) return info[1];
-    return SECTOR_NAMES[0];
+    return UNCLASSIFIED;
   }
 
   // 権利確定月・1株配当・配当性向の初期値は、EDINETの有価証券報告書から作っている。
@@ -3127,7 +3150,7 @@
   function missingFieldsOf(h) {
     var lack = [];
     if (h.div === "" || h.div == null) lack.push("配当");
-    if (h.prevDiv === "" || h.prevDiv == null) lack.push("前年配当");
+    if (!prevDivOf(h)) lack.push("前年配当");
     if (monthsOf(h).length === 0) lack.push("権利確定月");
     return lack;
   }
@@ -3638,9 +3661,10 @@
 
     // 前年配当が入力済みの銘柄だけを対象に、増配・減配の実額インパクトを集計する
     var changes = rows.filter(function (r) { return r.trend !== null; }).map(function (r) {
-      var perShareNow = num(r.div), perSharePrev = num(r.prevDiv), shares = num(r.shares);
+      var perShareNow = num(r.div), perSharePrev = num(r.prevEff), shares = num(r.shares);
       return {
         row: r,
+        prevAuto: r.prevAuto,
         perSharePrev: perSharePrev,
         perShareNow: perShareNow,
         perShareDiff: perShareNow - perSharePrev,
@@ -3807,8 +3831,9 @@
   function yieldStep(y) { return y >= 5 ? 4 : y >= 4 ? 3 : y >= 3 ? 2 : y >= 2 ? 1 : 0; }
 
   function growthOf(r) {
-    var prev = num(r.prevDiv);
-    if (r.prevDiv === "" || r.prevDiv == null || prev <= 0) return null;
+    var p = prevDivOf(r);
+    var prev = p ? p.v : 0;
+    if (!p || prev <= 0) return null;
     return ((num(r.div) - prev) / prev) * 100;
   }
   function bookYieldOf(r) {
@@ -5043,7 +5068,7 @@
 
       var cstk = dividendStreak(String(c.row.code || "").trim());
       tr.appendChild(td("銘柄", (c.row.code ? c.row.code + " " : "") + (c.row.name || "無名銘柄") + (cstk ? "(" + cstk.text + ")" : "")));
-      tr.appendChild(td("1株配当", fmtPerShare(c.perSharePrev) + " → " + fmtPerShare(c.perShareNow) + " (" + fmtSignedPerShare(c.perShareDiff) + ")", "num"));
+      tr.appendChild(td("1株配当", fmtPerShare(c.perSharePrev) + (c.prevAuto ? "※" : "") + " → " + fmtPerShare(c.perShareNow) + " (" + fmtSignedPerShare(c.perShareDiff) + ")", "num"));
       tr.appendChild(td("増減率", fmtSignedPct(c.ratePct), "num " + cls));
       tr.appendChild(td("保有株数", num(c.row.shares).toLocaleString("ja-JP"), "num"));
       tr.appendChild(td("年間配当", fmtYen(c.annualNow), "num"));
@@ -5112,7 +5137,7 @@
       '  <div id="calendarBody"></div>' +
       '</div>' +
       '<div class="panel">' +
-      '  <h2><span class="chap">五</span>増配・減配の状況 <span class="hint">前年配当を入力した銘柄が対象</span></h2>' +
+      '  <h2><span class="chap">五</span>増配・減配の状況 <span class="hint">※は前年配当が空欄のため内蔵データ(有価証券報告書)で比べた銘柄</span></h2>' +
       '  <div id="divLedger" class="ledger"></div>' +
       '  <div id="changeSummary"></div>' +
       '</div>' +
@@ -5365,7 +5390,20 @@
 
   setTimeout(function () { document.body.classList.remove("intro"); }, 2200);
 
+  // 以前は業種が分からない銘柄に先頭の「水産・農林業」が入っていた。内蔵データと食い違うものを直す
+  function fixUnknownSectors() {
+    var fixed = false;
+    state.holdings.forEach(function (h) {
+      if (h.sector !== "水産・農林業") return;
+      var info = CODE_INFO_MAP[String(h.code || "").trim().toUpperCase()];
+      var want = info && SECTOR_NAMES.indexOf(info[1]) !== -1 ? info[1] : UNCLASSIFIED;
+      if (want !== h.sector) { h.sector = want; fixed = true; }
+    });
+    if (fixed) save();
+  }
+
   function renderAll() {
+    fixUnknownSectors();
     bindGoalInputs();
     renderTable();
     renderWatchList();
