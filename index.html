@@ -792,10 +792,59 @@
     #holdingsTable tr { border-top: 2px solid var(--text); margin-bottom: 18px; }
     #holdingsTable td.row-actions button { border: 1px solid var(--line); }
   }
+  /* ---- タブ ---- */
+  body[data-tab="home"] [data-view]:not([data-view="home"]),
+  body[data-tab="holdings"] [data-view]:not([data-view="holdings"]),
+  body[data-tab="analysis"] [data-view]:not([data-view="analysis"]),
+  body[data-tab="extras"] [data-view]:not([data-view="extras"]) { display: none !important; }
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex; justify-content: center;
+    background: color-mix(in srgb, var(--page) 92%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid var(--line); padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); }
+  .tab { flex: 1; max-width: 160px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0;
+    background: none; border: none; color: var(--muted); font: inherit; font-size: 10.5px; font-weight: 700; cursor: pointer; }
+  .tab svg { width: 22px; height: 22px; }
+  .tab[aria-selected="true"] { color: var(--accent); }
+  .tier-3 .tab[aria-selected="true"], .tier-4 .tab[aria-selected="true"], .tier-5 .tab[aria-selected="true"] { color: var(--gold); }
+  .toast { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  #holdingsPanel, #watchPanel, [data-view="analysis"]:first-child { border-top: none; }
+
+  /* 表の上位だけ見せる */
+  table.is-limited tbody tr:nth-child(n+6) { display: none !important; }
+  .show-all { margin-top: 10px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--accent); background: none; border: none; padding: 6px 0; cursor: pointer; }
+
+  td.sum { display: none; }
+  body:not([data-tab="home"]) header.top p, body:not([data-tab="home"]) header.top .dateline { display: none; }
+  @media (max-width: 700px) {
+    /* 保有銘柄: 1銘柄1行。押すと入力欄が開く */
+    #holdingsTable tr { display: flex; flex-direction: column; border-top: 1px solid var(--line); margin: 0; padding: 0; }
+    #holdingsTable tr.open { border-top: 2px solid var(--text); padding-bottom: 12px; margin-bottom: 6px; }
+    #holdingsTable tr:not(.open) td:not(.sum) { display: none; }
+    #holdingsTable td.sum { display: block; order: -1; padding: 0; border: none; }
+    #holdingsTable td.sum::before { content: none; }
+    td.sum button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; width: 100%; text-align: left; background: none; border: none;
+      padding: 13px 0; font: inherit; color: var(--text); cursor: pointer; }
+    td.sum button::after { content: "›"; grid-row: 1 / span 2; grid-column: 2; align-self: center; color: var(--muted); font-size: 20px; transition: transform .2s var(--ease); }
+    #holdingsTable tr.open td.sum button::after { transform: rotate(90deg); }
+    .sum-name { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sum-meta { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+    .sum-meta em { font-style: normal; font-weight: 700; }
+    .sum-meta em.up { color: var(--accent); } .sum-meta em.down { color: var(--crit); }
+
+    /* 増配減配・利回り: 1銘柄1行に、主要な数字2つだけ */
+    .change-table tr { display: grid !important; grid-template-columns: minmax(0, 1fr) auto auto; column-gap: 14px; align-items: center;
+      padding: 10px 0; margin: 0; border-radius: 0; background: none; border-top: 1px solid var(--line); }
+    .change-table td { display: block; padding: 0; border: none; }
+    .change-table td:not(:first-child):not(.k) { display: none; }
+    .change-table td:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+    .change-table td.k { text-align: right; font-size: 13.5px; font-weight: 700; }
+    .change-table td.k::before { content: attr(data-label); display: block; font-size: 10px; font-weight: 400; color: var(--muted); }
+  }
 </style>
 </head>
 <body class="intro">
 <div class="toast" id="toast" role="status" hidden></div>
+<nav class="tabbar" role="tablist" aria-label="表示する画面"><button type="button" class="tab" role="tab" data-tab="home" id="tab-home"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M4 11.5 12 5l8 6.5V20h-5.5v-5h-5v5H4z"/></svg><span>ホーム</span></button><button type="button" class="tab" role="tab" data-tab="holdings" id="tab-holdings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M5 6h14M5 12h14M5 18h14"/></svg><span>保有銘柄</span></button><button type="button" class="tab" role="tab" data-tab="analysis" id="tab-analysis"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M5 20V11M12 20V5M19 20v-7"/></svg><span>分析</span></button><button type="button" class="tab" role="tab" data-tab="extras" id="tab-extras"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="m12 4 2.3 4.8 5.2.7-3.8 3.6.9 5.2L12 15.9l-4.6 2.4.9-5.2L4.5 9.5l5.2-.7z"/></svg><span>候補・優待</span></button></nav>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <filter id="inkRough" x="-30%" y="-30%" width="160%" height="160%">
@@ -832,7 +881,7 @@
     <button class="btn" id="clearSampleBtn">消して自分の銘柄を入れる</button>
   </p>
 
-  <section class="hero" id="heroSection">
+  <section class="hero" id="heroSection" data-view="home">
     <div class="stage">
       <span class="tag"><svg class="crest" viewBox="0 0 64 64" aria-hidden="true"><path fill="var(--gold-hi)" d="M32 4 L39 24 L60 24 L43 37 L50 58 L32 45 L14 58 L21 37 L4 24 L25 24 Z"/></svg><span id="stageTag"></span><span class="pips" id="stagePips"><i></i><i></i><i></i><i></i><i></i></span></span>
       <span class="next" id="stageNext"></span>
@@ -853,7 +902,7 @@
     <div class="hero-actions"><button class="btn" id="reportBtn" type="button">月の配当レポートを画像にする</button></div>
   </section>
 
-  <section class="panel" id="goalsPanel">
+  <section class="panel" id="goalsPanel" data-view="home">
     <h2><span class="chap">一</span>目標設定 <span class="hint">分散ガイドラインもここで調整できます</span></h2>
     <div class="grid-inputs">
       <label class="field">月間配当金の目標(円)
@@ -877,7 +926,7 @@
     </div>
   </section>
 
-  <section class="panel" id="holdingsPanel">
+  <section class="panel" id="holdingsPanel" data-view="holdings">
     <h2><span class="chap">二</span>保有銘柄明細</h2>
     <div class="table-wrap">
       <table class="data-table" id="holdingsTable">
@@ -1110,7 +1159,7 @@
     </details>
   </section>
 
-  <section class="panel" id="watchPanel">
+  <section class="panel" id="watchPanel" data-view="extras">
     <h2>買い増し候補 <span class="hint">目標利回りに近い順</span></h2>
     <div class="watch-add">
       <input type="text" id="watchAddInput" placeholder="コードか銘柄名で追加(例: 8306、KDDI)" autocomplete="off">
@@ -1120,7 +1169,7 @@
     <ul class="watch-list" id="watchList"></ul>
   </section>
 
-  <section class="panel" id="perkPanel">
+  <section class="panel" id="perkPanel" data-view="extras">
     <h2>株主優待 <span class="hint">届いた優待と有効期限</span></h2>
     <div id="perkSummary" class="perk-summary"></div>
     <h3 class="perk-sub">手元の優待(期限の近い順)</h3>
@@ -1135,7 +1184,7 @@
 
   <section id="dashboardSection"></section>
 
-  <details class="panel" id="sectorRefPanel">
+  <details class="panel" id="sectorRefPanel" data-view="analysis">
     <summary><span class="chap">附</span>業種一覧・景気感応度分類(東証33業種、編集可)</summary>
     <div class="table-wrap" style="margin-top:10px;">
       <table class="data-table" id="sectorTable">
@@ -1379,6 +1428,7 @@
 
       var codeCell = makeInputCell(h, "code", "text");
       var nameCell = makeInputCell(h, "name", "text");
+      if (openRows[h.id]) tr.classList.add("open");
       var sectorCell = makeSectorCell(h);
       wireCodeAutofill(h, codeCell, nameCell, sectorCell);
       tr.appendChild(codeCell);
@@ -1436,6 +1486,7 @@
       tdDel.appendChild(delBtn);
       tr.appendChild(tdDel);
 
+      tr.appendChild(makeSummaryCell(h, c, tr));
       tbody.appendChild(tr);
     });
   }
@@ -1875,8 +1926,11 @@
 
   // ヒートマップから明細の行を指す。見つけたあと見失わないよう一拍光らせる。
   function focusHolding(id) {
+    if (document.body.dataset.tab !== "holdings") setTab("holdings", true);
     var tr = document.querySelector('#holdingsBody tr[data-id="' + id + '"]');
     if (!tr) return;
+    openRows[id] = true;
+    tr.classList.add("open");
     var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     var y0 = window.scrollY;
     tr.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
@@ -1892,6 +1946,47 @@
     setTimeout(function () { tr.classList.remove("is-hit"); }, 2000);
   }
 
+  // 長い表は最初の数件だけ見せ、「すべて見る」で開く
+  function limitRows(container, table, n) {
+    var rows = table.tBodies[0] ? table.tBodies[0].rows.length : 0;
+    if (rows <= n) return;
+    table.classList.add("is-limited");
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "show-all";
+    b.textContent = "すべて見る(" + rows + "件)";
+    b.addEventListener("click", function () {
+      var limited = table.classList.toggle("is-limited");
+      b.textContent = limited ? "すべて見る(" + rows + "件)" : "閉じる";
+    });
+    container.appendChild(b);
+  }
+
+  // スマホでは1銘柄を1行にたたみ、押すと入力欄を開く
+  var openRows = {};
+  function summaryHtml(h, c) {
+    var t = c.trend === "up" ? '<em class="up">▲</em>' : c.trend === "down" ? '<em class="down">▽</em>' : "";
+    return '<span class="sum-name">' + escapeHtml((h.code ? h.code + " " : "") + String(h.name || "銘柄を入力").normalize("NFKC")) + '</span>' +
+      '<span class="sum-meta">' + (num(h.shares) ? num(h.shares).toLocaleString("ja-JP") + "株 ・ " : "") +
+      "年" + fmtYen(c.divPre) + " " + t + '</span>';
+  }
+  function makeSummaryCell(h, c, tr) {
+    var td = document.createElement("td");
+    td.className = "sum";
+    var b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("aria-expanded", tr.classList.contains("open") ? "true" : "false");
+    b.innerHTML = summaryHtml(h, c);
+    b.addEventListener("click", function () {
+      var open = !tr.classList.contains("open");
+      tr.classList.toggle("open", open);
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) openRows[h.id] = true; else delete openRows[h.id];
+    });
+    td.appendChild(b);
+    return td;
+  }
+  function escapeHtml(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
   function updateRowComputedCells(id) {
     var h = state.holdings.find(function (x) { return x.id === id; });
     if (!h) return;
@@ -1904,12 +1999,15 @@
     trendSpan.textContent = trendText(c.trend);
     tr.children[10].textContent = fmtYen(c.divPre);
     tr.children[11].textContent = fmtYen(c.acquisition);
+    var sumBtn = tr.querySelector(".sum button");
+    if (sumBtn) sumBtn.innerHTML = summaryHtml(h, c);
   }
 
   document.getElementById("addRowBtn").addEventListener("click", function () {
     var newId = uid();
     state.isSample = false;
     state.holdings.push({ id: newId, code: "", name: "", sector: UNCLASSIFIED, account: "特定", shares: "", cost: "", div: "", prevDiv: "", addedAt: todayIso() });
+    openRows[newId] = true;
     save(); renderTable(); renderDashboard();
     var newRow = document.querySelector('#holdingsBody tr[data-id="' + newId + '"]');
     if (newRow) {
@@ -2824,6 +2922,7 @@
   }
 
   function openPriceUpdate() {
+    if (document.body.dataset.tab !== "holdings") setTab("holdings", true);
     var box = document.getElementById("priceUpdateBox");
     box.open = true;
     box.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -4781,7 +4880,7 @@
         return cell;
       }
       tr.appendChild(td("銘柄", (x.row.code ? x.row.code + " " : "") + (x.row.name || "無名銘柄")));
-      tr.appendChild(td(basisLabel, fmtPct(x.yoc, 2), "num" + (x.yoc >= 5 ? " trend-down" : "")));
+      tr.appendChild(td(basisLabel, fmtPct(x.yoc, 2), "num k" + (x.yoc >= 5 ? " trend-down" : "")));
       if (basis === "current") {
         var age = priceAgeDays(x.row.priceDate);
         tr.appendChild(td("株価(日付)", fmtYen(num(x.row.price)) + (x.row.priceDate ? "(" + x.row.priceDate.slice(5) + ")" : ""),
@@ -4789,13 +4888,14 @@
       } else {
         tr.appendChild(td("取得額", fmtYen(x.row.acquisition), "num"));
       }
-      tr.appendChild(td("年間配当", fmtYen(x.row.divPre), "num"));
+      tr.appendChild(td("年間配当", fmtYen(x.row.divPre), "num k"));
       tr.appendChild(td("配当構成比", fmtPct(x.share), "num"));
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);
     wrap.appendChild(table);
     el.appendChild(wrap);
+    limitRows(el, table, 5);
   }
 
   // ---------- 将来見通し ----------
@@ -5069,10 +5169,10 @@
       var cstk = dividendStreak(String(c.row.code || "").trim());
       tr.appendChild(td("銘柄", (c.row.code ? c.row.code + " " : "") + (c.row.name || "無名銘柄") + (cstk ? "(" + cstk.text + ")" : "")));
       tr.appendChild(td("1株配当", fmtPerShare(c.perSharePrev) + (c.prevAuto ? "※" : "") + " → " + fmtPerShare(c.perShareNow) + " (" + fmtSignedPerShare(c.perShareDiff) + ")", "num"));
-      tr.appendChild(td("増減率", fmtSignedPct(c.ratePct), "num " + cls));
+      tr.appendChild(td("増減率", fmtSignedPct(c.ratePct), "num k " + cls));
       tr.appendChild(td("保有株数", num(c.row.shares).toLocaleString("ja-JP"), "num"));
       tr.appendChild(td("年間配当", fmtYen(c.annualNow), "num"));
-      tr.appendChild(td("増減額", fmtSignedYen(c.annualDiff), "num " + cls));
+      tr.appendChild(td("増減額", fmtSignedYen(c.annualDiff), "num k " + cls));
 
       tbody.appendChild(tr);
     });
@@ -5080,6 +5180,7 @@
     table.appendChild(tbody);
     wrap.appendChild(table);
     el.appendChild(wrap);
+    limitRows(el, table, 5);
   }
 
   function bindSimInputs() {
@@ -5113,7 +5214,7 @@
       return '<button class="axis-tab' + (k === currentColor ? ' active' : '') + '" data-color="' + k + '">' + COLOR_MODES[k].label + '</button>';
     }).join('');
     return '' +
-      '<div class="panel">' +
+      '<div class="panel" data-view="analysis">' +
       '  <h2><span class="chap">三</span>構成 <span class="hint">面積は年間配当金額・◆はNISA口座・タイルを押すと明細へ</span></h2>' +
       '  <div class="heat-controls">' +
       '    <div class="ctl-row"><span class="ctl-label">分け方</span><div class="axis-tabs" id="axisTabs">' + tabsHtml + '</div></div>' +
@@ -5124,11 +5225,11 @@
       '  <p class="heat-note" id="heatNote"></p>' +
       '  <ul class="legend" id="axisLegend"></ul>' +
       '</div>' +
-      '<div class="panel" id="actualPanel" hidden>' +
+      '<div class="panel" id="actualPanel" data-view="analysis" hidden>' +
       '  <h2><span class="chap">†</span>配当の答え合わせ <span class="hint">証券会社の受取履歴を読み込むと出ます</span></h2>' +
       '  <div id="actualBody"></div>' +
       '</div>' +
-      '<div class="panel">' +
+      '<div class="panel" data-view="home">' +
       '  <h2><span class="chap">四</span>配当金カレンダー <span class="hint">権利確定月は受取履歴CSVか手入力から</span></h2>' +
       '  <div class="axis-tabs" id="calendarTabs">' +
       '    <button class="axis-tab active" data-mode="record">権利確定月</button>' +
@@ -5136,20 +5237,20 @@
       '  </div>' +
       '  <div id="calendarBody"></div>' +
       '</div>' +
-      '<div class="panel">' +
+      '<div class="panel" data-view="analysis">' +
       '  <h2><span class="chap">五</span>増配・減配の状況 <span class="hint">※は前年配当が空欄のため内蔵データ(有価証券報告書)で比べた銘柄</span></h2>' +
       '  <div id="divLedger" class="ledger"></div>' +
       '  <div id="changeSummary"></div>' +
       '</div>' +
-      '<div class="panel">' +
+      '<div class="panel" data-view="analysis">' +
       '  <h2><span class="chap">六</span>利回りと集中度 <span class="hint">利回りは取得価格ベース(簿価利回り)</span></h2>' +
       '  <div id="yieldBody"></div>' +
       '</div>' +
-      '<div class="panel">' +
+      '<div class="panel" data-view="analysis">' +
       '  <h2><span class="chap">七</span>目標対比</h2>' +
       '  <div class="goal-actual" id="goalActual"></div>' +
       '</div>' +
-      '<div class="panel">' +
+      '<div class="panel" data-view="analysis">' +
       '  <h2><span class="chap">八</span>将来見通し <span class="hint">前提を変えると試算が変わります</span></h2>' +
       '  <div class="grid-inputs sim-inputs">' +
       '    <label class="field">毎月の追加投資額(円)' +
@@ -5164,11 +5265,11 @@
       '  </div>' +
       '  <div id="simBody"></div>' +
       '</div>' +
-      '<div class="panel">' +
+      '<div class="panel" data-view="analysis">' +
       '  <h2><span class="chap">九</span>分散ガイドライン</h2>' +
       '  <div class="badges" id="guideBadges"></div>' +
       '</div>' +
-      '<div class="panel">' +
+      '<div class="panel" data-view="home">' +
       '  <h2>節目の記録 <span class="hint">年間配当が節目を越えた日(このツールで記録した日)</span></h2>' +
       '  <div class="records" id="milestoneChips"></div>' +
       '  <p class="goal-history" id="goalHistoryLine"></p>' +
@@ -5390,6 +5491,33 @@
 
   setTimeout(function () { document.body.classList.remove("intro"); }, 2200);
 
+  // ---------- タブ ----------
+  var TABS = ["home", "holdings", "analysis", "extras"];
+  function setTab(t, quiet) {
+    if (TABS.indexOf(t) === -1) t = "home";
+    var changed = document.body.dataset.tab !== t;
+    document.body.dataset.tab = t;
+    Array.prototype.forEach.call(document.querySelectorAll(".tabbar .tab"), function (b) {
+      var on = b.dataset.tab === t;
+      b.setAttribute("aria-selected", on ? "true" : "false");
+      b.tabIndex = on ? 0 : -1;
+    });
+    try { localStorage.setItem("haitoTab", t); } catch (e) {}
+    if (changed) {
+      // 隠れている間は幅が0なので、ツリーマップなど幅で描く図は表示してから描き直す
+      if (t === "analysis" || t === "home") renderDashboard();
+      if (!quiet) window.scrollTo(0, 0);
+    }
+  }
+  Array.prototype.forEach.call(document.querySelectorAll(".tabbar .tab"), function (b) {
+    b.addEventListener("click", function () { setTab(b.dataset.tab); });
+  });
+  (function () {
+    var t = (location.hash || "").replace("#", "");
+    if (TABS.indexOf(t) === -1) { try { t = localStorage.getItem("haitoTab"); } catch (e) { t = null; } }
+    document.body.dataset.tab = TABS.indexOf(t) === -1 ? "home" : t;
+  })();
+
   // 以前は業種が分からない銘柄に先頭の「水産・農林業」が入っていた。内蔵データと食い違うものを直す
   function fixUnknownSectors() {
     var fixed = false;
@@ -5403,6 +5531,7 @@
   }
 
   function renderAll() {
+    setTab(document.body.dataset.tab || "home", true);
     fixUnknownSectors();
     bindGoalInputs();
     renderTable();
