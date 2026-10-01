@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>高配当株ポートフォリオダッシュボード</title>
 <meta name="description" content="保有する高配当株を入力すると、業種別・銘柄別の配当構成比、配当金カレンダー、増配率、目標達成の見通しまで自動で集計します。登録不要・データは端末内にのみ保存。">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%23e8543f%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2245%22%20font-size%3D%2238%22%20font-family%3D%22Helvetica%2CArial%2Csans-serif%22%20font-weight%3D%22bold%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3E%C2%A5%3C%2Ftext%3E%3C%2Fsvg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%231a5f7a%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2245%22%20font-size%3D%2238%22%20font-family%3D%22Helvetica%2CArial%2Csans-serif%22%20font-weight%3D%22bold%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3E%C2%A5%3C%2Ftext%3E%3C%2Fsvg%3E">
 <meta property="og:type" content="website">
 <meta property="og:title" content="高配当株ポートフォリオダッシュボード">
 <meta property="og:description" content="保有する高配当株を入力すると、業種別・銘柄別の配当構成比、配当金カレンダー、増配率、目標達成の見通しまで自動で集計します。登録不要・データは端末内にのみ保存。">
@@ -15,52 +15,60 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+  /* A案: 白地に細い罫線、数字は大きく。色は藍(1色目)と金茶(2色目)だけ */
   :root {
     color-scheme: light;
-    --font-sans: "Noto Sans JP", system-ui, -apple-system, "Hiragino Sans", sans-serif;
-    --page: #f6f7fb;
+    --font-sans: "Manrope", "Zen Kaku Gothic New", "Hiragino Sans", system-ui, sans-serif;
+    --page: #ffffff;
     --card: #ffffff;
-    --text: #23282e;
-    --text-2: #5a6470;
-    --muted: #97a0ad;
-    --line: #e5e8ef;
-    --field: #f3f5f9;
-    --accent: #e8543f;
+    --text: #0d0f12;
+    --text-2: #5b6270;
+    --muted: #8b909a;
+    --line: #e9eaee;
+    --field: #f4f5f7;
+    --accent: #1a5f7a;
     --accent-ink: #ffffff;
-    --accent-soft: #fdeeeb;
-    --good: #16a34a;  --good-soft: #e9f7ef;
-    --warn: #d97706;  --warn-soft: #fdf2e3;
-    --crit: #dc2626;  --crit-soft: #fdecec;
-    --radius: 14px;
-    --radius-lg: 22px;
-    --shadow: 0 6px 18px rgba(35,48,74,.06);
-    --s1: #2f6fd0; --s2: #5b93e6; --s3: #8fb7f0; --s4: #f0a63c;
-    --s5: #58b79a; --s6: #9b7fd4; --s7: #94a3b8; --s8: #d98080;
-    --other: #cbd3de;
-    --heat-bg: #151a22;
+    --accent-soft: #e5eef2;
+    --accent2: #a8791f;
+    --gold: #a8791f; --gold-hi: #e9c979; --gold-lo: #8c6214;
+    --deep: #0f2c3d; --deep-ink: #eef3f6; --deep-mute: #9fb3bf;
+    --good: #1f8a5b;  --good-soft: #e7f3ed;
+    --warn: #b7791f;  --warn-soft: #faf2e3;
+    --crit: #c8322d;  --crit-soft: #fbeceb;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --shadow: none;
+    --s1: #1a5f7a; --s2: #4f8fa8; --s3: #9cc3d3; --s4: #c9a24a;
+    --s5: #6f9e86; --s6: #8a76a8; --s7: #9aa3ad; --s8: #c98a7a;
+    --other: #d9dde2;
+    --heat-bg: #12161c;
+    --ease: cubic-bezier(.2, .7, .2, 1);
   }
   @media (prefers-color-scheme: dark) {
     :root {
       color-scheme: dark;
-      --page: #14161a;
-      --card: #1d2026;
-      --text: #eceef2;
-      --text-2: #a9b2bf;
-      --muted: #7c8695;
-      --line: #2c3037;
-      --field: #262a31;
-      --accent: #f2674f;
-      --accent-soft: #3a241f;
-      --good: #4ade80;  --good-soft: #1c2c22;
-      --warn: #f0b357;  --warn-soft: #302619;
-      --crit: #f87171;  --crit-soft: #331e1e;
-      --shadow: 0 6px 18px rgba(0,0,0,.28);
-      --s1: #5b93e6; --s2: #8fb7f0; --s3: #b9d2f6; --s4: #f0b357;
-      --s5: #6cc9aa; --s6: #b198e0; --s7: #a6b2c1; --s8: #e59797;
-      --other: #3a3f48;
-      --heat-bg: #0e1319;
+      --page: #0b0c0f;
+      --card: #0b0c0f;
+      --text: #f2f3f5;
+      --text-2: #a7adb8;
+      --muted: #7d838e;
+      --line: #24262c;
+      --field: #16181d;
+      --accent: #5fb3d1;
+      --accent-ink: #06222e;
+      --accent-soft: #12262e;
+      --accent2: #e0b560;
+      --gold: #e0b560; --gold-hi: #f6dc9c; --gold-lo: #b88a33;
+      --deep: #0e2230;
+      --good: #4cc79a;  --good-soft: #13241d;
+      --warn: #e0b560;  --warn-soft: #2a2316;
+      --crit: #ff6b5f;  --crit-soft: #2c1615;
+      --s1: #5fb3d1; --s2: #3f8aa8; --s3: #9fd0e2; --s4: #e0b560;
+      --s5: #7fbf9f; --s6: #ae9bd0; --s7: #9aa3ad; --s8: #e0a493;
+      --other: #33363d;
+      --heat-bg: #0e1116;
     }
   }
   * { box-sizing: border-box; }
@@ -185,11 +193,6 @@
   .hero-goal-line { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; color: var(--text-2); margin-bottom: 10px; }
   .hero-goal-line .pct { font-size: 17px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
   .hero-gauge { position: relative; height: 42px; margin-bottom: 4px; }
-  .gauge-rail { position: absolute; left: 0; right: 0; top: 17px; height: 8px; border-radius: 999px; background: var(--field); }
-  .gauge-fill { position: absolute; left: 0; top: 17px; height: 8px; border-radius: 999px; background: var(--accent); }
-  .gauge-tick { position: absolute; top: 13px; width: 1px; height: 16px; background: var(--line); }
-  .gauge-tick-label { position: absolute; top: 30px; font-size: 10px; color: var(--muted); transform: translateX(-50%); font-variant-numeric: tabular-nums; }
-  .gauge-stamp { position: absolute; top: 5px; width: 32px; height: 32px; transform: translateX(-50%); filter: url(#inkRough); }
   .hero-substats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 18px; }
   .ledger { background: var(--field); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
   .ledger-title { font-size: 12.5px; font-weight: 700; color: var(--text-2); }
@@ -481,11 +484,11 @@
   .source-note { margin: 0 0 12px; line-height: 1.85; }
   .price-notice {
     display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
-    background: #fff4df; color: #7a4a00; border-radius: var(--radius);
+    background: var(--warn-soft); color: var(--text); border-radius: var(--radius);
     padding: 12px 15px; margin-bottom: 14px; font-size: 12.5px; line-height: 1.75;
   }
   .price-notice span { flex: 1 1 16em; }
-  table.data-table td.is-stale { color: #b45309; }
+  table.data-table td.is-stale { color: var(--warn); }
   #priceUpdateArea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .source-note a { color: inherit; }
   .missing-box {
@@ -665,9 +668,134 @@
   .sibling .ttl { font-size: 13.5px; font-weight: 700; }
   .sibling .sub { font-size: 11.5px; color: var(--text-2); margin-top: 3px; }
   .sibling .arw { color: var(--muted); flex-shrink: 0; }
+  .panel h2 { flex-wrap: wrap; row-gap: 4px; }
+  .panel h2 .hint { flex: 1 1 14em; }
+  /* ---- A案の見た目: カードをやめ、罫線と余白で区切る ---- */
+  body { font-feature-settings: "palt"; -webkit-font-smoothing: antialiased; }
+  .app { padding: 20px 20px 72px; }
+  header.top, .hero, .panel, footer.foot, .onboard, .sibling {
+    background: none; box-shadow: none; border-radius: 0; padding-left: 0; padding-right: 0;
+  }
+  header.top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+    padding: 4px 0 14px; margin: 0; border-bottom: 2px solid var(--text); transition: border-color .6s var(--ease); }
+  header.top h1 { font-size: 15px; font-weight: 800; letter-spacing: .02em; }
+  header.top p { font-size: 12px; color: var(--muted); max-width: 46em; margin-top: 6px; }
+  header.top .dateline { background: none; padding: 0; margin: 0; color: var(--muted); letter-spacing: .06em; }
+  .panel { border-top: 1px solid var(--line); padding: 26px 0 8px; margin: 0; }
+  .panel h2, details.panel > summary { font-size: 16px; font-weight: 800; letter-spacing: .01em; margin-bottom: 18px; }
+  .panel h2::before, details.panel > summary::before { content: none; }
+  footer.foot { border-top: 1px solid var(--line); margin-top: 28px; padding-top: 18px; }
+  footer.foot .note-label { background: none; padding: 0; color: var(--accent); }
+  .sibling { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 14px 0; margin: 18px 0 0; }
+  .sibling:hover { background: none; }
+  .sibling .ico, .onboard-list .ico { border-radius: 50%; }
+  .onboard { border-bottom: 1px solid var(--line); padding: 24px 0; }
+  .onboard-list li, .badge, .change-summary .stat, .actual-card, .missing-box, .backup-status, .watch-cell, .watch-sim,
+  .perk-summary .stat, .buy-preview, .ledger, .calendar-lead span { border-radius: var(--radius); }
+  button.btn { font-weight: 700; border-color: var(--line); }
+  button.btn.primary:hover { opacity: 1; filter: brightness(1.08); }
+  .axis-tab.active { background: var(--text); border-color: var(--text); color: var(--page); }
+  .cal-bar, .band-bar, .legend .lbar i { background: var(--s1); }
+  .cal-bar { border-radius: 2px 2px 0 0; }
+  .months-dialog { border-radius: var(--radius-lg); }
+  a { color: var(--accent); }
+
+  /* ---- 一番上: 年間の配当金 ---- */
+  .hero { position: relative; margin: 0 -20px; padding: 30px 20px 26px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(160deg, var(--page) 20%, color-mix(in srgb, var(--accent) 7%, var(--page)) 70%, color-mix(in srgb, var(--accent2) 9%, var(--page)) 100%);
+    transition: background .6s var(--ease), color .6s var(--ease); }
+  .stage { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
+  .stage .tag { font-size: 12.5px; font-weight: 700; letter-spacing: .04em; color: var(--accent); }
+  .stage .next { font-size: 11.5px; color: var(--muted); text-align: right; }
+  .stage .next b { color: var(--text); }
+  .pips { display: flex; gap: 4px; margin-top: 8px; }
+  .pips i { width: 14px; height: 3px; background: var(--line); }
+  .pips i.on { background: var(--accent); }
+  .crest { display: none; }
+  .hero-label { font-size: 11.5px; font-weight: 700; letter-spacing: .14em; color: var(--muted); margin-bottom: 0; }
+  .hero-label span { font-weight: 400; letter-spacing: .04em; margin-left: 8px; }
+  .hero-value { font-size: clamp(46px, 13vw, 76px); font-weight: 800; letter-spacing: -.045em; line-height: 1; margin: 12px 0 0; color: var(--text); }
+  .hero-value .yen { font-size: .48em; vertical-align: .78em; margin-right: 5px; letter-spacing: 0; color: var(--accent); }
+  .hero-monthly { margin: 14px 0 24px; font-size: 13px; color: var(--muted); }
+  .hero-monthly b { color: var(--text); font-size: 16px; margin-left: 6px; font-variant-numeric: tabular-nums; }
+  .hero-goal-line { font-size: 13px; color: var(--muted); margin-bottom: 0; }
+  .hero-goal-line .pct { font-size: 16px; font-weight: 800; color: var(--accent); }
+  .hero-track { height: 3px; background: color-mix(in srgb, var(--accent) 22%, var(--page)); margin-top: 10px; overflow: hidden; }
+  .hero-fill { height: 3px; background: var(--accent); width: 0; transition: width 1.1s var(--ease); }
+  .goal-done { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; font-size: 13px; font-weight: 700; color: var(--gold); }
+  .ghost { font: inherit; font-size: 12px; font-weight: 700; padding: 7px 14px; border-radius: 999px; cursor: pointer; background: none; color: inherit; border: 1px solid currentColor; }
+  .hero-substats { grid-template-columns: repeat(2, 1fr); gap: 0; margin-top: 26px; border-top: 1px solid var(--line); }
+  @media (min-width: 701px) { .hero-substats { grid-template-columns: repeat(4, 1fr); } }
+  .hero-substats .stat { background: none; border-radius: 0; padding: 16px 0 14px; border-bottom: 1px solid var(--line); }
+  .hero-substats .stat:nth-child(even) { padding-left: 16px; border-left: 1px solid var(--line); }
+  @media (min-width: 701px) { .hero-substats .stat + .stat { padding-left: 16px; border-left: 1px solid var(--line); } }
+  .hero-substats .label { font-size: 11px; font-weight: 700; letter-spacing: .12em; color: var(--muted); }
+  .hero-substats .value { font-size: 24px; font-weight: 800; letter-spacing: -.03em; }
+  .hero-actions { margin-top: 18px; justify-content: flex-start; }
+
+  /* 節目: 年間配当の金額で全員共通。越えるごとに一番上が一段華やかになる */
+  .tier-2 .hero-value .yen, .tier-3 .hero-value .yen { color: var(--gold); }
+  .tier-2 header.top { border-bottom-color: var(--gold); }
+  .tier-2 .stage .tag, .tier-3 .stage .tag, .tier-3 .hero-goal-line .pct { color: var(--gold); }
+  .tier-2 .pips i.on, .tier-3 .pips i.on { background: var(--gold); }
+  .tier-3 header.top, .tier-4 header.top, .tier-5 header.top { border-bottom-color: var(--gold); }
+  .tier-3 .hero { background: linear-gradient(160deg, var(--page) 10%, color-mix(in srgb, var(--gold) 12%, var(--page)) 100%); }
+  .tier-3 #heroValue, .tier-4 #heroValue, .tier-5 #heroValue, .tier-4 .hero-value .yen, .tier-5 .hero-value .yen {
+    background: linear-gradient(100deg, var(--gold-lo) 0%, var(--gold) 30%, var(--gold-hi) 50%, var(--gold) 70%, var(--gold-lo) 100%);
+    background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .tier-3 .hero-fill { background: var(--gold); }
+  .tier-4 .hero, .tier-5 .hero { background: radial-gradient(120% 90% at 85% 0%, color-mix(in srgb, var(--accent) 55%, var(--deep)) 0%, var(--deep) 60%); color: var(--deep-ink); border-bottom-color: var(--deep); }
+  .tier-4 .hero-label, .tier-5 .hero-label, .tier-4 .hero-monthly, .tier-5 .hero-monthly, .tier-4 .hero-goal-line, .tier-5 .hero-goal-line,
+  .tier-4 .stage .next, .tier-5 .stage .next { color: var(--deep-mute); }
+  .tier-4 .hero-monthly b, .tier-5 .hero-monthly b, .tier-4 .stage .next b, .tier-5 .stage .next b, .tier-4 .hero .value, .tier-5 .hero .value { color: var(--deep-ink); }
+  .tier-4 .hero-goal-line .pct, .tier-5 .hero-goal-line .pct, .tier-4 .stage .tag, .tier-5 .stage .tag, .tier-4 .goal-done, .tier-5 .goal-done { color: var(--gold-hi); }
+  .tier-4 .hero-track, .tier-5 .hero-track { background: rgba(255,255,255,.12); }
+  .tier-4 .hero-fill, .tier-5 .hero-fill { background: linear-gradient(90deg, var(--gold), var(--gold-hi)); }
+  .tier-4 .pips i, .tier-5 .pips i { background: rgba(255,255,255,.18); }
+  .tier-4 .pips i.on, .tier-5 .pips i.on { background: var(--gold-hi); }
+  .tier-4 .hero-substats, .tier-5 .hero-substats, .tier-4 .hero-substats .stat, .tier-5 .hero-substats .stat { border-color: rgba(255,255,255,.14); }
+  .tier-4 .hero-substats .label, .tier-5 .hero-substats .label { color: var(--deep-mute); }
+  .tier-4 .hero .btn, .tier-5 .hero .btn { background: transparent; color: var(--deep-ink); border-color: rgba(255,255,255,.3); }
+  .tier-5 .hero { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--gold) 70%, transparent), inset 0 -1px 0 color-mix(in srgb, var(--gold) 70%, transparent); }
+  .tier-5 .crest { display: inline-block; width: 15px; height: 15px; margin-right: 7px; vertical-align: -2px; }
+
+  /* 節目の記録 */
+  .records { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: inline-flex; flex-direction: column; padding: 8px 12px; border-radius: var(--radius); background: color-mix(in srgb, var(--gold) 12%, var(--page)); font-weight: 800; font-size: 14px; }
+  .chip small { font-weight: 500; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  .chip.next { background: none; border: 1px dashed var(--line); color: var(--muted); }
+  .records-note, .goal-history { margin: 12px 0 0; font-size: 12px; color: var(--muted); line-height: 1.8; }
+
+  .toast { position: fixed; left: 0; right: 0; margin: 0 auto; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    width: min(92vw, 440px); background: var(--text); color: var(--page); font-size: 13px; line-height: 1.7;
+    padding: 12px 16px; border-radius: 12px; z-index: 60; }
+
+  /* 動き: 開いたときの一度だけ。数字は最終値のまま描いてあり、上に動きを重ねるだけ */
+  @media (prefers-reduced-motion: no-preference) {
+    .intro .hero > *, .intro .hero-substats, .intro #watchPanel, .intro #holdingsPanel { animation: rise .7s var(--ease) both; }
+    .intro .hero > :nth-child(2) { animation-delay: .05s } .intro .hero > :nth-child(3) { animation-delay: .1s }
+    .intro .hero > :nth-child(4) { animation-delay: .15s } .intro .hero > :nth-child(n+5) { animation-delay: .22s }
+    @keyframes rise { from { opacity: .001; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .intro .cal-bar { animation: grow .8s var(--ease) both; transform-origin: bottom; }
+    @keyframes grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+    .toast:not([hidden]) { animation: rise .35s var(--ease) both; }
+    .tier-5 #heroValue, .tier-5 .hero-value .yen { animation: sheen 5s linear infinite; }
+    @keyframes sheen { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+    .data-table tbody tr, .watch-item { transition: transform .25s var(--ease); }
+  }
+  @media (max-width: 700px) {
+    .app { padding: 14px 16px 64px; }
+    .hero { margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+    #holdingsTable tr { background: none; border-top: 1px solid var(--line); border-radius: 0; padding: 6px 0 12px; }
+    .change-table tr { background: none; border-top: 1px solid var(--line); border-radius: 0; padding: 6px 0 12px; }
+    #holdingsTable td input, #holdingsTable td select { background: var(--field); }
+    #holdingsTable tr { border-top: 2px solid var(--text); margin-bottom: 18px; }
+    #holdingsTable td.row-actions button { border: 1px solid var(--line); }
+  }
 </style>
 </head>
-<body>
+<body class="intro">
+<div class="toast" id="toast" role="status" hidden></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <filter id="inkRough" x="-30%" y="-30%" width="160%" height="160%">
@@ -680,7 +808,7 @@
   <header class="top">
     <div>
       <h1>高配当株ポートフォリオダッシュボード</h1>
-      <p>保有銘柄を入力すると、業種別・銘柄別・景気感応度別・口座別の配当金構成比とツリーマップ、目標に対する実績を自動集計します。データはこの端末のブラウザ内(localStorage)にのみ保存されます。</p>
+      <p>保有銘柄を入れると、配当の構成・受け取りの予定・目標の達成度を自動で集計します。データはこの端末の中だけに保存されます。</p>
     </div>
     <div class="dateline" id="dateline"></div>
   </header>
@@ -705,15 +833,22 @@
   </p>
 
   <section class="hero" id="heroSection">
-    <div class="hero-figure">
-      <div class="hero-label">月間配当金(実績・税引前)</div>
-      <div class="hero-value" id="heroValue">¥0</div>
+    <div class="stage">
+      <span class="tag"><svg class="crest" viewBox="0 0 64 64" aria-hidden="true"><path fill="var(--gold-hi)" d="M32 4 L39 24 L60 24 L43 37 L50 58 L32 45 L14 58 L21 37 L4 24 L25 24 Z"/></svg><span id="stageTag"></span><span class="pips" id="stagePips"><i></i><i></i><i></i><i></i><i></i></span></span>
+      <span class="next" id="stageNext"></span>
     </div>
+    <div class="hero-label">年間の配当金<span>税引前</span></div>
+    <div class="hero-value"><span class="yen">¥</span><span id="heroValue">0</span></div>
+    <div class="hero-monthly">月あたり<b id="heroMonthly">¥0</b></div>
     <div class="hero-goal-line">
       <span id="heroGoalText">目標 ¥0 まで</span>
       <span class="pct" id="heroPct">0.0%</span>
     </div>
-    <div class="hero-gauge" id="heroGauge"></div>
+    <div class="hero-track"><div class="hero-fill" id="heroFill"></div></div>
+    <div class="goal-done" id="goalDone" hidden>
+      <span>月の目標を達成しました</span>
+      <button type="button" class="ghost" id="nextGoalBtn">次の目標を設定</button>
+    </div>
     <div class="hero-substats" id="heroSubstats"></div>
     <div class="hero-actions"><button class="btn" id="reportBtn" type="button">月の配当レポートを画像にする</button></div>
   </section>
@@ -3661,7 +3796,8 @@
 
   // ---------- 色の尺度 ----------
   // 値上がり/値下がりではなく、配当固有の指標(増配率・簿価利回り)を色に割り当てる。
-  var GROWTH_UP = ["#2f4a3a", "#256b41", "#199a4f", "#25c463"];
+  // 増配は藍の濃淡(明るいほど大きい増配)、減配は赤。アプリ全体の「増配=藍、減配=赤」と合わせる
+  var GROWTH_UP = ["#203a4a", "#22597a", "#2f7aa3", "#5aa9d2"];
   var GROWTH_DOWN = ["#553438", "#8c2f36", "#c02b33", "#e04048"];
   var GROWTH_FLAT = "#474e59";
   var HEAT_NA = "#2b313a";
@@ -3994,58 +4130,150 @@
   }
 
   // ---------- ヒーロー(月間配当金実績・目標達成ゲージ) ----------
-  function renderHeroGauge(container, pct) {
-    container.innerHTML = "";
-    var clamped = Math.max(0, Math.min(100, isFinite(pct) ? pct : 0));
-    var rail = document.createElement("div"); rail.className = "gauge-rail";
-    container.appendChild(rail);
-    var fill = document.createElement("div"); fill.className = "gauge-fill"; fill.style.width = clamped + "%";
-    container.appendChild(fill);
-    [0, 25, 50, 75, 100].forEach(function (t) {
-      var tick = document.createElement("div"); tick.className = "gauge-tick"; tick.style.left = t + "%";
-      container.appendChild(tick);
-      var lbl = document.createElement("div"); lbl.className = "gauge-tick-label"; lbl.style.left = t + "%"; lbl.textContent = t + "%";
-      // 両端のラベルが枠外に切れないよう寄せる
-      if (t === 0) lbl.style.transform = "translateX(0)";
-      else if (t === 100) lbl.style.transform = "translateX(-100%)";
-      container.appendChild(lbl);
+  // ---------- 一番上(年間の配当金)と節目 ----------
+  // 見た目の段階は年間配当の金額で全員共通にする。SNSに並んでも同じ意味になるように。
+  var TIERS = [0, 100000, 300000, 600000, 1200000];
+  // 記録の節目は細かく刻み、始めたばかりでも次の節目が近くにあるようにする。
+  var MILESTONES = [10000, 30000, 50000, 100000, 200000, 300000, 500000, 600000, 800000, 1000000,
+                    1200000, 1500000, 2000000, 3000000, 5000000, 10000000];
+  function manYen(y) { return y >= 100000000 ? (y / 100000000) + "億円" : (y / 10000) + "万円"; }
+  function dotDate(iso) { return iso.replace(/-/g, "."); }
+  var toastTimer = null;
+  function showToast(msg) {
+    var el = document.getElementById("toast");
+    el.textContent = msg; el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.hidden = true; }, 4500);
+  }
+
+  // 節目を越えたかを見て記録する。使い始めたとき(前回の年間配当が0)にすでに越えていた節目は
+  // 日付を作らず「使い始めたときに達成済み」とする。サンプル表示中は記録しない。
+  function trackMilestones(annual) {
+    if (state.isSample) return;
+    if (!state.milestones) state.milestones = {};
+    var prev = num(state.lastAnnual);
+    var first = !(prev > 0);
+    var today = todayIso(), newest = null, prevTier = tierOf(prev), changed = false;
+    MILESTONES.forEach(function (m) {
+      if (annual >= m && !state.milestones[m]) {
+        state.milestones[m] = first ? "pre" : today;
+        if (!first) newest = m;
+        changed = true;
+      }
     });
-    var svgNS = "http://www.w3.org/2000/svg";
-    var stamp = document.createElementNS(svgNS, "svg");
-    stamp.setAttribute("viewBox", "0 0 32 32");
-    stamp.classList.add("gauge-stamp");
-    stamp.style.left = clamped + "%";
-    var ring1 = document.createElementNS(svgNS, "circle");
-    ring1.setAttribute("cx", 16); ring1.setAttribute("cy", 16); ring1.setAttribute("r", 12.5);
-    ring1.setAttribute("fill", "none"); ring1.setAttribute("stroke", cssVar("--vermillion")); ring1.setAttribute("stroke-width", 2.2);
-    stamp.appendChild(ring1);
-    var ring2 = document.createElementNS(svgNS, "circle");
-    ring2.setAttribute("cx", 16); ring2.setAttribute("cy", 16); ring2.setAttribute("r", 7.5);
-    ring2.setAttribute("fill", "none"); ring2.setAttribute("stroke", cssVar("--vermillion")); ring2.setAttribute("stroke-width", 1.5);
-    stamp.appendChild(ring2);
-    container.appendChild(stamp);
+    if (Math.round(annual) !== Math.round(prev)) { state.lastAnnual = Math.round(annual); changed = true; }
+    if (changed) save();
+    if (!first && annual > prev) {
+      var t = tierOf(annual);
+      if (t > prevTier) showToast("年間" + manYen(TIERS[t]) + "を超えました。この節目から、一番上の見た目が一段華やかになります。");
+      else if (newest) showToast("年間" + manYen(newest) + "を突破しました。節目の記録に残しました。");
+    }
+  }
+  function tierOf(annual) {
+    var t = 0;
+    TIERS.forEach(function (m, i) { if (annual >= m) t = i; });
+    return t;
+  }
+
+  var heroCounted = false;
+  function countUp(el, to, fmt) {
+    var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce || !(to > 0)) { el.textContent = fmt(to); return; }
+    var start = null, from = to * 0.6;
+    function step(t) {
+      if (start === null) start = t;
+      var p = Math.min(1, (t - start) / 1100), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt(from + (to - from) * e);
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
   }
 
   function renderHero(agg) {
-    var monthly = agg.totalDivPre / 12;
-    var goal = state.goals.monthly;
+    var annual = agg.totalDivPre;
+    var monthly = annual / 12;
+    var goal = num(state.goals.monthly);
     var pct = goal > 0 ? (monthly / goal) * 100 : 0;
+    trackMilestones(annual);
 
-    document.getElementById("heroValue").textContent = fmtYen(monthly);
-    document.getElementById("heroGoalText").textContent = "目標 " + fmtYen(goal) + " まで";
+    var t = tierOf(annual);
+    document.body.classList.remove("tier-1", "tier-2", "tier-3", "tier-4", "tier-5");
+    document.body.classList.add("tier-" + (t + 1));
+    Array.prototype.forEach.call(document.getElementById("stagePips").children, function (p, i) { p.classList.toggle("on", i <= t); });
+    var top = MILESTONES.filter(function (m) { return annual >= m; }).pop();
+    var next = MILESTONES.filter(function (m) { return annual < m; })[0];
+    document.getElementById("stageTag").textContent = top ? "年間" + manYen(top) + "を突破" : "最初の節目は年間" + manYen(MILESTONES[0]);
+    document.getElementById("stageNext").innerHTML = next
+      ? "次の節目(年間" + manYen(next) + ")まで <b>" + fmtYen(next - annual) + "</b>"
+      : "すべての節目を達成";
+
+    var yenFmt = function (v) { return Math.round(v).toLocaleString("ja-JP"); };
+    var valEl = document.getElementById("heroValue");
+    if (!heroCounted) { countUp(valEl, annual, yenFmt); heroCounted = true; }
+    else valEl.textContent = yenFmt(annual);
+    document.getElementById("heroMonthly").textContent = fmtYen(monthly);
+    var done = goal > 0 && pct >= 100;
+    document.getElementById("heroGoalText").textContent = "月" + fmtYen(goal) + "の目標" + (done ? "を達成" : "まで");
     document.getElementById("heroPct").textContent = fmtPct(pct, 1);
-    renderHeroGauge(document.getElementById("heroGauge"), pct);
+    requestAnimationFrame(function () {
+      document.getElementById("heroFill").style.width = Math.max(0, Math.min(100, isFinite(pct) ? pct : 0)) + "%";
+    });
+    var doneBox = document.getElementById("goalDone");
+    doneBox.hidden = !done || state.isSample;
+    if (done) {
+      var sugg = Math.ceil(goal * 1.5 / 10000) * 10000;
+      var btn = document.getElementById("nextGoalBtn");
+      btn.textContent = "次の目標を月" + manYen(sugg) + "にする";
+      btn.dataset.yen = sugg;
+    }
 
     var yieldPre = agg.totalAcq > 0 ? (agg.totalDivPre / agg.totalAcq) * 100 : 0;
     var subs = [
-      { label: "業種数", value: agg.sectorCount + "" },
-      { label: "銘柄数", value: agg.stockCount + "" },
-      { label: "年間配当金(税引前)", value: fmtYen(agg.totalDivPre) },
-      { label: "利回り(税引前)", value: agg.totalAcq > 0 ? fmtPct(yieldPre, 2) : "—" }
+      { label: "利回り", value: agg.totalAcq > 0 ? fmtPct(yieldPre, 2) : "—" },
+      { label: "税引後", value: fmtYen(agg.totalDivPost) },
+      { label: "銘柄", value: agg.stockCount + "" },
+      { label: "業種", value: agg.sectorCount + "" }
     ];
     document.getElementById("heroSubstats").innerHTML = subs.map(function (s) {
       return '<div class="stat"><div class="label">' + s.label + '</div><div class="value">' + s.value + '</div></div>';
     }).join("");
+    renderMilestones(annual);
+  }
+
+  document.getElementById("nextGoalBtn").addEventListener("click", function () {
+    var yen = num(this.dataset.yen);
+    if (!(yen > 0)) return;
+    if (!Array.isArray(state.goalHistory)) state.goalHistory = [];
+    state.goalHistory.push({ yen: num(state.goals.monthly), at: todayIso() });
+    state.goals.monthly = yen;
+    var input = document.getElementById("goalMonthly");
+    if (input) input.value = yen;
+    save(); renderDashboard();
+    showToast("新しい目標を月" + manYen(yen) + "にしました。達成した目標は節目の記録に残っています。");
+  });
+
+  function renderMilestones(annual) {
+    var box = document.getElementById("milestoneChips");
+    if (!box) return;
+    box.innerHTML = "";
+    var rec = state.isSample ? {} : (state.milestones || {});
+    var next = MILESTONES.filter(function (m) { return annual < m; })[0];
+    MILESTONES.forEach(function (m) {
+      var at = rec[m];
+      if (!at && m !== next) return;
+      var c = document.createElement("span");
+      c.className = "chip" + (at ? "" : " next");
+      c.textContent = manYen(m);
+      var sm = document.createElement("small");
+      sm.textContent = !at ? "次の節目" : at === "pre" ? "使い始めたときに達成済み" : dotDate(at);
+      c.appendChild(sm);
+      box.appendChild(c);
+    });
+    var gh = document.getElementById("goalHistoryLine");
+    var hist = state.isSample ? [] : (state.goalHistory || []);
+    gh.textContent = hist.length
+      ? "達成した月の目標: " + hist.map(function (g) { return "月" + manYen(g.yen) + "(" + dotDate(g.at) + ")"; }).join("、")
+      : "";
   }
 
   // ---------- 配当レポート(SNS共有用の画像) ----------
@@ -4129,9 +4357,9 @@
     var W = 1080, H = 1350;
     canvas.width = W; canvas.height = H;
     var g = canvas.getContext("2d");
-    var FONT = '"Noto Sans JP", "Hiragino Sans", system-ui, sans-serif';
-    var C = { page: "#f6f7fb", card: "#ffffff", text: "#23282e", text2: "#5a6470", muted: "#97a0ad",
-              line: "#e5e8ef", field: "#f3f5f9", accent: "#e8543f", prev: "#cbd3de", good: "#16a34a", crit: "#dc2626" };
+    var FONT = '"Manrope", "Zen Kaku Gothic New", "Hiragino Sans", system-ui, sans-serif';
+    var C = { page: "#f4f5f7", card: "#ffffff", text: "#0d0f12", text2: "#5b6270", muted: "#8b909a",
+              line: "#e9eaee", field: "#f4f5f7", accent: "#1a5f7a", prev: "#cfdde3", good: "#1f8a5b", crit: "#c8322d" };
     function font(w, px) { g.font = w + " " + px + "px " + FONT; }
     function rr(x, y, w, h, r, fill) {
       r = Math.min(r, w / 2, h / 2);
@@ -4296,7 +4524,7 @@
     document.getElementById("reportHide").checked = !!state.reportHide;
     document.getElementById("reportDialog").showModal();
     var fontsReady = document.fonts && document.fonts.load
-      ? document.fonts.load('700 40px "Noto Sans JP"').catch(function () {}) : Promise.resolve();
+      ? Promise.all([document.fonts.load('800 40px "Manrope"'), document.fonts.load('700 40px "Zen Kaku Gothic New"')]).catch(function () {}) : Promise.resolve();
     paintReport();
     fontsReady.then(paintReport);
   }
@@ -4914,6 +5142,12 @@
       '<div class="panel">' +
       '  <h2><span class="chap">九</span>分散ガイドライン</h2>' +
       '  <div class="badges" id="guideBadges"></div>' +
+      '</div>' +
+      '<div class="panel">' +
+      '  <h2>節目の記録 <span class="hint">年間配当が節目を越えた日(このツールで記録した日)</span></h2>' +
+      '  <div class="records" id="milestoneChips"></div>' +
+      '  <p class="goal-history" id="goalHistoryLine"></p>' +
+      '  <p class="records-note">日付は、保有銘柄の入力や読み込みで節目を越えたことが分かった日です。購入日ではありません。</p>' +
       '</div>';
   }
 
@@ -5128,6 +5362,8 @@
       setTimeout(function () { area.focus({ preventScroll: true }); }, 350);
     }
   }
+
+  setTimeout(function () { document.body.classList.remove("intro"); }, 2200);
 
   function renderAll() {
     bindGoalInputs();
