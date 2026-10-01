@@ -313,6 +313,7 @@
   }
   .ctl-row .axis-tabs { margin-bottom: 0; gap: 6px; }
   .ctl-row .axis-tab { padding: 6px 13px; font-size: 12px; }
+  .sim-basis { margin: 4px 0 14px; }
 
   .treemap {
     position: relative; width: 100%; height: 460px;
@@ -1277,7 +1278,7 @@
       goals: { monthly: 50000, stockCount: 40, acquisition: 15000000 },
       guides: { sensitiveTarget: 50, maxStockPct: 5, maxSectorPct: 15 },
       // 将来見通しの前提。growth が null のときは実績の増配率を使う。
-      sim: { monthlyInvest: 30000, growth: null, reinvest: true },
+      sim: { monthlyInvest: 30000, growth: null, reinvest: true, basis: 5 },
       lastExport: null,
       isSample: false
     };
@@ -3662,7 +3663,7 @@
       holdings: [], sectorClass: {},
       goals: { monthly: 50000, stockCount: 40, acquisition: 15000000 },
       guides: { sensitiveTarget: 50, maxStockPct: 5, maxSectorPct: 15 },
-      sim: { monthlyInvest: 30000, growth: null, reinvest: true },
+      sim: { monthlyInvest: 30000, growth: null, reinvest: true, basis: 5 },
       lastExport: null,
       isSample: false
     };
@@ -4901,12 +4902,41 @@
   // ---------- 将来見通し ----------
   var SIM_MAX_YEARS = 40;
 
+  var SIM_BASES = [1, 3, 5, 10];
+
+  // 過去 years 年の年平均増配率(銘柄ごとの年率を、今の年間配当で重み付けして平均)。
+  // 1年は増配・減配の状況と同じ数字(前年配当の手入力も反映)。それより長い期間は内蔵の配当履歴から。
+  // 履歴が足りない銘柄は、ある分だけの年率で数え、何銘柄が短いかを返して表示に添える。
+  function historicalGrowth(agg, years) {
+    if (years <= 1) {
+      return { pct: agg.changeRatePct, used: agg.changes.length, short: 0, total: agg.rows.length };
+    }
+    var wSum = 0, gSum = 0, used = 0, short = 0;
+    agg.rows.forEach(function (r) {
+      var cur = num(r.div), weight = cur * num(r.shares);
+      var s = dividendsFor(String(r.code || "").trim().toUpperCase());
+      if (!(cur > 0) || !(weight > 0) || !s || s.length < 2) return;
+      var same = Math.abs(cur - s[0]) <= Math.max(0.011, s[0] * 0.005);
+      var vals = [cur].concat(same ? s.slice(1) : s);
+      var n = Math.min(years, vals.length - 1);
+      var old = vals[n];
+      if (!(old > 0)) return;
+      if (n < years) short++;
+      gSum += (Math.pow(cur / old, 1 / n) - 1) * weight;
+      wSum += weight;
+      used++;
+    });
+    return { pct: wSum > 0 ? gSum / wSum * 100 : null, used: used, short: short, total: agg.rows.length };
+  }
+
   // 各年: 前年の配当が増配率ぶん伸び、そこに新規投資(積立+再投資)の配当が乗る。
   function simulate(agg) {
     var yieldRate = agg.totalAcq > 0 ? agg.totalDivPre / agg.totalAcq : 0;
+    var basis = SIM_BASES.indexOf(num(state.sim.basis)) >= 0 ? num(state.sim.basis) : 5;
+    var hist = state.sim.growth != null ? null : historicalGrowth(agg, basis);
     var growth = state.sim.growth != null
       ? state.sim.growth / 100
-      : (agg.changeRatePct != null ? agg.changeRatePct / 100 : 0);
+      : (hist.pct != null ? hist.pct / 100 : 0);
     var monthly = num(state.sim.monthlyInvest);
     var goalAnnual = num(state.goals.monthly) * 12;
 
@@ -4928,7 +4958,7 @@
       if (reached === null && annualDiv >= goalAnnual && goalAnnual > 0) reached = y;
     }
     return {
-      series: series, reached: reached, growth: growth * 100,
+      series: series, reached: reached, growth: growth * 100, basis: basis, hist: hist,
       yieldRate: yieldRate * 100, goalAnnual: goalAnnual,
       // 追加投資だけで目標に届かせる場合に必要な額(増配・再投資を織り込まない)
       neededNow: goalAnnual > agg.totalDivPre ? (goalAnnual - agg.totalDivPre) / yieldRate : 0
@@ -4961,6 +4991,19 @@
       '<div class="stat"><div class="label">10年後の月間配当</div><div class="value">' + fmtYen(y10.div / 12) + '</div></div>' +
       '<div class="stat"><div class="label">今すぐ目標に届かせるなら</div><div class="value">' + (sim.neededNow > 0 ? "+" + fmtYen(sim.neededNow) : "達成済み") + '</div></div>';
     el.appendChild(summary);
+
+    var basisNote = document.createElement("p");
+    basisNote.className = "calendar-note sim-basis-note";
+    if (!sim.hist) {
+      basisNote.textContent = "増配率は手入力の 年" + fmtPct(sim.growth, 1) + " で計算しています。";
+    } else if (sim.hist.pct == null) {
+      basisNote.textContent = "比べられる配当の記録がないため、増配率0%で計算しています。";
+    } else {
+      basisNote.textContent = "増配率は" + (sim.basis === 1 ? "直近1年" : "過去" + sim.basis + "年平均") +
+        "の 年" + fmtPct(sim.growth, 1) + "(" + sim.hist.total + "銘柄中" + sim.hist.used + "銘柄の配当から" +
+        (sim.hist.short > 0 ? "・うち" + sim.hist.short + "銘柄は" + sim.basis + "年分の記録がなく、ある分で計算" : "") + ")。";
+    }
+    el.appendChild(basisNote);
 
     var chart = document.createElement("div");
     chart.className = "calendar-chart sim-chart";
@@ -5204,6 +5247,23 @@
       state.sim.reinvest = reinvest.checked;
       save(); renderSimulation(aggregate());
     });
+    var basisTabs = document.getElementById("simBasisTabs");
+    function paintBasis() {
+      var cur = SIM_BASES.indexOf(num(state.sim.basis)) >= 0 ? num(state.sim.basis) : 5;
+      basisTabs.querySelectorAll("button").forEach(function (b) {
+        b.classList.toggle("active", num(b.dataset.years) === cur && state.sim.growth == null);
+      });
+    }
+    basisTabs.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-years]");
+      if (!b) return;
+      state.sim.basis = num(b.dataset.years);
+      // 期間を選んだら手入力の増配率は外して、実績の平均に戻す
+      state.sim.growth = null; growth.value = "";
+      paintBasis(); save(); renderSimulation(aggregate());
+    });
+    growth.addEventListener("input", paintBasis);
+    paintBasis();
   }
 
   function dashboardTemplate() {
@@ -5257,12 +5317,15 @@
       '      <input type="number" id="simMonthlyInvest" min="0" step="10000">' +
       '    </label>' +
       '    <label class="field">想定増配率(%/年)' +
-      '      <input type="number" id="simGrowth" step="0.1" placeholder="空欄なら実績値">' +
+      '      <input type="number" id="simGrowth" step="0.1" placeholder="空欄なら実績">' +
       '    </label>' +
       '    <label class="field field-check">' +
       '      <span><input type="checkbox" id="simReinvest"> 受取配当を再投資する</span>' +
       '    </label>' +
       '  </div>' +
+      '  <div class="ctl-row sim-basis"><span class="ctl-label">増配率の実績</span><div class="axis-tabs" id="simBasisTabs">' +
+      SIM_BASES.map(function (y) { return '<button class="axis-tab" data-years="' + y + '">' + (y === 1 ? "直近1年" : y + "年平均") + '</button>'; }).join('') +
+      '</div></div>' +
       '  <div id="simBody"></div>' +
       '</div>' +
       '<div class="panel" data-view="analysis">' +
