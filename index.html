@@ -2606,7 +2606,7 @@
       tag.textContent = c.counts.bad > 0 ? "❌" + c.counts.bad + "項目" : (c.starPassing === c.starTotal ? "基準内" : "要確認");
       var t = document.createElement("span");
       t.textContent = "チェック " + String(c.date || "").slice(5).replace("-", "/") + " ・ ◎" + c.counts.good + " ○" + c.counts.ok +
-        " △" + c.counts.mid + " ❌" + c.counts.bad + " ・ 重要4項目 " + c.starPassing + "/" + c.starTotal;
+        " △" + c.counts.mid + " ❌" + c.counts.bad + " ・ 重要項目 " + c.starPassing + "/" + c.starTotal;
       box.appendChild(tag); box.appendChild(t);
       a.textContent = "見直す";
     } else {
