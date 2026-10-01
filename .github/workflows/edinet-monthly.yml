@@ -1,5 +1,6 @@
 # 毎月、直近に提出された有価証券報告書で内蔵データ(1株配当・配当性向・新規上場)を新しい期に進める。
 # リポジトリの Settings → Secrets and variables → Actions に EDINET_API_KEY が必要。
+# Actions の画面の「Run workflow」から手動でも動かせる。
 name: EDINETの月次更新
 on:
   schedule:
