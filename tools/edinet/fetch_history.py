@@ -136,6 +136,7 @@ def parse_csv(text):
         if el == "jpdei_cor:CurrentFiscalYearEndDateDEI":
             fyend = v
         elif el in ("jpcrp_cor:DividendPaidPerShareSummaryOfBusinessResults",
+                    "jpcrp_cor:InterimDividendPaidPerShareSummaryOfBusinessResults",
                     "jpcrp_cor:TotalNumberOfIssuedSharesSummaryOfBusinessResults"):
             vals[(el.split(":")[1], ctx)] = v
 
@@ -157,6 +158,7 @@ def parse_csv(text):
             "back": i,
             "dps": pick("DividendPaidPerShareSummaryOfBusinessResults", rel, "Duration"),
             "shares": pick("TotalNumberOfIssuedSharesSummaryOfBusinessResults", rel, "Instant"),
+            "interim": pick("InterimDividendPaidPerShareSummaryOfBusinessResults", rel, "Duration"),
         })
     return {"fyend": fyend, "periods": periods}
 
@@ -212,6 +214,16 @@ def within_filing(periods):
     ps = sorted(periods, key=lambda p: -p["back"])  # 古い順
     vals = [p["dps"] for p in ps]
     shares = [p["shares"] for p in ps]
+    # 期の途中で分割した年は、中間配当が分割前・期末配当が分割後の株数で払われ、年間の値が混ざる。
+    # 中間配当が分割前の水準(前期の年間配当の半分前後)なら、中間配当を倍率で割り戻して期末と足す
+    mixed = [False] * len(ps)
+    for t in range(1, len(ps)):
+        it = ps[t].get("interim")
+        f = snap(shares[t] / shares[t - 1]) if shares[t] and shares[t - 1] else 1.0
+        if (f and f >= 1.5 and it and vals[t] and vals[t - 1] and 0 < it < vals[t]
+                and it / vals[t - 1] > 0.5 / f ** 0.5):
+            vals[t] = round(it / f + (vals[t] - it), 2)
+            mixed[t] = True
     out = [None] * len(ps)
     factor = 1.0
     out[-1] = vals[-1]
@@ -221,7 +233,7 @@ def within_filing(periods):
         f = snap(shares[t + 1] / shares[t]) if shares[t] and shares[t + 1] else 1.0
         if f is None:
             break  # 株数が不自然に動いた(合併・併合など)ので、ここより古い期は使わない
-        if f > 1 and vals[t] > 0 and vals[t + 1] / vals[t] < 0.75:
+        if f > 1 and vals[t] > 0 and (mixed[t + 1] or vals[t + 1] / vals[t] < 0.75):
             factor *= f
         out[t] = vals[t] / factor
     return [(p["back"], v, s) for p, v, s in zip(ps, out, shares)]
