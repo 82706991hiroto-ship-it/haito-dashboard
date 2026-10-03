@@ -22,7 +22,7 @@ import fetch_history as fh  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STATE = os.path.join(ROOT, "tools", "edinet", "state.json")
 MANUAL = os.path.join(ROOT, "data", "manual-dividends.json")
-MAX_PERIODS = 25  # 自動は最大14期。手で足した過去の分も含めて残す上限
+MAX_PERIODS = 30  # 自動は最大14期。手で足した過去の分も含めて残す上限
 CODELIST = "https://disclosure2dl.edinet-fsa.go.jp/searchdocument/codelist/Edinetcode.zip"
 
 
