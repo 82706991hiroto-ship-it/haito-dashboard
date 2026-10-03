@@ -1450,5 +1450,280 @@
   "status": "not_found",
   "reason": "会社公式サイトの有報ページ(/jp/investors/ir-library/securities-report)は現在404。公式ドメイン上の有報PDF(annual-securities-report-fyXXXX-jp.pdf)はFY2017(2018-03)以降のみ存在し、target(2013年3月期)以前は見つからず。EDINETは保存期間切れ。",
   "sources": []
+ },
+ "4732": {
+  "name": "ユー・エス・エス",
+  "status": "ok",
+  "sources": [
+   {
+    "url": "https://www.ussnet.co.jp/ir/item/2015_4_financial.pdf",
+    "yuho_fy": "2015-03",
+    "kai": "第35期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2011-03",
+      "dps": 192.0,
+      "interim": 91.0,
+      "shares": 31325000,
+      "note": ""
+     },
+     {
+      "fy": "2012-03",
+      "dps": 244.0,
+      "interim": 110.0,
+      "shares": 31325000,
+      "note": ""
+     },
+     {
+      "fy": "2013-03",
+      "dps": 307.5,
+      "interim": 161.5,
+      "shares": 31325000,
+      "note": "記念配当30円を含む(中間配当にも含む)"
+     },
+     {
+      "fy": "2014-03",
+      "dps": 178.25,
+      "interim": 159.5,
+      "shares": 313250000,
+      "note": "中間159.50(分割前)+期末18.75(分割後)の単純合計。分割考慮なしの年間は347.00(注記)"
+     },
+     {
+      "fy": "2015-03",
+      "dps": 37.7,
+      "interim": 18.5,
+      "shares": 313250000,
+      "note": ""
+     }
+    ],
+    "notes": "第33期(2013-03)の配当額・中間配当額には記念配当30円を含む。平成25年10月1日付1株→10株の株式分割。第34期(2014-03)は中間159円50銭(分割前)+期末18円75銭(分割後)の単純合計178円25銭として記載、分割を考慮しない場合の年間配当は347円00銭(注記)。"
+   },
+   {
+    "url": "https://www.ussnet.co.jp/ir/item/2010_3financial.pdf",
+    "yuho_fy": "2010-03",
+    "kai": "第30期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2006-03",
+      "dps": 80.0,
+      "interim": 32.5,
+      "shares": 32486932,
+      "note": ""
+     },
+     {
+      "fy": "2007-03",
+      "dps": 100.0,
+      "interim": 50.0,
+      "shares": 32604062,
+      "note": ""
+     },
+     {
+      "fy": "2008-03",
+      "dps": 145.0,
+      "interim": 60.0,
+      "shares": 32695982,
+      "note": ""
+     },
+     {
+      "fy": "2009-03",
+      "dps": 165.0,
+      "interim": 82.5,
+      "shares": 32695982,
+      "note": ""
+     },
+     {
+      "fy": "2010-03",
+      "dps": 168.0,
+      "interim": 72.5,
+      "shares": 32695982,
+      "note": ""
+     }
+    ],
+    "notes": "表に記念配当・分割の注記なし。"
+   },
+   {
+    "url": "https://www.ussnet.co.jp/ir/item/2006_3financial.pdf",
+    "yuho_fy": "2006-03",
+    "kai": "第26期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2002-03",
+      "dps": 30.0,
+      "interim": 15.0,
+      "shares": 26825200,
+      "note": ""
+     },
+     {
+      "fy": "2003-03",
+      "dps": 40.0,
+      "interim": 20.0,
+      "shares": 27412942,
+      "note": ""
+     },
+     {
+      "fy": "2004-03",
+      "dps": 50.0,
+      "interim": 25.0,
+      "shares": 30815069,
+      "note": ""
+     },
+     {
+      "fy": "2005-03",
+      "dps": 65.0,
+      "interim": 30.0,
+      "shares": 31981969,
+      "note": ""
+     },
+     {
+      "fy": "2006-03",
+      "dps": 80.0,
+      "interim": 32.5,
+      "shares": 32486932,
+      "note": ""
+     }
+    ],
+    "notes": "第22期(2002-03)に(株)ユー・エス・エス・ジャパンを吸収合併(平成14年1月1日)。"
+   }
+  ]
+ },
+ "4848": {
+  "name": "フルキャストホールディングス",
+  "status": "ok",
+  "reason": "公式サイトの有報2本で2004-09〜2013-12を取得。2008-09〜2012-12は無配、2013-12に復配。",
+  "sources": [
+   {
+    "url": "https://www.fullcastholdings.co.jp/assets/upload/2022/04/2013yuho.pdf",
+    "yuho_fy": "2013-12",
+    "kai": "第21期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2009-09",
+      "dps": null,
+      "interim": null,
+      "shares": 395964,
+      "note": "表上「―」(無配)"
+     },
+     {
+      "fy": "2010-09",
+      "dps": null,
+      "interim": null,
+      "shares": 395964,
+      "note": "表上「―」(無配)"
+     },
+     {
+      "fy": "2011-09",
+      "dps": null,
+      "interim": null,
+      "shares": 395964,
+      "note": "表上「―」(無配)"
+     },
+     {
+      "fy": "2012-12",
+      "dps": null,
+      "interim": null,
+      "shares": 395964,
+      "note": "表上「―」(無配)、決算期変更による15ヶ月決算"
+     },
+     {
+      "fy": "2013-12",
+      "dps": 14.0,
+      "interim": null,
+      "shares": 38486400,
+      "note": ""
+     }
+    ],
+    "notes": "決算期変更(9月→12月)により第20期は平成23年10月1日〜平成24年12月31日の15ヶ月。平成25年7月1日付で1株→100株の株式分割。第17〜20期の配当は「―」(無配)。"
+   },
+   {
+    "url": "https://www.fullcastholdings.co.jp/assets/upload/2022/04/2008yuho.pdf",
+    "yuho_fy": "2008-09",
+    "kai": "第16期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2004-09",
+      "dps": 2000,
+      "interim": 1000,
+      "shares": 275964,
+      "note": "東証一部上場記念配当500円を含む"
+     },
+     {
+      "fy": "2005-09",
+      "dps": 2000,
+      "interim": 1000,
+      "shares": 275964,
+      "note": ""
+     },
+     {
+      "fy": "2006-09",
+      "dps": 3000,
+      "interim": 1500,
+      "shares": 275964,
+      "note": ""
+     },
+     {
+      "fy": "2007-09",
+      "dps": 3000,
+      "interim": 2000,
+      "shares": 275964,
+      "note": ""
+     },
+     {
+      "fy": "2008-09",
+      "dps": null,
+      "interim": null,
+      "shares": 275964,
+      "note": "表上「−」(無配)"
+     }
+    ],
+    "notes": "平成15年11月20日付1株→3株、平成16年5月20日付1株→2株の株式分割。第12期(2004-09)の2,000円には東証一部上場記念配当500円を含む。第16期(2008-09)は「−」(無配)。"
+   }
+  ]
+ },
+ "4901": {
+  "name": "富士フイルムホールディングス",
+  "status": "not_found",
+  "reason": "会社公式サイト(https://ir.fujifilm.com/ja/investors/ir-materials/securities-reports.html)の有報掲載は2016年3月期(第120期)以降のみ。target(2013年3月期)以前は掲載なし。EDINETは保存期間切れ。",
+  "sources": []
+ },
+ "4928": {
+  "name": "ノエビアホールディングス",
+  "status": "partial",
+  "reason": "持株会社は2011年3月設立のため有報の5期表は2期分のみ(2011-09, 2012-09)。それ以前は旧(株)ノエビアの有報が必要だが公式サイトに無し。",
+  "sources": [
+   {
+    "url": "https://www.noevirholdings.co.jp/ir/library/security-reports/pdf/2012/yuho2.pdf",
+    "yuho_fy": "2012-09",
+    "kai": "第2期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2011-09",
+      "dps": 36,
+      "interim": 0,
+      "shares": 41322000,
+      "note": "設立初年度(平成23年3月22日〜9月30日)"
+     },
+     {
+      "fy": "2012-09",
+      "dps": 40,
+      "interim": 0,
+      "shares": 37442000,
+      "note": "東証一部指定記念配当4円を含む"
+     }
+    ],
+    "notes": "当社は(株)ノエビアの単独株式移転により平成23年3月22日設立。第1期は平成23年3月22日〜9月30日。第2期の40円には東証一部指定記念配当4円を含む。中間配当は「(0)」と記載。IRページの一覧は2022年以降だが、同じ公式ドメイン上のPDF(pdf/2012/yuho2.pdf)の表紙で第2期を確認して使用。"
+   }
+  ]
+ },
+ "4967": {
+  "name": "小林製薬",
+  "status": "not_found",
+  "reason": "会社公式サイト(https://www.kobayashi.co.jp/ir/report/asr/)の有報掲載は2013年12月期以降のみ(2008〜2009年のPDFは404)。target(2008年12月期)の有報は掲載なし。EDINETは保存期間切れ。",
+  "sources": []
  }
 }
