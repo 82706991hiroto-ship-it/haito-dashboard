@@ -204,6 +204,23 @@ def snap(ratio):
     return None
 
 
+def share_factor(new, old):
+    """期末の発行済株式数の比(新/旧)から分割倍率を出す。
+
+    自社株の消却で株数が減った年(比が0.7〜1)と、増資などで少し増えた年(きりのいい倍率に寄らない1.3倍未満)は
+    分割ではないので1倍とみなす。併合(大きく減る)や合併などで大きく動いたときは None。
+    """
+    if not new or not old:
+        return 1.0
+    r = new / old
+    if 0.7 <= r <= 1.05:
+        return 1.0
+    n = snap(r)
+    if n:
+        return n
+    return 1.0 if 1.05 < r < 1.3 else None
+
+
 def within_filing(periods):
     """1本の有報の5期分を、その有報の当期の株数基準にそろえる(古い順のリストを返す)。
 
@@ -219,7 +236,7 @@ def within_filing(periods):
     mixed = [False] * len(ps)
     for t in range(1, len(ps)):
         it = ps[t].get("interim")
-        f = snap(shares[t] / shares[t - 1]) if shares[t] and shares[t - 1] else 1.0
+        f = share_factor(shares[t], shares[t - 1])
         if (f and f >= 1.5 and it and vals[t] and vals[t - 1] and 0 < it < vals[t]
                 and it / vals[t - 1] > 0.5 / f ** 0.5):
             vals[t] = round(it / f + (vals[t] - it), 2)
@@ -230,10 +247,11 @@ def within_filing(periods):
     for t in range(len(ps) - 2, -1, -1):
         if vals[t] is None or vals[t + 1] is None:
             break
-        f = snap(shares[t + 1] / shares[t]) if shares[t] and shares[t + 1] else 1.0
+        f = share_factor(shares[t + 1], shares[t])
         if f is None:
             break  # 株数が不自然に動いた(合併・併合など)ので、ここより古い期は使わない
-        if f > 1 and vals[t] > 0 and (mixed[t + 1] or vals[t + 1] / vals[t] < 0.75):
+        # 分割の年に配当がほぼ倍率ぶん下がっていれば実額(2倍の分割で20円→15円のように、増配込みで下がり方が浅い年もある)
+        if f > 1 and vals[t] > 0 and (mixed[t + 1] or vals[t + 1] / vals[t] < min(0.85, 1.6 / f)):
             factor *= f
         out[t] = vals[t] / factor
     return [(p["back"], v, s) for p, v, s in zip(ps, out, shares)]
@@ -287,17 +305,23 @@ def build_code(docs_parsed):
                 break
         out.append(round(series[fy], 2))
     # 期の途中で分割した年は、中間(分割前)と期末(分割後)の混ざった値になる(トヨタ148円など)。
-    # 株数が跳ねた期の前後1期以内で40%を超えて下がっていたら、その混在年より古い期を外す。
+    # 株数が跳ねた期の前後1期以内で25%を超えて下がっていたら、その混在年より古い期を外す
+    # (分割の年と配当が下がる年が1期ずれる会社もあるため、跳ねた期の隣まで見る)。
     def split_near(j):
         for a in range(max(1, j - 1), min(len(keys), j + 2)):
             s_new, s_old = shares.get(keys[a - 1]), shares.get(keys[a])
             if s_new and s_old:
-                f = snap(s_new / s_old)
+                f = share_factor(s_new, s_old)
                 if f is None or f > 1:
                     return True
         return False
     for j in range(1, len(out)):
-        if out[j] > 0 and out[j - 1] / out[j] < 0.6 and split_near(j):
+        if out[j] > 0 and out[j - 1] / out[j] < 0.75 and split_near(j):
+            out = out[:j]
+            break
+    # 古い期が5倍以上大きいのは、分割を割り戻せていない実額とみなし、それより古い期を外す
+    for j in range(1, len(out)):
+        if out[j] > 0 and out[j - 1] / out[j] < 0.2:
             out = out[:j]
             break
     # 3倍を超える増配は上場前の年度などの混入とみなし、それより古い期を外す
@@ -342,7 +366,8 @@ def cmd_apply(history_path, html_path):
         old = v[3] if len(v) > 3 and isinstance(v[3], list) else None
         if old:
             # 既存の取り込み(分割の個別対応済み)と重なる期が一致するときだけ延ばす
-            ok = len(new) >= len(old) and all(
+            # 重なる期が2期以下だと照合にならないので、既存が3期以上ある銘柄だけ延ばす
+            ok = len(old) >= 3 and len(new) >= len(old) and all(
                 abs(a - b) <= max(0.02 * abs(b), 0.011) for a, b in zip(new, old))
             if not ok:
                 stats["kept_mismatch"] += 1
