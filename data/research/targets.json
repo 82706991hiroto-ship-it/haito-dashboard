@@ -1,0 +1,733 @@
+{
+ "_説明": "連続増配が記録の始まりまで続いていて、本当の期数が分からない会社。これより古い年の1株配当を、会社公式の有価証券報告書から調べる。",
+ "companies": [
+  {
+   "code": "1721",
+   "name": "コムシスホールディングス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 20.0,
+    "2014-03": 25.0,
+    "2015-03": 30.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "1926",
+   "name": "ライト工業",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 8.0,
+    "2014-03": 10.0,
+    "2015-03": 14.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "1944",
+   "name": "きんでん",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 16.0,
+    "2014-03": 18.0,
+    "2015-03": 20.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "1951",
+   "name": "エクシオグループ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 11.0,
+    "2014-03": 12.0,
+    "2015-03": 16.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "2130",
+   "name": "メンバーズ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 2.0,
+    "2014-03": 2.5,
+    "2015-03": 3.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "2353",
+   "name": "日本駐車場開発",
+   "fy_month": 7,
+   "oldest_recorded_fy": "2012-07",
+   "oldest_values_split_adjusted": {
+    "2012-07": 2.0,
+    "2013-07": 2.5,
+    "2014-07": 2.7
+   },
+   "target_yuho_fy": "2012-07",
+   "want_years": "2002-07 〜 2011-07"
+  },
+  {
+   "code": "2391",
+   "name": "プラネット",
+   "fy_month": 7,
+   "oldest_recorded_fy": "2012-07",
+   "oldest_values_split_adjusted": {
+    "2012-07": 30.0,
+    "2013-07": 34.0,
+    "2014-07": 35.0
+   },
+   "target_yuho_fy": "2012-07",
+   "want_years": "2002-07 〜 2011-07"
+  },
+  {
+   "code": "2477",
+   "name": "手間いらず",
+   "fy_month": 6,
+   "oldest_recorded_fy": "2015-06",
+   "oldest_values_split_adjusted": {
+    "2015-06": 2.5,
+    "2016-06": 3.5,
+    "2017-06": 10.0
+   },
+   "target_yuho_fy": "2015-06",
+   "want_years": "2005-06 〜 2014-06"
+  },
+  {
+   "code": "2659",
+   "name": "サンエー",
+   "fy_month": 2,
+   "oldest_recorded_fy": "2009-02",
+   "oldest_values_split_adjusted": {
+    "2009-02": 8.75,
+    "2010-02": 9.25,
+    "2011-02": 10.5
+   },
+   "target_yuho_fy": "2009-02",
+   "want_years": "1999-02 〜 2008-02"
+  },
+  {
+   "code": "3231",
+   "name": "野村不動産ホールディングス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 6.0,
+    "2014-03": 7.0,
+    "2015-03": 9.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "3349",
+   "name": "コスモス薬品",
+   "fy_month": 5,
+   "oldest_recorded_fy": "2013-05",
+   "oldest_values_split_adjusted": {
+    "2013-05": 12.5,
+    "2014-05": 13.75,
+    "2015-05": 15.0
+   },
+   "target_yuho_fy": "2013-05",
+   "want_years": "2003-05 〜 2012-05"
+  },
+  {
+   "code": "3417",
+   "name": "大木ヘルスケアホールディングス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2016-03",
+   "oldest_values_split_adjusted": {
+    "2016-03": 12.0,
+    "2017-03": 13.0,
+    "2018-03": 17.0
+   },
+   "target_yuho_fy": "2016-03",
+   "want_years": "2006-03 〜 2015-03"
+  },
+  {
+   "code": "3663",
+   "name": "セルシス",
+   "fy_month": 12,
+   "oldest_recorded_fy": "2015-12",
+   "oldest_values_split_adjusted": {
+    "2015-12": 0.5,
+    "2016-12": 0.75,
+    "2017-12": 1.0
+   },
+   "target_yuho_fy": "2015-12",
+   "want_years": "2005-12 〜 2014-12"
+  },
+  {
+   "code": "3836",
+   "name": "アバントグループ",
+   "fy_month": 6,
+   "oldest_recorded_fy": "2015-06",
+   "oldest_values_split_adjusted": {
+    "2015-06": 2.25,
+    "2016-06": 2.75,
+    "2017-06": 4.0
+   },
+   "target_yuho_fy": "2015-06",
+   "want_years": "2005-06 〜 2014-06"
+  },
+  {
+   "code": "3901",
+   "name": "マークラインズ",
+   "fy_month": 12,
+   "oldest_recorded_fy": "2014-12",
+   "oldest_values_split_adjusted": {
+    "2014-12": 7.0,
+    "2015-12": 8.75,
+    "2016-12": 10.5
+   },
+   "target_yuho_fy": "2014-12",
+   "want_years": "2004-12 〜 2013-12"
+  },
+  {
+   "code": "3925",
+   "name": "ダブルスタンダード",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2016-03",
+   "oldest_values_split_adjusted": {
+    "2016-03": 6.5,
+    "2017-03": 8.25,
+    "2018-03": 10.0
+   },
+   "target_yuho_fy": "2016-03",
+   "want_years": "2006-03 〜 2015-03"
+  },
+  {
+   "code": "4204",
+   "name": "積水化学工業",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 18.0,
+    "2014-03": 23.0,
+    "2015-03": 27.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "4205",
+   "name": "日本ゼオン",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 12.0,
+    "2014-03": 13.0,
+    "2015-03": 14.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "4206",
+   "name": "アイカ工業",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 36.0,
+    "2014-03": 38.0,
+    "2015-03": 43.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "4212",
+   "name": "積水樹脂",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 26.0,
+    "2014-03": 30.0,
+    "2015-03": 33.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "4345",
+   "name": "シーティーエス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 2.81,
+    "2014-03": 3.88,
+    "2015-03": 5.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "4452",
+   "name": "花王",
+   "fy_month": 12,
+   "oldest_recorded_fy": "2012-12",
+   "oldest_values_split_adjusted": {
+    "2012-12": 62.0,
+    "2013-12": 64.0,
+    "2014-12": 70.0
+   },
+   "target_yuho_fy": "2012-12",
+   "want_years": "2002-12 〜 2011-12"
+  },
+  {
+   "code": "4503",
+   "name": "アステラス製薬",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 26.0,
+    "2014-03": 27.0,
+    "2015-03": 30.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "4732",
+   "name": "ユー・エス・エス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2015-03",
+   "oldest_values_split_adjusted": {
+    "2015-03": 18.85,
+    "2016-03": 20.4,
+    "2017-03": 23.2
+   },
+   "target_yuho_fy": "2015-03",
+   "want_years": "2005-03 〜 2014-03"
+  },
+  {
+   "code": "4848",
+   "name": "フルキャストホールディングス",
+   "fy_month": 12,
+   "oldest_recorded_fy": "2013-12",
+   "oldest_values_split_adjusted": {
+    "2013-12": 14.0,
+    "2014-12": 16.0,
+    "2015-12": 18.0
+   },
+   "target_yuho_fy": "2013-12",
+   "want_years": "2003-12 〜 2012-12"
+  },
+  {
+   "code": "4901",
+   "name": "富士フイルムホールディングス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 13.33,
+    "2014-03": 16.67,
+    "2015-03": 20.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "4928",
+   "name": "ノエビアホールディングス",
+   "fy_month": 9,
+   "oldest_recorded_fy": "2012-09",
+   "oldest_values_split_adjusted": {
+    "2012-09": 40.0,
+    "2013-09": 50.0,
+    "2014-09": 60.0
+   },
+   "target_yuho_fy": "2012-09",
+   "want_years": "2002-09 〜 2011-09"
+  },
+  {
+   "code": "4967",
+   "name": "小林製薬",
+   "fy_month": 12,
+   "oldest_recorded_fy": "2008-12",
+   "oldest_values_split_adjusted": {
+    "2008-12": 29.0,
+    "2009-12": 31.0,
+    "2010-12": 33.0
+   },
+   "target_yuho_fy": "2008-12",
+   "want_years": "1998-12 〜 2007-12"
+  },
+  {
+   "code": "5344",
+   "name": "ＭＡＲＵＷＡ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 30.0,
+    "2014-03": 34.0,
+    "2015-03": 36.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "5947",
+   "name": "リンナイ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2008-03",
+   "oldest_values_split_adjusted": {
+    "2008-03": 12.0,
+    "2009-03": 13.33,
+    "2010-03": 14.0
+   },
+   "target_yuho_fy": "2008-03",
+   "want_years": "1998-03 〜 2007-03"
+  },
+  {
+   "code": "5970",
+   "name": "ジーテクト",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 17.0,
+    "2014-03": 20.0,
+    "2015-03": 24.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "6050",
+   "name": "イー・ガーディアン",
+   "fy_month": 9,
+   "oldest_recorded_fy": "2013-09",
+   "oldest_values_split_adjusted": {
+    "2013-09": 1.67,
+    "2014-09": 2.0,
+    "2015-09": 2.33
+   },
+   "target_yuho_fy": "2013-09",
+   "want_years": "2003-09 〜 2012-09"
+  },
+  {
+   "code": "6078",
+   "name": "バリューＨＲ",
+   "fy_month": 12,
+   "oldest_recorded_fy": "2013-12",
+   "oldest_values_split_adjusted": {
+    "2013-12": 1.56,
+    "2014-12": 1.88,
+    "2015-12": 3.75
+   },
+   "target_yuho_fy": "2013-12",
+   "want_years": "2003-12 〜 2012-12"
+  },
+  {
+   "code": "6294",
+   "name": "オカダアイヨン",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 10.0,
+    "2014-03": 12.0,
+    "2015-03": 18.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "6370",
+   "name": "栗田工業",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 42.0,
+    "2014-03": 44.0,
+    "2015-03": 46.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "6996",
+   "name": "ニチコン",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 15.0,
+    "2014-03": 16.0,
+    "2015-03": 18.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "7164",
+   "name": "全国保証",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 10.75,
+    "2014-03": 15.0,
+    "2015-03": 24.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "7208",
+   "name": "カネミツ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 14.5,
+    "2014-03": 15.0,
+    "2015-03": 16.5
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "7313",
+   "name": "テイ・エス　テック",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 17.0,
+    "2014-03": 27.0,
+    "2015-03": 30.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "7459",
+   "name": "メディパルホールディングス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 20.0,
+    "2014-03": 23.0,
+    "2015-03": 24.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "7504",
+   "name": "高速",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 20.0,
+    "2014-03": 21.0,
+    "2015-03": 22.5
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "7532",
+   "name": "パン・パシフィック・インターナショナルホールディングス",
+   "fy_month": 6,
+   "oldest_recorded_fy": "2013-06",
+   "oldest_values_split_adjusted": {
+    "2013-06": 0.83,
+    "2014-06": 0.9,
+    "2015-06": 1.0
+   },
+   "target_yuho_fy": "2013-06",
+   "want_years": "2003-06 〜 2012-06"
+  },
+  {
+   "code": "8012",
+   "name": "長瀬産業",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 26.0,
+    "2014-03": 28.0,
+    "2015-03": 30.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "8113",
+   "name": "ユニ・チャーム",
+   "fy_month": 12,
+   "oldest_recorded_fy": "2015-12",
+   "oldest_values_split_adjusted": {
+    "2015-12": 4.93,
+    "2016-12": 5.33,
+    "2017-12": 6.67
+   },
+   "target_yuho_fy": "2015-12",
+   "want_years": "2005-12 〜 2014-12"
+  },
+  {
+   "code": "8130",
+   "name": "サンゲツ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2016-03",
+   "oldest_values_split_adjusted": {
+    "2016-03": 47.5,
+    "2017-03": 52.5,
+    "2018-03": 55.5
+   },
+   "target_yuho_fy": "2016-03",
+   "want_years": "2006-03 〜 2015-03"
+  },
+  {
+   "code": "8252",
+   "name": "丸井グループ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 15.0,
+    "2014-03": 18.0,
+    "2015-03": 19.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "8418",
+   "name": "山口フィナンシャルグループ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 12.0,
+    "2014-03": 13.0,
+    "2015-03": 14.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "8424",
+   "name": "芙蓉総合リース",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 23.33,
+    "2014-03": 24.67,
+    "2015-03": 26.67
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "8425",
+   "name": "みずほリース",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2008-03",
+   "oldest_values_split_adjusted": {
+    "2008-03": 6.33,
+    "2009-03": 6.67,
+    "2010-03": 7.33
+   },
+   "target_yuho_fy": "2008-03",
+   "want_years": "1998-03 〜 2007-03"
+  },
+  {
+   "code": "8566",
+   "name": "リコーリース",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2006-03",
+   "oldest_values_split_adjusted": {
+    "2006-03": 28.0,
+    "2007-03": 31.0,
+    "2008-03": 35.0
+   },
+   "target_yuho_fy": "2006-03",
+   "want_years": "1996-03 〜 2005-03"
+  },
+  {
+   "code": "8771",
+   "name": "イー・ギャランティ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 4.38,
+    "2014-03": 5.5,
+    "2015-03": 7.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "8804",
+   "name": "東京建物",
+   "fy_month": 12,
+   "oldest_recorded_fy": "2015-12",
+   "oldest_values_split_adjusted": {
+    "2015-12": 16.0,
+    "2016-12": 26.0,
+    "2017-12": 30.0
+   },
+   "target_yuho_fy": "2015-12",
+   "want_years": "2005-12 〜 2014-12"
+  },
+  {
+   "code": "9432",
+   "name": "ＮＴＴ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2016-03",
+   "oldest_values_split_adjusted": {
+    "2016-03": 2.2,
+    "2017-03": 2.4,
+    "2018-03": 3.0
+   },
+   "target_yuho_fy": "2016-03",
+   "want_years": "2006-03 〜 2015-03"
+  },
+  {
+   "code": "9433",
+   "name": "ＫＤＤＩ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2014-03",
+   "oldest_values_split_adjusted": {
+    "2014-03": 21.67,
+    "2015-03": 28.33,
+    "2016-03": 35.0
+   },
+   "target_yuho_fy": "2014-03",
+   "want_years": "2004-03 〜 2013-03"
+  },
+  {
+   "code": "9435",
+   "name": "光通信",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 94.0,
+    "2014-03": 140.0,
+    "2015-03": 160.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  },
+  {
+   "code": "9989",
+   "name": "サンドラッグ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2013-03",
+   "oldest_values_split_adjusted": {
+    "2013-03": 24.0,
+    "2014-03": 28.0,
+    "2015-03": 30.0
+   },
+   "target_yuho_fy": "2013-03",
+   "want_years": "2003-03 〜 2012-03"
+  }
+ ]
+}
