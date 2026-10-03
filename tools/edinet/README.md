@@ -34,9 +34,9 @@ EDINETは提出から約10年で書類を消すため、提出日の範囲(`WIND
 
 2026年9月の実行結果: 2,207銘柄を3期より長く延長(うち887銘柄が14期)。直近が既存の値と食い違う銘柄は据え置き。それより前の推移は IR BANK へのリンクで補う。
 
-## 毎月の更新(GitHub Actions)
+## 毎週の更新(GitHub Actions)
 
-`.github/workflows/edinet-monthly.yml` が毎月3日に `monthly.py` を動かし、変わっていればコミットして公開する。
+`.github/workflows/edinet-monthly.yml` が毎週月曜に `monthly.py` を動かし、変わっていればコミットして公開する。
 Actions の画面の「Run workflow」から手動でも動かせる(見る日数も指定可)。
 
 - 直近45日に提出された有報のうち、`state.json`(証券コード → 取り込んだ有報の期末日)より新しい期のものだけ読む。
