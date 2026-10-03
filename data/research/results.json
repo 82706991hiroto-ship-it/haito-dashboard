@@ -1,0 +1,537 @@
+{
+ "1721": {
+  "name": "コムシスホールディングス",
+  "status": "partial",
+  "reason": "会社公式サイト(eir-parts)の有報掲載は2013年3月期が最古。2008年3月期以前の有報は公式サイトに無く、EDINETも保存期間(10年)切れで取得不可。",
+  "sources": [
+   {
+    "url": "https://ssl4.eir-parts.net/doc/1721/yuho_pdf/S000DUZB/00.pdf",
+    "yuho_fy": "2013-03",
+    "kai": "第10期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2009-03",
+      "dps": 20.0,
+      "interim": 10.0,
+      "shares": 145977000,
+      "note": "創立5周年記念配当3円を含む"
+     },
+     {
+      "fy": "2010-03",
+      "dps": 20.0,
+      "interim": 10.0,
+      "shares": 145977000,
+      "note": ""
+     },
+     {
+      "fy": "2011-03",
+      "dps": 20.0,
+      "interim": 10.0,
+      "shares": 145977000,
+      "note": ""
+     },
+     {
+      "fy": "2012-03",
+      "dps": 20.0,
+      "interim": 10.0,
+      "shares": 145977000,
+      "note": ""
+     },
+     {
+      "fy": "2013-03",
+      "dps": 20.0,
+      "interim": 10.0,
+      "shares": 145977000,
+      "note": ""
+     }
+    ],
+    "notes": "第6期(2009-03)の1株配当20円には創立5周年の記念配当3円を含む。"
+   }
+  ]
+ },
+ "1926": {
+  "name": "ライト工業",
+  "status": "ok",
+  "sources": [
+   {
+    "url": "https://ssl4.eir-parts.net/doc/1926/yuho_pdf/S000DTM0/00.pdf",
+    "yuho_fy": "2013-03",
+    "kai": "第66期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2009-03",
+      "dps": 8,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     },
+     {
+      "fy": "2010-03",
+      "dps": 8,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     },
+     {
+      "fy": "2011-03",
+      "dps": 8,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     },
+     {
+      "fy": "2012-03",
+      "dps": 8,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     },
+     {
+      "fy": "2013-03",
+      "dps": 8,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     }
+    ],
+    "notes": "中間配当は各期とも「-」。第62期(2009-03)は当期純損失。"
+   },
+   {
+    "url": "https://ssl4.eir-parts.net/doc/1926/yuho_pdf/S0000Q0N/00.pdf",
+    "yuho_fy": "2008-03",
+    "kai": "第61期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2004-03",
+      "dps": 10,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     },
+     {
+      "fy": "2005-03",
+      "dps": 10,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     },
+     {
+      "fy": "2006-03",
+      "dps": 10,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     },
+     {
+      "fy": "2007-03",
+      "dps": 8,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     },
+     {
+      "fy": "2008-03",
+      "dps": 8,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     }
+    ],
+    "notes": "中間配当は各期とも「−」。第59期・第61期は当期純損失。"
+   },
+   {
+    "url": "https://ssl4.eir-parts.net/doc/1926/yuho_pdf/00305D4K/00.pdf",
+    "yuho_fy": "2003-03",
+    "kai": "第56期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "1999-03",
+      "dps": 14,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     },
+     {
+      "fy": "2000-03",
+      "dps": 14,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     },
+     {
+      "fy": "2001-03",
+      "dps": 12,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     },
+     {
+      "fy": "2002-03",
+      "dps": 12,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     },
+     {
+      "fy": "2003-03",
+      "dps": 10,
+      "interim": null,
+      "shares": 57804450,
+      "note": ""
+     }
+    ],
+    "notes": "画像PDF(スキャン)のため目視で読み取り。中間配当は各期とも「—」。",
+    "read_from": "scanned image (目視)"
+   }
+  ]
+ },
+ "1944": {
+  "name": "きんでん",
+  "status": "partial",
+  "reason": "会社公式サイトの有報掲載は第100期(2014年3月期)が最古で、target の2013年3月期(第99期)以前の有報は掲載なし。2014年3月期有報の5期分(2010-03〜2014-03)のみ記録。EDINETは保存期間切れ。",
+  "sources": [
+   {
+    "url": "https://www.kinden.co.jp/pdf/100.pdf",
+    "yuho_fy": "2014-03",
+    "kai": "第100期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2010-03",
+      "dps": 16,
+      "interim": 6.5,
+      "shares": 266065000,
+      "note": "創業65周年記念配当1円・特別配当4円を含む"
+     },
+     {
+      "fy": "2011-03",
+      "dps": 14,
+      "interim": 6.0,
+      "shares": 266065000,
+      "note": "特別配当2円を含む"
+     },
+     {
+      "fy": "2012-03",
+      "dps": 14,
+      "interim": 6.0,
+      "shares": 266065000,
+      "note": "特別配当2円を含む"
+     },
+     {
+      "fy": "2013-03",
+      "dps": 16,
+      "interim": 6.0,
+      "shares": 266065000,
+      "note": "特別配当4円を含む"
+     },
+     {
+      "fy": "2014-03",
+      "dps": 18,
+      "interim": 6.0,
+      "shares": 218141000,
+      "note": "特別配当4円・創業70周年記念配当2円を含む"
+     }
+    ],
+    "notes": "2010-03: 中間6円50銭(普通5円50銭+創業65周年記念1円)、期末9円50銭(普通5円50銭+特別4円)。2011-03・2012-03: 中間6円、期末8円(普通6円+特別2円)。2013-03: 中間6円、期末10円(普通6円+特別4円)。2014-03: 中間6円、期末12円(普通6円+特別4円+創業70周年記念2円)。2014-03に発行済株式総数が266,065千株→218,141千株(表の注記に理由の記載なし)。"
+   }
+  ]
+ },
+ "1951": {
+  "name": "エクシオグループ",
+  "status": "partial",
+  "reason": "会社公式サイトの有報掲載は2014年3月期(第60期)が最古で、targetの2013年3月期以前は掲載なし。2014年3月期有報の5期分(2010-03〜2014-03)のみ記録。EDINETは保存期間切れ。",
+  "sources": [
+   {
+    "url": "https://www.exeo.co.jp/wp-content/uploads/2020/03/yuuhou2603.pdf",
+    "yuho_fy": "2014-03",
+    "kai": "第60期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2010-03",
+      "dps": 20.0,
+      "interim": 10.0,
+      "shares": 117812000,
+      "note": ""
+     },
+     {
+      "fy": "2011-03",
+      "dps": 20.0,
+      "interim": 10.0,
+      "shares": 117812000,
+      "note": ""
+     },
+     {
+      "fy": "2012-03",
+      "dps": 20.0,
+      "interim": 10.0,
+      "shares": 117812000,
+      "note": ""
+     },
+     {
+      "fy": "2013-03",
+      "dps": 22.0,
+      "interim": 10.0,
+      "shares": 117812000,
+      "note": ""
+     },
+     {
+      "fy": "2014-03",
+      "dps": 24.0,
+      "interim": 12.0,
+      "shares": 117812000,
+      "note": ""
+     }
+    ],
+    "notes": "表に記念配当・特別配当・分割の注記なし。"
+   }
+  ]
+ },
+ "2130": {
+  "name": "メンバーズ",
+  "status": "not_found",
+  "reason": "会社公式サイト(https://www.members.co.jp/ir/library)のIRライブラリは2021年以降のみで、target(2013年3月期)の有報は掲載なし。EDINETは保存期間切れ。",
+  "sources": []
+ },
+ "2353": {
+  "name": "日本駐車場開発",
+  "status": "not_found",
+  "reason": "会社公式サイト(https://n-p-d.co.jp/ir/result/)の決算短信・有価証券報告書は2022年7月期以降のみで、target(2012年7月期)の有報は掲載なし。EDINETは保存期間切れ。",
+  "sources": []
+ },
+ "2391": {
+  "name": "プラネット",
+  "status": "not_found",
+  "reason": "会社公式サイト(https://www.planet-van.co.jp/ir/financial.html)の有価証券報告書等は2017年7月期以降のみで、target(2012年7月期)の有報は掲載なし。EDINETは保存期間切れ。",
+  "sources": []
+ },
+ "2477": {
+  "name": "手間いらず",
+  "status": "ok",
+  "reason": "2003年8月設立。第1期(2004-06)〜2015-06を公式サイトの有報3本で取得。2014-06以前は全期無配(表上「-」)。",
+  "sources": [
+   {
+    "url": "https://www.temairazu.co.jp/pdf/533/ir-news",
+    "yuho_fy": "2015-06",
+    "kai": "第12期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2011-06",
+      "dps": null,
+      "interim": null,
+      "shares": 32382,
+      "note": ""
+     },
+     {
+      "fy": "2012-06",
+      "dps": null,
+      "interim": null,
+      "shares": 32382,
+      "note": ""
+     },
+     {
+      "fy": "2013-06",
+      "dps": null,
+      "interim": null,
+      "shares": 32382,
+      "note": ""
+     },
+     {
+      "fy": "2014-06",
+      "dps": null,
+      "interim": null,
+      "shares": 3238200,
+      "note": ""
+     },
+     {
+      "fy": "2015-06",
+      "dps": 5.0,
+      "interim": null,
+      "shares": 3238200,
+      "note": ""
+     }
+    ],
+    "notes": "平成25年7月1日付で1株→100株、平成27年7月1日付で1株→2株の株式分割(配当額は分割前の実額)。第8〜11期は配当なし(-)。"
+   },
+   {
+    "url": "https://www.temairazu.co.jp/pdf/650/ir-news",
+    "yuho_fy": "2010-06",
+    "kai": "第7期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2006-06",
+      "dps": null,
+      "interim": null,
+      "shares": 31380,
+      "note": ""
+     },
+     {
+      "fy": "2007-06",
+      "dps": null,
+      "interim": null,
+      "shares": 31860,
+      "note": ""
+     },
+     {
+      "fy": "2008-06",
+      "dps": null,
+      "interim": null,
+      "shares": 31948,
+      "note": ""
+     },
+     {
+      "fy": "2009-06",
+      "dps": null,
+      "interim": null,
+      "shares": 32382,
+      "note": ""
+     },
+     {
+      "fy": "2010-06",
+      "dps": null,
+      "interim": null,
+      "shares": 32382,
+      "note": ""
+     }
+    ],
+    "notes": "第3〜7期は配当を実施していない(注記)。当時の社名は比較.com株式会社。"
+   },
+   {
+    "url": "https://www.temairazu.co.jp/pdf/777/ir-news",
+    "yuho_fy": "2006-06",
+    "kai": "第3期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2004-06",
+      "dps": null,
+      "interim": null,
+      "shares": 190,
+      "note": "設立初年度"
+     },
+     {
+      "fy": "2005-06",
+      "dps": null,
+      "interim": null,
+      "shares": 13690,
+      "note": ""
+     },
+     {
+      "fy": "2006-06",
+      "dps": null,
+      "interim": null,
+      "shares": 31380,
+      "note": ""
+     }
+    ],
+    "notes": "当時の社名は比較.com株式会社。第1期は平成15年8月4日〜平成16年6月30日(設立初年度)。平成17年6月14日付1株→5株、平成17年11月29日付1株→2株の株式分割。配当は実施していない(注記)。"
+   }
+  ]
+ },
+ "2659": {
+  "name": "サンエー",
+  "status": "not_found",
+  "reason": "会社公式サイト(https://www.san-a.co.jp/ir/info/ 「有報」)の掲載は2021年2月期(第51期)以降のみ。target(2009年2月期)の有報は掲載なし。EDINETは保存期間切れ。",
+  "sources": []
+ },
+ "3231": {
+  "name": "野村不動産ホールディングス",
+  "status": "ok",
+  "reason": "2004年6月設立のため2005年3月期以前は存在しない。2005-03〜2013-03を公式サイトの有報2本で取得。",
+  "sources": [
+   {
+    "url": "https://www.nomura-re-hd.co.jp/ir/pdf/hokoku_1303.pdf",
+    "yuho_fy": "2013-03",
+    "kai": "第9期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2009-03",
+      "dps": 40.0,
+      "interim": 20.0,
+      "shares": 149371000,
+      "note": ""
+     },
+     {
+      "fy": "2010-03",
+      "dps": 25.0,
+      "interim": 20.0,
+      "shares": 190331000,
+      "note": ""
+     },
+     {
+      "fy": "2011-03",
+      "dps": 25.0,
+      "interim": 12.5,
+      "shares": 190387000,
+      "note": ""
+     },
+     {
+      "fy": "2012-03",
+      "dps": 25.0,
+      "interim": 12.5,
+      "shares": 190456000,
+      "note": ""
+     },
+     {
+      "fy": "2013-03",
+      "dps": 30.0,
+      "interim": 15.0,
+      "shares": 190595000,
+      "note": ""
+     }
+    ],
+    "notes": "表に記念配当・特別配当・分割の注記なし。"
+   },
+   {
+    "url": "https://www.nomura-re-hd.co.jp/ir/pdf/yuka_0803.pdf",
+    "yuho_fy": "2008-03",
+    "kai": "第4期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2005-03",
+      "dps": null,
+      "interim": null,
+      "shares": 226650,
+      "note": "設立初年度(10ヶ月決算)、配当なし(-)"
+     },
+     {
+      "fy": "2006-03",
+      "dps": 2000.0,
+      "interim": null,
+      "shares": 226650,
+      "note": "1株→500株分割(2006-04-01)前の値"
+     },
+     {
+      "fy": "2007-03",
+      "dps": 20.0,
+      "interim": null,
+      "shares": 149325000,
+      "note": ""
+     },
+     {
+      "fy": "2008-03",
+      "dps": 30.0,
+      "interim": 15.0,
+      "shares": 149325000,
+      "note": ""
+     }
+    ],
+    "notes": "平成16年6月1日設立、第1期(2005-03)は10ヶ月の変則決算。平成18年4月1日付で1株→500株の株式分割(2006-03の配当2,000円は分割前の値)。第1期・第2期は非上場。"
+   }
+  ]
+ },
+ "3417": {
+  "name": "大木ヘルスケアホールディングス",
+  "status": "not_found",
+  "reason": "会社公式サイト(http://www.ohki-net.co.jp/ir/report.html)は最新期(第11期)の有報のみ掲載。target(2016年3月期・第1期)の有報は掲載なし。EDINETは保存期間切れ。なお当社は2015年設立の持株会社。",
+  "sources": []
+ }
+}
