@@ -5,6 +5,10 @@ name: EDINETの週次更新
 on:
   schedule:
     - cron: "23 1 * * 1"   # 毎週月曜 10:23(日本時間)
+  # 手で足す過去の配当(data/manual-dividends.json)を保存したら、その分だけすぐ反映する
+  push:
+    branches: [main]
+    paths: [data/manual-dividends.json]
   workflow_dispatch:
     inputs:
       days:
@@ -27,7 +31,12 @@ jobs:
       - name: 有報で内蔵データを更新
         env:
           EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
-        run: python3 tools/edinet/monthly.py --days "${{ inputs.days || '45' }}"
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            python3 tools/edinet/monthly.py --manual-only
+          else
+            python3 tools/edinet/monthly.py --days "${{ inputs.days || '45' }}"
+          fi
       - name: 変わっていればコミットして公開
         env:
           GH_TOKEN: ${{ github.token }}

@@ -21,6 +21,8 @@ import fetch_history as fh  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STATE = os.path.join(ROOT, "tools", "edinet", "state.json")
+MANUAL = os.path.join(ROOT, "data", "manual-dividends.json")
+MAX_PERIODS = 20  # 自動は最大14期。手で足した過去の分も含めて残す上限
 CODELIST = "https://disclosure2dl.edinet-fsa.go.jp/searchdocument/codelist/Edinetcode.zip"
 
 
@@ -151,11 +153,63 @@ def months_of(fyend, interim):
     return sorted(ms)
 
 
+def fy_key(s):
+    """「2011-03」「2011/3」「2011年3月」などを「2011-03」に"""
+    m = re.match(r"^\s*(\d{4})\D+(\d{1,2})", str(s))
+    return "%s-%02d" % (m.group(1), int(m.group(2))) if m else None
+
+
+def apply_manual(info, state):
+    """data/manual-dividends.json の過去の1株配当を、自動の記録の古い側につなぐ。何度動かしても同じ結果になる。"""
+    if not os.path.exists(MANUAL):
+        return {}
+    data = json.load(open(MANUAL, encoding="utf-8"))
+    log = {}
+    for code, entry in data.items():
+        if code.startswith("_"):
+            continue
+        code = code.strip().upper()
+        divs = {fy_key(k): float(v) for k, v in ((entry or {}).get("配当") or {}).items() if fy_key(k) and v not in (None, "")}
+        v = info.get(code)
+        if not divs or not v or len(v) < 4 or not v[3] or not state.get(code):
+            log.setdefault("自動の記録か決算期が分からず見送り", []).append(code)
+            continue
+        y, mth = int(state[code][:4]), int(state[code][5:7])
+        labels = ["%d-%02d" % (y - i, mth) for i in range(len(v[3]))]  # 新しい順
+        bad = [k for k, val in zip(labels, v[3]) if k in divs and not close(divs[k], val)]
+        if bad:
+            log.setdefault("自動の記録と食い違い(%s)のため見送り" % ",".join(bad), []).append(code)
+            continue
+        added, odd = 0, None
+        oy = y - len(v[3])
+        while "%d-%02d" % (oy, mth) in divs and len(v[3]) < MAX_PERIODS:
+            val = divs["%d-%02d" % (oy, mth)]
+            newer = v[3][-1]
+            # 隣の期と5倍以上違うのは、分割の割り戻し忘れなどの入力ミスとみなして止める
+            if newer > 0 and val > 0 and not (0.2 <= val / newer <= 5):
+                odd = "%d-%02d" % (oy, mth)
+                break
+            v[3].append(round(val, 2))
+            oy -= 1
+            added += 1
+        older = [k for k in divs if k < "%d-%02d" % (oy + 1, mth)]
+        if odd:
+            log.setdefault("隣の期と大きく違うので止めた(分割調整を確認)", []).append("%s(%s)" % (code, odd))
+        elif added:
+            log.setdefault("過去の配当を足した", []).append("%s(+%d期)" % (code, added))
+        elif older:
+            log.setdefault("自動の記録の一番古い期(%s)の1つ前から続けて書いてください" % labels[-1], []).append(code)
+        else:
+            log.setdefault("反映済み", []).append(code)
+    return log
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=45)
     ap.add_argument("--html", default=os.path.join(ROOT, "index.html"))
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--manual-only", action="store_true", help="EDINETは見ず、手で足した過去の配当だけ反映する")
     a = ap.parse_args()
 
     html = open(a.html, encoding="utf-8").read()
@@ -163,7 +217,7 @@ def main():
     info = json.loads(m.group(1))
     state = json.load(open(STATE)) if os.path.exists(STATE) else {}
 
-    filings = recent_filings(a.days)
+    filings = {} if a.manual_only else recent_filings(a.days)
     todo = [(c, x) for c, x in filings.items()
             if re.match(r"^[1-9][0-9A-Z]{3}$", c) and state.get(c, "") < x["periodEnd"]]
     print("有報", len(filings), "件のうち、未取り込みの期", len(todo), "件", flush=True)
@@ -194,7 +248,7 @@ def main():
                     v.append(months_of(parsed["fyend"], parsed.get("interim")))
                 while len(v) < 5:
                     v.append(None)
-                v[3] = merged[:14]
+                v[3] = merged[:MAX_PERIODS]
                 if parsed.get("payout") is not None:
                     v[4] = round(parsed["payout"], 3)
                 elif v[4] is None:
@@ -202,6 +256,8 @@ def main():
             log.setdefault(how, []).append(code)
             state[code] = x["periodEnd"]
 
+    for how, codes in apply_manual(info, state).items():
+        log.setdefault("手入力: " + how, []).extend(codes)
     for how, codes in sorted(log.items()):
         print("%s: %d社 %s%s" % (how, len(codes), " ".join(codes[:30]), " …" if len(codes) > 30 else ""))
     if a.dry_run:
