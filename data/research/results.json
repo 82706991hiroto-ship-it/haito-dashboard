@@ -293,9 +293,98 @@
  },
  "2130": {
   "name": "メンバーズ",
-  "status": "not_found",
-  "reason": "会社公式サイト(https://www.members.co.jp/ir/library)のIRライブラリは2021年以降のみで、target(2013年3月期)の有報は掲載なし。EDINETは保存期間切れ。",
-  "sources": []
+  "status": "ok",
+  "reason": "会社IRライブラリの配信元(eir-parts)に2006年以降の有報あり(サイト上の表示は2021年以降のみだったため前回not_foundとしたのを訂正)。2004-05〜2012-03は全期無配、2013-03に初配当4円。",
+  "sources": [
+   {
+    "url": "https://ssl4.eir-parts.net/doc/2130/yuho_pdf/S000DPEB/00.pdf",
+    "yuho_fy": "2013-03",
+    "kai": "第18期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2009-03",
+      "dps": null,
+      "interim": null,
+      "shares": 29560,
+      "note": "表上「―」(無配)"
+     },
+     {
+      "fy": "2010-03",
+      "dps": null,
+      "interim": null,
+      "shares": 29560,
+      "note": "表上「―」(無配)"
+     },
+     {
+      "fy": "2011-03",
+      "dps": null,
+      "interim": null,
+      "shares": 29560,
+      "note": "表上「―」(無配)"
+     },
+     {
+      "fy": "2012-03",
+      "dps": null,
+      "interim": null,
+      "shares": 29560,
+      "note": "表上「―」(無配)"
+     },
+     {
+      "fy": "2013-03",
+      "dps": 4,
+      "interim": null,
+      "shares": 5934600,
+      "note": ""
+     }
+    ],
+    "notes": "第18期中に1株→100株および1株→2株の株式分割。第14〜17期の配当は「―」(無配)。中間配当は各期「―」。"
+   },
+   {
+    "url": "https://ssl4.eir-parts.net/doc/2130/yuho_pdf/S0000PY5/00.pdf",
+    "yuho_fy": "2008-03",
+    "kai": "第13期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2004-05",
+      "dps": null,
+      "interim": null,
+      "shares": 27210,
+      "note": "表上「―」(無配)"
+     },
+     {
+      "fy": "2005-05",
+      "dps": null,
+      "interim": null,
+      "shares": 27210,
+      "note": "表上「―」(無配)"
+     },
+     {
+      "fy": "2006-05",
+      "dps": null,
+      "interim": null,
+      "shares": 27210,
+      "note": "表上「―」(無配)"
+     },
+     {
+      "fy": "2007-05",
+      "dps": null,
+      "interim": null,
+      "shares": 29560,
+      "note": "表上「―」(無配)"
+     },
+     {
+      "fy": "2008-03",
+      "dps": null,
+      "interim": null,
+      "shares": 29560,
+      "note": "表上「―」(無配)、決算期変更による10ヶ月決算"
+     }
+    ],
+    "notes": "連結なし(提出会社のみ)。第13期は決算期変更により平成19年6月1日〜平成20年3月31日の10ヶ月(5月決算→3月決算)。全期「―」(無配)。"
+   }
+  ]
  },
  "2353": {
   "name": "日本駐車場開発",
@@ -931,5 +1020,435 @@
     "notes": "表に記念配当・特別配当・分割の注記なし。"
    }
   ]
+ },
+ "4212": {
+  "name": "積水樹脂",
+  "status": "ok",
+  "reason": "会社サイトのIRライブラリ(eir-parts配信)の有報3本で2002-03〜2013-03を取得。",
+  "sources": [
+   {
+    "url": "https://ssl4.eir-parts.net/doc/4212/yuho_pdf/S000DWWF/00.pdf",
+    "yuho_fy": "2013-03",
+    "kai": "第79期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2009-03",
+      "dps": 16.0,
+      "interim": 8.0,
+      "shares": 47313000,
+      "note": ""
+     },
+     {
+      "fy": "2010-03",
+      "dps": 20.0,
+      "interim": 8.0,
+      "shares": 47313000,
+      "note": "うち特別配当4円"
+     },
+     {
+      "fy": "2011-03",
+      "dps": 21.0,
+      "interim": 8.0,
+      "shares": 47313000,
+      "note": "うち特別配当5円"
+     },
+     {
+      "fy": "2012-03",
+      "dps": 23.0,
+      "interim": 10.0,
+      "shares": 47313000,
+      "note": "うち特別配当3円"
+     },
+     {
+      "fy": "2013-03",
+      "dps": 26.0,
+      "interim": 11.0,
+      "shares": 47313000,
+      "note": "うち特別配当4円"
+     }
+    ],
+    "notes": "回次・決算年月は(1)連結と共通のヘッダ。第76期20円のうち4円、第77期21円のうち5円、第78期23円のうち3円、第79期26円のうち4円は特別配当。"
+   },
+   {
+    "url": "https://ssl4.eir-parts.net/doc/4212/yuho_pdf/S0000S2V/00.pdf",
+    "yuho_fy": "2008-03",
+    "kai": "第74期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2004-03",
+      "dps": 12.0,
+      "interim": 5.0,
+      "shares": 47313000,
+      "note": "うち創立50周年記念配当2円"
+     },
+     {
+      "fy": "2005-03",
+      "dps": 12.0,
+      "interim": 5.0,
+      "shares": 47313000,
+      "note": "うち特別配当2円"
+     },
+     {
+      "fy": "2006-03",
+      "dps": 15.0,
+      "interim": 6.0,
+      "shares": 47313000,
+      "note": "うち特別配当3円"
+     },
+     {
+      "fy": "2007-03",
+      "dps": 15.0,
+      "interim": 6.0,
+      "shares": 47313000,
+      "note": "うち特別配当3円"
+     },
+     {
+      "fy": "2008-03",
+      "dps": 18.0,
+      "interim": 8.0,
+      "shares": 47313000,
+      "note": "うち特別配当2円"
+     }
+    ],
+    "notes": "回次・決算年月は(1)連結と共通のヘッダ。第70期12円のうち2円は創立50周年記念配当、第71期12円のうち2円・第72期15円のうち3円・第73期15円のうち3円・第74期18円のうち2円は特別配当。"
+   },
+   {
+    "url": "https://ssl4.eir-parts.net/doc/4212/yuho_pdf/0060DM3H/00.pdf",
+    "yuho_fy": "2006-03",
+    "kai": "第72期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2002-03",
+      "dps": 10.0,
+      "interim": 5.0,
+      "shares": 47313000,
+      "note": ""
+     },
+     {
+      "fy": "2003-03",
+      "dps": 10.0,
+      "interim": 5.0,
+      "shares": 47313000,
+      "note": ""
+     },
+     {
+      "fy": "2004-03",
+      "dps": 12.0,
+      "interim": 5.0,
+      "shares": 47313000,
+      "note": "うち創立50周年記念配当2円"
+     },
+     {
+      "fy": "2005-03",
+      "dps": 12.0,
+      "interim": 5.0,
+      "shares": 47313000,
+      "note": "うち特別配当2円"
+     },
+     {
+      "fy": "2006-03",
+      "dps": 15.0,
+      "interim": 6.0,
+      "shares": 47313000,
+      "note": "うち特別配当3円"
+     }
+    ],
+    "notes": "回次・決算年月は(1)連結と共通のヘッダ。第70期12円のうち2円は創立50周年記念配当、第71期12円のうち2円・第72期15円のうち3円は特別配当。"
+   }
+  ]
+ },
+ "4345": {
+  "name": "シーティーエス",
+  "status": "ok",
+  "reason": "会社IRサイト(eir-parts配信)の有報3本で2003-03〜2013-03を取得。",
+  "sources": [
+   {
+    "url": "https://ssl4.eir-parts.net/doc/4345/yuho_pdf/S000DK48/00.pdf",
+    "yuho_fy": "2013-03",
+    "kai": "第23期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2009-03",
+      "dps": 5000,
+      "interim": 2000,
+      "shares": 16094,
+      "note": ""
+     },
+     {
+      "fy": "2010-03",
+      "dps": 6100,
+      "interim": 2500,
+      "shares": 14000,
+      "note": ""
+     },
+     {
+      "fy": "2011-03",
+      "dps": 7800,
+      "interim": 1300,
+      "shares": 28000,
+      "note": "記念配当5,000円を含む"
+     },
+     {
+      "fy": "2012-03",
+      "dps": 3500,
+      "interim": 1500,
+      "shares": 28000,
+      "note": ""
+     },
+     {
+      "fy": "2013-03",
+      "dps": 45,
+      "interim": 20,
+      "shares": 2800000,
+      "note": "中間20円は分割後換算の表示、実際の中間配当は2,000円(注記)"
+     }
+    ],
+    "notes": "連結なし(提出会社のみ)。平成22年4月1日付1株→2株、平成24年10月1日付1株→100株の株式分割。2011-03の7,800円には記念配当5,000円を含む。2013-03の配当額45円・中間20円は分割後の金額で、実際の中間配当は2,000円(注記)。"
+   },
+   {
+    "url": "https://ssl4.eir-parts.net/doc/4345/yuho_pdf/S0000M9D/00.pdf",
+    "yuho_fy": "2008-03",
+    "kai": "第18期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2004-03",
+      "dps": 8000,
+      "interim": null,
+      "shares": 5364.71,
+      "note": ""
+     },
+     {
+      "fy": "2005-03",
+      "dps": 6900,
+      "interim": null,
+      "shares": 5364.71,
+      "note": ""
+     },
+     {
+      "fy": "2006-03",
+      "dps": 4300,
+      "interim": null,
+      "shares": 16094.13,
+      "note": ""
+     },
+     {
+      "fy": "2007-03",
+      "dps": 6100,
+      "interim": null,
+      "shares": 16094.0,
+      "note": ""
+     },
+     {
+      "fy": "2008-03",
+      "dps": 6700,
+      "interim": 2500,
+      "shares": 16094.0,
+      "note": ""
+     }
+    ],
+    "notes": "連結なし。平成18年2月11日付で1株→3株の株式分割。発行済株式総数は端株を含む小数表記のまま記録。"
+   },
+   {
+    "url": "https://ssl4.eir-parts.net/doc/4345/yuho_pdf/0070GAMM/00.pdf",
+    "yuho_fy": "2007-03",
+    "kai": "第17期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2003-03",
+      "dps": 8000,
+      "interim": null,
+      "shares": 5364.71,
+      "note": ""
+     },
+     {
+      "fy": "2004-03",
+      "dps": 8000,
+      "interim": null,
+      "shares": 5364.71,
+      "note": ""
+     },
+     {
+      "fy": "2005-03",
+      "dps": 6900,
+      "interim": null,
+      "shares": 5364.71,
+      "note": ""
+     },
+     {
+      "fy": "2006-03",
+      "dps": 4300,
+      "interim": null,
+      "shares": 16094.13,
+      "note": ""
+     },
+     {
+      "fy": "2007-03",
+      "dps": 6100,
+      "interim": null,
+      "shares": 16094.0,
+      "note": ""
+     }
+    ],
+    "notes": "連結なし。平成18年2月11日付で1株→3株の株式分割。中間配当は各期「―」。"
+   }
+  ]
+ },
+ "4452": {
+  "name": "花王",
+  "status": "ok",
+  "reason": "IR資料ページ(https://www.kao.com/jp/investor-relations/library/securities/)の一覧はFY2015以降だが、同じ公式ドメイン上の同名規則のPDF(securities_fy20XX_all_01.pdf)が存在し、表紙で期を確認して使用。2012-12は訂正版。",
+  "sources": [
+   {
+    "url": "https://www.kao.com/content/dam/sites/kao/www-kao-com/jp/ja/corporate/investor-relations/pdf/securities_fy2012_all_01.pdf",
+    "yuho_fy": "2012-12",
+    "kai": "第107期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2008-03",
+      "dps": 54.0,
+      "interim": 27.0,
+      "shares": 549444000,
+      "note": ""
+     },
+     {
+      "fy": "2009-03",
+      "dps": 56.0,
+      "interim": 28.0,
+      "shares": 540144000,
+      "note": ""
+     },
+     {
+      "fy": "2010-03",
+      "dps": 57.0,
+      "interim": 28.0,
+      "shares": 540144000,
+      "note": ""
+     },
+     {
+      "fy": "2011-03",
+      "dps": 58.0,
+      "interim": 29.0,
+      "shares": 540144000,
+      "note": ""
+     },
+     {
+      "fy": "2012-03",
+      "dps": 60.0,
+      "interim": 29.0,
+      "shares": 526213000,
+      "note": ""
+     },
+     {
+      "fy": "2012-12",
+      "dps": 62.0,
+      "interim": 31.0,
+      "shares": 526213000,
+      "note": "決算期変更による9か月決算"
+     }
+    ],
+    "notes": "訂正版(平成25年12月5日提出の訂正後の有報)。第107期は決算期変更により平成24年4月1日〜12月31日の9か月間。"
+   },
+   {
+    "url": "https://www.kao.com/content/dam/sites/kao/www-kao-com/jp/ja/corporate/investor-relations/pdf/securities_fy2007_all_01.pdf",
+    "yuho_fy": "2008-03",
+    "kai": "第102期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2004-03",
+      "dps": 32.0,
+      "interim": 16.0,
+      "shares": 599443000,
+      "note": ""
+     },
+     {
+      "fy": "2005-03",
+      "dps": 38.0,
+      "interim": 19.0,
+      "shares": 549443000,
+      "note": ""
+     },
+     {
+      "fy": "2006-03",
+      "dps": 50.0,
+      "interim": 25.0,
+      "shares": 549443000,
+      "note": ""
+     },
+     {
+      "fy": "2007-03",
+      "dps": 52.0,
+      "interim": 26.0,
+      "shares": 549443000,
+      "note": ""
+     },
+     {
+      "fy": "2008-03",
+      "dps": 54.0,
+      "interim": 27.0,
+      "shares": 549443000,
+      "note": ""
+     }
+    ],
+    "notes": "表に記念配当・分割の注記なし。"
+   },
+   {
+    "url": "https://www.kao.com/content/dam/sites/kao/www-kao-com/jp/ja/corporate/investor-relations/pdf/securities_fy2002_all_01.pdf",
+    "yuho_fy": "2003-03",
+    "kai": "第97期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "1999-03",
+      "dps": 16.0,
+      "interim": 8.0,
+      "shares": 621439000,
+      "note": ""
+     },
+     {
+      "fy": "2000-03",
+      "dps": 20.0,
+      "interim": 10.0,
+      "shares": 620433000,
+      "note": ""
+     },
+     {
+      "fy": "2001-03",
+      "dps": 24.0,
+      "interim": 12.0,
+      "shares": 610826000,
+      "note": ""
+     },
+     {
+      "fy": "2002-03",
+      "dps": 26.0,
+      "interim": 13.0,
+      "shares": 599429000,
+      "note": ""
+     },
+     {
+      "fy": "2003-03",
+      "dps": 30.0,
+      "interim": 15.0,
+      "shares": 599443000,
+      "note": ""
+     }
+    ],
+    "notes": "第96期から自己株式を資本から控除(配当額は除く)。表に記念配当・分割の注記なし。"
+   }
+  ]
+ },
+ "4503": {
+  "name": "アステラス製薬",
+  "status": "not_found",
+  "reason": "会社公式サイトの有報ページ(/jp/investors/ir-library/securities-report)は現在404。公式ドメイン上の有報PDF(annual-securities-report-fyXXXX-jp.pdf)はFY2017(2018-03)以降のみ存在し、target(2013年3月期)以前は見つからず。EDINETは保存期間切れ。",
+  "sources": []
  }
 }
