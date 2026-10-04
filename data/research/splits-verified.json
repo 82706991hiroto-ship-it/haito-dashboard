@@ -185,9 +185,8 @@
   "効力発生日": "2026-05-01",
   "比率": 4,
   "種類": "分割",
-  "出典": "https://finance-frontend-pc-dist.west.edge.storage-yahoo.jp/disclosure/20260316/20260316582518.pdf",
-  "確認": "済",
-  "備考": "2026-03-16付TDnet決算短信PDF(Yahoo配信ミラー)で取締役会決議を確認"
+  "確認": "未",
+  "備考": "公式(TDnet/会社IR)の原文には届かず。Yahoo配信ミラーのPDF(https://finance-frontend-pc-dist.west.edge.storage-yahoo.jp/disclosure/20260316/20260316582518.pdf)では一覧どおり(効力発生日2026-05-01, 1→4)と読めたが、公式でないため未。"
  },
  "5232": {
   "名前": "住友大阪セメント",
