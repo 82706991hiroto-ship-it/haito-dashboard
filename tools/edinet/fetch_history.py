@@ -216,6 +216,10 @@ def share_factor(new, old):
     if 0.7 <= r <= 1.05:
         return 1.0
     n = snap(r)
+    # 1.1〜1.25倍の小さな分割は、株数がほぼぴったり(1%以内)その倍率のときだけ。
+    # それ以外は増資・合併・新株予約権の行使などで株数が増えただけとみなす
+    if n and n < 1.3 and abs(r / n - 1) > 0.01:
+        return 1.0
     if n:
         return n
     return 1.0 if 1.05 < r < 1.3 else None
