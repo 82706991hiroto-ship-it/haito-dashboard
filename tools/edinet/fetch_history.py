@@ -241,6 +241,15 @@ def within_filing(periods):
                 and it / vals[t - 1] > 0.5 / f ** 0.5):
             vals[t] = round(it / f + (vals[t] - it), 2)
             mixed[t] = True
+    # 期末日に分割の効力が出る会社は、その期の株数はもう分割後なのに配当は分割前の実額で載る
+    # (翌期に配当が「下がって」見える)。株数の跳ねを翌期の境目に移して、その期まで割り戻す
+    shares = list(shares)
+    for t in range(1, len(ps) - 1):
+        f = share_factor(shares[t], shares[t - 1])
+        if (f and f >= 1.5 and not mixed[t] and vals[t - 1] and vals[t] and vals[t + 1]
+                and vals[t] / vals[t - 1] >= 0.8 and vals[t + 1] / vals[t] < 0.8
+                and 0.95 <= vals[t + 1] / (vals[t] / f) <= 2.6):
+            shares[t] = shares[t - 1]
     out = [None] * len(ps)
     factor = 1.0
     out[-1] = vals[-1]
