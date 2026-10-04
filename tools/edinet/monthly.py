@@ -237,6 +237,18 @@ def apply_splits(info, state, path_splits, path_applied):
     return log
 
 
+def split_factor(code):
+    """data/splits.json の分割のうち、自動の記録を割り戻したもの(splits-applied.json)の比率の積。"""
+    if not (os.path.exists(SPLITS) and os.path.exists(SPLITS_APPLIED)):
+        return 1
+    splits = json.load(open(SPLITS, encoding="utf-8"))
+    applied = json.load(open(SPLITS_APPLIED, encoding="utf-8"))
+    e = splits.get(code)
+    if not isinstance(e, dict) or not (applied.get("%s@%s" % (code, e.get("効力発生日"))) or {}).get("割り戻し"):
+        return 1
+    return float(e.get("比率") or 1)
+
+
 def apply_manual(info, state):
     """data/manual-dividends.json の過去の1株配当を、自動の記録の古い側につなぐ。何度動かしても同じ結果になる。"""
     if not os.path.exists(MANUAL):
@@ -255,6 +267,12 @@ def apply_manual(info, state):
         y, mth = int(state[code][:4]), int(state[code][5:7])
         labels = ["%d-%02d" % (y - i, mth) for i in range(len(v[3]))]  # 新しい順
         bad = [k for k, val in zip(labels, v[3]) if k in divs and not close(divs[k], val)]
+        f = split_factor(code)
+        if bad and f != 1:
+            # 決算後の分割(data/splits.json)で自動の記録を割り戻した後なら、手入力も同じ比率で割り戻して照合する
+            fdivs = {k: round(val / f, 2) for k, val in divs.items()}
+            if not [k for k, val in zip(labels, v[3]) if k in fdivs and not close(fdivs[k], val)]:
+                divs, bad = fdivs, []
         if bad:
             log.setdefault("自動の記録と食い違い(%s)のため見送り" % ",".join(bad), []).append(code)
             continue
