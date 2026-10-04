@@ -8,7 +8,7 @@ on:
   # 手で足す過去の配当(data/manual-dividends.json)を保存したら、その分だけすぐ反映する
   push:
     branches: [main]
-    paths: [data/manual-dividends.json]
+    paths: [data/manual-dividends.json, data/splits.json]
   workflow_dispatch:
     inputs:
       days:
@@ -41,7 +41,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git add index.html tools/edinet/state.json
+          git add index.html tools/edinet/state.json data/splits-applied.json
           if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

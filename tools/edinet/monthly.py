@@ -22,6 +22,8 @@ import fetch_history as fh  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STATE = os.path.join(ROOT, "tools", "edinet", "state.json")
 MANUAL = os.path.join(ROOT, "data", "manual-dividends.json")
+SPLITS = os.path.join(ROOT, "data", "splits.json")
+SPLITS_APPLIED = os.path.join(ROOT, "data", "splits-applied.json")
 MAX_PERIODS = 35  # 自動は最大14期。手で足した過去の分も含めて残す上限
 CODELIST = "https://disclosure2dl.edinet-fsa.go.jp/searchdocument/codelist/Edinetcode.zip"
 
@@ -204,6 +206,37 @@ def fy_key(s):
     return "%s-%02d" % (m.group(1), int(m.group(2))) if m else None
 
 
+
+
+def apply_splits(info, state, path_splits, path_applied):
+    """決算後の株式分割(data/splits.json)で、最新の有報の期末より前の1株配当を割り戻す。一度だけ。"""
+    if not os.path.exists(path_splits):
+        return {}
+    splits = json.load(open(path_splits, encoding="utf-8"))
+    applied = json.load(open(path_applied, encoding="utf-8")) if path_applied and os.path.exists(path_applied) else {}
+    log = {}
+    for code, e in splits.items():
+        if code.startswith("_") or not isinstance(e, dict):
+            continue
+        day, ratio = e.get("効力発生日"), float(e.get("比率") or 0)
+        v = info.get(code)
+        key = "%s@%s" % (code, day)
+        if key in applied or not day or ratio <= 0 or not v or len(v) < 4 or not v[3]:
+            continue
+        fy = state.get(code)
+        if not fy or fy >= day:
+            # 分割より後の期の有報がもう入っている(有報の側で割り戻し済み)
+            applied[key] = {"期末": fy, "割り戻し": False}
+            log.setdefault("有報で反映済み", []).append(code)
+            continue
+        v[3] = [round(x / ratio, 2) for x in v[3]]
+        applied[key] = {"期末": fy, "割り戻し": True}
+        log.setdefault("分割で割り戻した", []).append("%s(÷%g)" % (code, ratio))
+    if path_applied:
+        json.dump(applied, open(path_applied, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    return log
+
+
 def apply_manual(info, state):
     """data/manual-dividends.json の過去の1株配当を、自動の記録の古い側につなぐ。何度動かしても同じ結果になる。"""
     if not os.path.exists(MANUAL):
@@ -303,6 +336,8 @@ def main():
 
     for how, codes in apply_manual(info, state).items():
         log.setdefault("手入力: " + how, []).extend(codes)
+    for how, codes in apply_splits(info, state, SPLITS, None if a.dry_run else SPLITS_APPLIED).items():
+        log.setdefault("決算後の分割: " + how, []).extend(codes)
     for how, codes in sorted(log.items()):
         print("%s: %d社 %s%s" % (how, len(codes), " ".join(codes[:30]), " …" if len(codes) > 30 else ""))
     if a.dry_run:
