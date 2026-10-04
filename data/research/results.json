@@ -2892,6 +2892,386 @@
    }
   ]
  },
+ "8113": {
+  "name": "ユニ・チャーム",
+  "status": "ok",
+  "reason": "公式サイトの有報3本で2002-03〜2015-12を取得。",
+  "sources": [
+   {
+    "url": "https://www.unicharm.co.jp/content/dam/sites/www_unicharm_co_jp/pdf/ir/library/securities/201512_0_All.pdf",
+    "yuho_fy": "2015-12",
+    "kai": "第56期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2012-03",
+      "dps": 32,
+      "interim": 16,
+      "shares": 206944773,
+      "note": ""
+     },
+     {
+      "fy": "2013-03",
+      "dps": 34,
+      "interim": 17,
+      "shares": 206944773,
+      "note": ""
+     },
+     {
+      "fy": "2014-03",
+      "dps": 38,
+      "interim": 18,
+      "shares": 206944773,
+      "note": ""
+     },
+     {
+      "fy": "2014-12",
+      "dps": 25.4,
+      "interim": 19,
+      "shares": 620834319,
+      "note": "決算期変更による9ヶ月決算。中間19円(分割前)+期末6.4円(分割後)の合計(注記)"
+     },
+     {
+      "fy": "2015-12",
+      "dps": 14.8,
+      "interim": 7.4,
+      "shares": 620834319,
+      "note": ""
+     }
+    ],
+    "notes": "決算期変更(3月→12月)により第55期は平成26年4月1日〜12月31日。平成26年10月1日付1株→3株の株式分割。第55期の25.4円は中間19円(分割前)+期末6.4円(分割後)の合計(注記)。"
+   },
+   {
+    "url": "https://www.unicharm.co.jp/content/dam/sites/www_unicharm_co_jp/pdf/ir/library/securities/yuho_201103_all.pdf",
+    "yuho_fy": "2011-03",
+    "kai": "第51期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2007-03",
+      "dps": 44,
+      "interim": 22,
+      "shares": 68981591,
+      "note": ""
+     },
+     {
+      "fy": "2008-03",
+      "dps": 46,
+      "interim": 23,
+      "shares": 68981591,
+      "note": ""
+     },
+     {
+      "fy": "2009-03",
+      "dps": 54,
+      "interim": 27,
+      "shares": 68981591,
+      "note": ""
+     },
+     {
+      "fy": "2010-03",
+      "dps": 70,
+      "interim": 35,
+      "shares": 68981591,
+      "note": ""
+     },
+     {
+      "fy": "2011-03",
+      "dps": 56,
+      "interim": 42,
+      "shares": 206944773,
+      "note": "期中(平成22年10月1日)に1株→3株分割"
+     }
+    ],
+    "notes": "平成22年10月1日付で1株→3株の株式分割(第51期)。"
+   },
+   {
+    "url": "https://www.unicharm.co.jp/content/dam/sites/www_unicharm_co_jp/pdf/ir/library/securities/yuho_200603_all.pdf",
+    "yuho_fy": "2006-03",
+    "kai": "第46期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2002-03",
+      "dps": 20,
+      "interim": 10,
+      "shares": 68981591,
+      "note": ""
+     },
+     {
+      "fy": "2003-03",
+      "dps": 24,
+      "interim": 12,
+      "shares": 68981591,
+      "note": ""
+     },
+     {
+      "fy": "2004-03",
+      "dps": 28,
+      "interim": 14,
+      "shares": 68981591,
+      "note": ""
+     },
+     {
+      "fy": "2005-03",
+      "dps": 30,
+      "interim": 15,
+      "shares": 68981591,
+      "note": ""
+     },
+     {
+      "fy": "2006-03",
+      "dps": 32,
+      "interim": 16,
+      "shares": 68981591,
+      "note": ""
+     }
+    ],
+    "notes": "表に記念配当・分割の注記なし。"
+   }
+  ]
+ },
+ "8130": {
+  "name": "サンゲツ",
+  "status": "ok",
+  "reason": "会社IRサイト(eir-parts配信)の有報3本で2002-03〜2016-03を取得。",
+  "sources": [
+   {
+    "url": "https://ssl4.eir-parts.net/doc/8130/yuho_pdf/S1007VFE/00.pdf",
+    "yuho_fy": "2016-03",
+    "kai": "第64期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2012-03",
+      "dps": 75.0,
+      "interim": 37.5,
+      "shares": 40188000,
+      "note": ""
+     },
+     {
+      "fy": "2013-03",
+      "dps": 78.0,
+      "interim": 37.5,
+      "shares": 40188000,
+      "note": "創立60周年記念配当3円を含む"
+     },
+     {
+      "fy": "2014-03",
+      "dps": 75.0,
+      "interim": 37.5,
+      "shares": 40188000,
+      "note": ""
+     },
+     {
+      "fy": "2015-03",
+      "dps": 82.5,
+      "interim": 37.5,
+      "shares": 37050000,
+      "note": ""
+     },
+     {
+      "fy": "2016-03",
+      "dps": 47.5,
+      "interim": 22.5,
+      "shares": 69170000,
+      "note": ""
+     }
+    ],
+    "notes": "第61期(2013-03)の配当額には創立60周年記念配当3円を含む。平成27年4月1日付で1株→2株の株式分割(第64期は分割後の値)。"
+   },
+   {
+    "url": "https://ssl4.eir-parts.net/doc/8130/yuho_pdf/S0008KDD/00.pdf",
+    "yuho_fy": "2011-03",
+    "kai": "第59期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2007-03",
+      "dps": 75.0,
+      "interim": 37.5,
+      "shares": 42188000,
+      "note": ""
+     },
+     {
+      "fy": "2008-03",
+      "dps": 75.0,
+      "interim": 37.5,
+      "shares": 42188000,
+      "note": ""
+     },
+     {
+      "fy": "2009-03",
+      "dps": 75.0,
+      "interim": 37.5,
+      "shares": 42188000,
+      "note": ""
+     },
+     {
+      "fy": "2010-03",
+      "dps": 75.0,
+      "interim": 37.5,
+      "shares": 40188000,
+      "note": ""
+     },
+     {
+      "fy": "2011-03",
+      "dps": 75.0,
+      "interim": 37.5,
+      "shares": 40188000,
+      "note": ""
+     }
+    ],
+    "notes": "表に記念配当・分割の注記なし。"
+   },
+   {
+    "url": "https://ssl4.eir-parts.net/doc/8130/yuho_pdf/0060DJEC/00.pdf",
+    "yuho_fy": "2006-03",
+    "kai": "第54期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2002-03",
+      "dps": 38.0,
+      "interim": 19.0,
+      "shares": 43188000,
+      "note": ""
+     },
+     {
+      "fy": "2003-03",
+      "dps": 40.0,
+      "interim": 19.0,
+      "shares": 43188000,
+      "note": "会社創立50周年記念配当2円を含む"
+     },
+     {
+      "fy": "2004-03",
+      "dps": 65.0,
+      "interim": 19.0,
+      "shares": 43188000,
+      "note": ""
+     },
+     {
+      "fy": "2005-03",
+      "dps": 75.0,
+      "interim": 32.5,
+      "shares": 43188000,
+      "note": ""
+     },
+     {
+      "fy": "2006-03",
+      "dps": 75.0,
+      "interim": 37.5,
+      "shares": 42188000,
+      "note": ""
+     }
+    ],
+    "notes": "第51期(2003-03)の配当額には会社創立50周年記念配当2円を含む。"
+   }
+  ]
+ },
+ "8252": {
+  "name": "丸井グループ",
+  "status": "ok",
+  "reason": "公式サイトの有報(2013-03、2008-03)で2003-09〜2013-03を取得。2010-03に28円→14円へ減配、以降14円据置ののち2013-03に15円。",
+  "sources": [
+   {
+    "url": "https://www.0101maruigroup.co.jp/pdf/settlement/0130GFE0.pdf",
+    "yuho_fy": "2013-03",
+    "kai": "第77期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2009-03",
+      "dps": 28.0,
+      "interim": 14.0,
+      "shares": 318660417,
+      "note": ""
+     },
+     {
+      "fy": "2010-03",
+      "dps": 14.0,
+      "interim": 7.0,
+      "shares": 318660417,
+      "note": ""
+     },
+     {
+      "fy": "2011-03",
+      "dps": 14.0,
+      "interim": 7.0,
+      "shares": 318660417,
+      "note": ""
+     },
+     {
+      "fy": "2012-03",
+      "dps": 14.0,
+      "interim": 7.0,
+      "shares": 318660417,
+      "note": ""
+     },
+     {
+      "fy": "2013-03",
+      "dps": 15.0,
+      "interim": 7.0,
+      "shares": 318660417,
+      "note": ""
+     }
+    ],
+    "notes": "中間配当は[ ]書き。表に記念配当・分割の注記なし。"
+   },
+   {
+    "url": "https://pdf.0101maruigroup.co.jp/pdf/settlement/0080GFE0.pdf",
+    "yuho_fy": "2008-03",
+    "kai": "第72期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2003-09",
+      "dps": 15.0,
+      "interim": null,
+      "shares": 368660417,
+      "note": "決算期変更による8ヵ月決算"
+     },
+     {
+      "fy": "2004-03",
+      "dps": 11.0,
+      "interim": null,
+      "shares": 368660417,
+      "note": "決算期変更による6ヵ月決算"
+     },
+     {
+      "fy": "2005-03",
+      "dps": 22.0,
+      "interim": null,
+      "shares": 368660417,
+      "note": ""
+     },
+     {
+      "fy": "2006-03",
+      "dps": 28.0,
+      "interim": null,
+      "shares": 368660417,
+      "note": ""
+     },
+     {
+      "fy": "2007-03",
+      "dps": 28.0,
+      "interim": 12.0,
+      "shares": 368660417,
+      "note": ""
+     },
+     {
+      "fy": "2008-03",
+      "dps": 28.0,
+      "interim": 14.0,
+      "shares": 318660417,
+      "note": ""
+     }
+    ],
+    "notes": "6期分の表。決算期変更により平成15年9月期は平成15年2月1日〜9月30日の8ヵ月、平成16年3月期は平成15年10月1日〜平成16年3月31日の6ヵ月。IRページの一覧は2013年3月期以降だが、同じ公式ドメインのPDF(0080GFE0.pdf)の表紙で第72期を確認して使用。"
+   }
+  ]
+ },
  "8424": {
   "name": "芙蓉総合リース",
   "status": "ok",
