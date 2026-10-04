@@ -3272,6 +3272,12 @@
    }
   ]
  },
+ "8418": {
+  "name": "山口フィナンシャルグループ",
+  "status": "not_found",
+  "reason": "会社公式サイト(https://www.ymfg.co.jp/finance/securities.html)の有報は2016年3月期(第10期)以降のみ。target(2013年3月期)以前は掲載なし。EDINETは保存期間切れ。",
+  "sources": []
+ },
  "8424": {
   "name": "芙蓉総合リース",
   "status": "ok",
@@ -3408,6 +3414,341 @@
      }
     ],
     "notes": "第34期(2003-03)の配当は「旧株 100.00 / 新株 26.00」と2段で記載(dpsには旧株の値を記録)。第33〜35期は非上場。第36期の25円には上場記念配当5円を含む。"
+   }
+  ]
+ },
+ "8425": {
+  "name": "みずほリース",
+  "status": "not_found",
+  "reason": "会社公式サイト(https://www.mizuho-ls.co.jp/ja/ir/library/securities.html)の有報は2012年3月期以降のみ。target(2008年3月期)より前の年を含む有報は掲載なし。EDINETは保存期間切れ。",
+  "sources": []
+ },
+ "8566": {
+  "name": "リコーリース",
+  "status": "ok",
+  "reason": "会社IRサイトの配信元(irpocket)の有報2本で1997-03〜2006-03を取得(want範囲1996-03は1997年版5期表に含まれず)。",
+  "sources": [
+   {
+    "url": "https://pdf.irpocket.com/C8566/p5Zl/HnmG/Oa9v.pdf",
+    "yuho_fy": "2006-03",
+    "kai": "第30期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2002-03",
+      "dps": 20.0,
+      "interim": 9.5,
+      "shares": 29292000,
+      "note": ""
+     },
+     {
+      "fy": "2003-03",
+      "dps": 21.0,
+      "interim": 10.0,
+      "shares": 31243000,
+      "note": ""
+     },
+     {
+      "fy": "2004-03",
+      "dps": 22.0,
+      "interim": 10.5,
+      "shares": 31243000,
+      "note": ""
+     },
+     {
+      "fy": "2005-03",
+      "dps": 24.0,
+      "interim": 11.0,
+      "shares": 31243000,
+      "note": ""
+     },
+     {
+      "fy": "2006-03",
+      "dps": 28.0,
+      "interim": 12.0,
+      "shares": 31243000,
+      "note": ""
+     }
+    ],
+    "notes": "表に記念配当・分割の注記なし。"
+   },
+   {
+    "url": "https://pdf.irpocket.com/C8566/p5Zl/HnmG/Aqk3.pdf",
+    "yuho_fy": "2001-03",
+    "kai": "第25期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "1997-03",
+      "dps": 12.0,
+      "interim": null,
+      "shares": 17800000,
+      "note": ""
+     },
+     {
+      "fy": "1998-03",
+      "dps": 15.0,
+      "interim": null,
+      "shares": 17800000,
+      "note": ""
+     },
+     {
+      "fy": "1999-03",
+      "dps": 18.0,
+      "interim": 7.5,
+      "shares": 17800000,
+      "note": ""
+     },
+     {
+      "fy": "2000-03",
+      "dps": 18.0,
+      "interim": 9.0,
+      "shares": 19451000,
+      "note": ""
+     },
+     {
+      "fy": "2001-03",
+      "dps": 19.0,
+      "interim": 9.0,
+      "shares": 28288000,
+      "note": ""
+     }
+    ],
+    "notes": "平成12年3月31日を基準とする1:1.2の株式分割(第24期の株価注記より)。"
+   }
+  ]
+ },
+ "8771": {
+  "name": "イー・ギャランティ",
+  "status": "ok",
+  "reason": "会社IRサイトの配信元(xj-storage)の有報2本で2004-03〜2013-03を取得。2008-03以前は無配、2009-03に初配当。",
+  "sources": [
+   {
+    "url": "https://contents.xj-storage.jp/xcontents/AS00432/e0aba668/820d/43e5/9694/ecddeb0bae48/20230215124621419s.pdf",
+    "yuho_fy": "2013-03",
+    "kai": "第13期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2009-03",
+      "dps": 1500,
+      "interim": null,
+      "shares": 20200,
+      "note": ""
+     },
+     {
+      "fy": "2010-03",
+      "dps": 3000,
+      "interim": null,
+      "shares": 20202,
+      "note": ""
+     },
+     {
+      "fy": "2011-03",
+      "dps": 4000,
+      "interim": null,
+      "shares": 20202,
+      "note": ""
+     },
+     {
+      "fy": "2012-03",
+      "dps": 25,
+      "interim": null,
+      "shares": 5047900,
+      "note": ""
+     },
+     {
+      "fy": "2013-03",
+      "dps": 17.5,
+      "interim": null,
+      "shares": 10165800,
+      "note": ""
+     }
+    ],
+    "notes": "平成23年4月1日付1株→200株、平成25年3月1日付1株→2株の株式分割。中間配当は各期「−」。"
+   },
+   {
+    "url": "https://contents.xj-storage.jp/xcontents/AS00432/5e121434/4360/4223/9508/015ee8a2b684/20230215124802060s.pdf",
+    "yuho_fy": "2008-03",
+    "kai": "第8期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2004-03",
+      "dps": null,
+      "interim": null,
+      "shares": 14200,
+      "note": "表上「－」(無配)"
+     },
+     {
+      "fy": "2005-03",
+      "dps": null,
+      "interim": null,
+      "shares": 19200,
+      "note": "表上「－」(無配)"
+     },
+     {
+      "fy": "2006-03",
+      "dps": null,
+      "interim": null,
+      "shares": 19200,
+      "note": "表上「－」(無配)"
+     },
+     {
+      "fy": "2007-03",
+      "dps": null,
+      "interim": null,
+      "shares": 20200,
+      "note": "表上「－」(無配)"
+     },
+     {
+      "fy": "2008-03",
+      "dps": null,
+      "interim": null,
+      "shares": 20200,
+      "note": "表上「─」(無配)"
+     }
+    ],
+    "notes": "第4〜8期の配当は「－」(無配)。"
+   }
+  ]
+ },
+ "8804": {
+  "name": "東京建物",
+  "status": "ok",
+  "reason": "会社IRサイトの配信元(irpocket)の有報3本で2001-12〜2015-12を取得。2011-12は無配(「−」)。",
+  "sources": [
+   {
+    "url": "https://pdf.irpocket.com/C8804/lsfl/DP9l/Exks.pdf",
+    "yuho_fy": "2015-12",
+    "kai": "第198期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2011-12",
+      "dps": null,
+      "interim": null,
+      "shares": 433059168,
+      "note": "表上「−」(無配)"
+     },
+     {
+      "fy": "2012-12",
+      "dps": 5.0,
+      "interim": null,
+      "shares": 433059168,
+      "note": ""
+     },
+     {
+      "fy": "2013-12",
+      "dps": 5.0,
+      "interim": null,
+      "shares": 433059168,
+      "note": ""
+     },
+     {
+      "fy": "2014-12",
+      "dps": 6.0,
+      "interim": 3.0,
+      "shares": 433059168,
+      "note": ""
+     },
+     {
+      "fy": "2015-12",
+      "dps": 16.0,
+      "interim": 4.0,
+      "shares": 216963374,
+      "note": "中間4円(併合前)+期末12円(併合後)の合計(注記)"
+     }
+    ],
+    "notes": "平成27年7月1日付で2株→1株の株式併合。第197期の配当額は併合前の実際の額。第198期の16円は中間4円(併合前)+期末12円(併合後)の合計(注記)。第194期(2011-12)は配当「−」(無配)。"
+   },
+   {
+    "url": "https://pdf.irpocket.com/C8804/kzOO/ig5c/ElIH.pdf",
+    "yuho_fy": "2010-12",
+    "kai": "第193期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2006-12",
+      "dps": 12.0,
+      "interim": 6.0,
+      "shares": 318059168,
+      "note": "創立110周年記念配当2円を含む(中間6円のうち1円)"
+     },
+     {
+      "fy": "2007-12",
+      "dps": 14.0,
+      "interim": 7.0,
+      "shares": 318059168,
+      "note": ""
+     },
+     {
+      "fy": "2008-12",
+      "dps": 16.0,
+      "interim": 8.0,
+      "shares": 318059168,
+      "note": ""
+     },
+     {
+      "fy": "2009-12",
+      "dps": 10.0,
+      "interim": 5.0,
+      "shares": 433059168,
+      "note": ""
+     },
+     {
+      "fy": "2010-12",
+      "dps": 8.0,
+      "interim": 4.0,
+      "shares": 433059168,
+      "note": ""
+     }
+    ],
+    "notes": "第189期(2006-12)の12円には創立110周年記念配当2円(中間6円のうち1円)を含む。"
+   },
+   {
+    "url": "https://pdf.irpocket.com/8804/lRYU/U3g5.pdf",
+    "yuho_fy": "2005-12",
+    "kai": "第188期",
+    "table": "提出会社",
+    "rows": [
+     {
+      "fy": "2001-12",
+      "dps": 5.0,
+      "interim": 0.0,
+      "shares": 228141634,
+      "note": ""
+     },
+     {
+      "fy": "2002-12",
+      "dps": 6.0,
+      "interim": 0.0,
+      "shares": 228141634,
+      "note": ""
+     },
+     {
+      "fy": "2003-12",
+      "dps": 7.0,
+      "interim": 3.0,
+      "shares": 228141634,
+      "note": ""
+     },
+     {
+      "fy": "2004-12",
+      "dps": 8.0,
+      "interim": 4.0,
+      "shares": 254141634,
+      "note": ""
+     },
+     {
+      "fy": "2005-12",
+      "dps": 9.0,
+      "interim": 4.0,
+      "shares": 318059168,
+      "note": ""
+     }
+    ],
+    "notes": "中間配当は第184〜185期「0.00」と記載。表に記念配当・分割の注記なし。"
    }
   ]
  }
