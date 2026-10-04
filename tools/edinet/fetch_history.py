@@ -325,12 +325,12 @@ def build_code(docs_parsed):
                     return True
         return False
     for j in range(1, len(out)):
-        if out[j] > 0 and out[j - 1] / out[j] < 0.75 and split_near(j):
+        if out[j] > 0 and out[j - 1] > 0 and out[j - 1] / out[j] < 0.75 and split_near(j):
             out = out[:j]
             break
     # 古い期が5倍以上大きいのは、分割を割り戻せていない実額とみなし、それより古い期を外す
     for j in range(1, len(out)):
-        if out[j] > 0 and out[j - 1] / out[j] < 0.2:
+        if out[j] > 0 and out[j - 1] > 0 and out[j - 1] / out[j] < 0.2:
             out = out[:j]
             break
     # 3倍を超える増配は上場前の年度などの混入とみなし、それより古い期を外す
