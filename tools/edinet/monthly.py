@@ -237,6 +237,18 @@ def apply_splits(info, state, path_splits, path_applied):
     return log
 
 
+def write_split_map(html):
+    """data/splits.json を index.html の SPLIT_MAP に書く。保有銘柄の株数・1株配当をブラウザ側で直すのに使う。"""
+    splits = json.load(open(SPLITS, encoding="utf-8")) if os.path.exists(SPLITS) else {}
+    out = {}
+    for code, e in splits.items():
+        for x in (e if isinstance(e, list) else [e]):
+            if not code.startswith("_") and isinstance(x, dict) and x.get("効力発生日") and x.get("比率"):
+                out.setdefault(code, []).append([x["効力発生日"], x["比率"]])
+    body = json.dumps(dict(sorted(out.items())), ensure_ascii=False, separators=(",", ":"))
+    return re.sub(r"var SPLIT_MAP = \{.*?\};\n", lambda _: "var SPLIT_MAP = %s;\n" % body, html, count=1)
+
+
 def split_factor(code):
     """data/splits.json の分割のうち、自動の記録を割り戻したもの(splits-applied.json)の比率の積。"""
     if not (os.path.exists(SPLITS) and os.path.exists(SPLITS_APPLIED)):
@@ -362,6 +374,7 @@ def main():
         return
     body = json.dumps(info, ensure_ascii=False, separators=(",", ":"))
     html = html[:m.start(1)] + body + html[m.end(1):]
+    html = write_split_map(html)
     open(a.html, "w", encoding="utf-8").write(html)
     with open(STATE, "w") as f:
         json.dump(dict(sorted(state.items())), f, separators=(",", ":"))
