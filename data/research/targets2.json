@@ -1,0 +1,252 @@
+{
+ "_説明": "2回目: 累進配当・DOEの会社のうち、連続増配5〜9期で記録の始まりまで増配が続いている会社",
+ "companies": [
+  {
+   "code": "2153",
+   "name": "Ｅ・Ｊホールディングス",
+   "fy_month": 5,
+   "oldest_recorded_fy": "2021-05",
+   "oldest_values_split_adjusted": {
+    "2021-05": 35.0,
+    "2022-05": 43.0,
+    "2023-05": 50.0
+   },
+   "target_yuho_fy": "2021-05",
+   "want_years": "2011-05 〜 2020-05"
+  },
+  {
+   "code": "2154",
+   "name": "オープンアップグループ",
+   "fy_month": 6,
+   "oldest_recorded_fy": "2021-06",
+   "oldest_values_split_adjusted": {
+    "2021-06": 44.0,
+    "2022-06": 45.0,
+    "2023-06": 50.0
+   },
+   "target_yuho_fy": "2021-06",
+   "want_years": "2011-06 〜 2020-06"
+  },
+  {
+   "code": "2175",
+   "name": "エス・エム・エス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2019-03",
+   "oldest_values_split_adjusted": {
+    "2019-03": 7.5,
+    "2020-03": 8.5,
+    "2021-03": 9.5
+   },
+   "target_yuho_fy": "2019-03",
+   "want_years": "2009-03 〜 2018-03"
+  },
+  {
+   "code": "2201",
+   "name": "森永製菓",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2017-03",
+   "oldest_values_split_adjusted": {
+    "2017-03": 22.5,
+    "2018-03": 25.0,
+    "2019-03": 33.0
+   },
+   "target_yuho_fy": "2017-03",
+   "want_years": "2007-03 〜 2016-03"
+  },
+  {
+   "code": "3284",
+   "name": "フージャースホールディングス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2021-03",
+   "oldest_values_split_adjusted": {
+    "2021-03": 24.0,
+    "2022-03": 36.0,
+    "2023-03": 52.0
+   },
+   "target_yuho_fy": "2021-03",
+   "want_years": "2011-03 〜 2020-03"
+  },
+  {
+   "code": "3690",
+   "name": "イルグルム",
+   "fy_month": 9,
+   "oldest_recorded_fy": "2020-09",
+   "oldest_values_split_adjusted": {
+    "2020-09": 4.0,
+    "2021-09": 5.2,
+    "2022-09": 7.0
+   },
+   "target_yuho_fy": "2020-09",
+   "want_years": "2010-09 〜 2019-09"
+  },
+  {
+   "code": "3921",
+   "name": "ネオジャパン",
+   "fy_month": 1,
+   "oldest_recorded_fy": "2018-01",
+   "oldest_values_split_adjusted": {
+    "2018-01": 5.5,
+    "2019-01": 6.0,
+    "2020-01": 7.5
+   },
+   "target_yuho_fy": "2018-01",
+   "want_years": "2008-01 〜 2017-01"
+  },
+  {
+   "code": "4326",
+   "name": "インテージホールディングス",
+   "fy_month": 6,
+   "oldest_recorded_fy": "2018-06",
+   "oldest_values_split_adjusted": {
+    "2018-06": 20.0,
+    "2019-06": 22.0,
+    "2020-06": 30.0
+   },
+   "target_yuho_fy": "2018-06",
+   "want_years": "2008-06 〜 2017-06"
+  },
+  {
+   "code": "4433",
+   "name": "ヒト・コミュニケーションズ・ホールディングス",
+   "fy_month": 8,
+   "oldest_recorded_fy": "2019-08",
+   "oldest_values_split_adjusted": {
+    "2019-08": 10.0,
+    "2020-08": 20.5,
+    "2021-08": 24.5
+   },
+   "target_yuho_fy": "2019-08",
+   "want_years": "2009-08 〜 2018-08"
+  },
+  {
+   "code": "5393",
+   "name": "ニチアス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2019-03",
+   "oldest_values_split_adjusted": {
+    "2019-03": 52.0,
+    "2020-03": 76.0,
+    "2021-03": 78.0
+   },
+   "target_yuho_fy": "2019-03",
+   "want_years": "2009-03 〜 2018-03"
+  },
+  {
+   "code": "6230",
+   "name": "ＳＡＮＥＩ",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2019-03",
+   "oldest_values_split_adjusted": {
+    "2019-03": 15.0,
+    "2020-03": 22.5,
+    "2021-03": 37.5
+   },
+   "target_yuho_fy": "2019-03",
+   "want_years": "2009-03 〜 2018-03"
+  },
+  {
+   "code": "7679",
+   "name": "薬王堂ホールディングス",
+   "fy_month": 2,
+   "oldest_recorded_fy": "2020-02",
+   "oldest_values_split_adjusted": {
+    "2020-02": 22.0,
+    "2021-02": 23.0,
+    "2022-02": 24.0
+   },
+   "target_yuho_fy": "2020-02",
+   "want_years": "2010-02 〜 2019-02"
+  },
+  {
+   "code": "7818",
+   "name": "トランザクション",
+   "fy_month": 8,
+   "oldest_recorded_fy": "2017-08",
+   "oldest_values_split_adjusted": {
+    "2017-08": 10.0,
+    "2018-08": 13.0,
+    "2019-08": 16.0
+   },
+   "target_yuho_fy": "2017-08",
+   "want_years": "2007-08 〜 2016-08"
+  },
+  {
+   "code": "7846",
+   "name": "パイロットコーポレーション",
+   "fy_month": 12,
+   "oldest_recorded_fy": "2016-12",
+   "oldest_values_split_adjusted": {
+    "2016-12": 22.0,
+    "2017-12": 32.0,
+    "2018-12": 40.0
+   },
+   "target_yuho_fy": "2016-12",
+   "want_years": "2006-12 〜 2015-12"
+  },
+  {
+   "code": "8101",
+   "name": "ＧＳＩクレオス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2018-03",
+   "oldest_values_split_adjusted": {
+    "2018-03": 35.0,
+    "2019-03": 40.0,
+    "2020-03": 45.0
+   },
+   "target_yuho_fy": "2018-03",
+   "want_years": "2008-03 〜 2017-03"
+  },
+  {
+   "code": "8179",
+   "name": "ロイヤルホールディングス",
+   "fy_month": 12,
+   "oldest_recorded_fy": "2020-12",
+   "oldest_values_split_adjusted": {
+    "2020-12": 0.0,
+    "2021-12": 5.0,
+    "2022-12": 10.0
+   },
+   "target_yuho_fy": "2020-12",
+   "want_years": "2010-12 〜 2019-12"
+  },
+  {
+   "code": "8704",
+   "name": "トレイダーズホールディングス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2021-03",
+   "oldest_values_split_adjusted": {
+    "2021-03": 10.0,
+    "2022-03": 11.0,
+    "2023-03": 17.0
+   },
+   "target_yuho_fy": "2021-03",
+   "want_years": "2011-03 〜 2020-03"
+  },
+  {
+   "code": "8919",
+   "name": "カチタス",
+   "fy_month": 3,
+   "oldest_recorded_fy": "2018-03",
+   "oldest_values_split_adjusted": {
+    "2018-03": 13.0,
+    "2019-03": 26.0,
+    "2020-03": 27.0
+   },
+   "target_yuho_fy": "2018-03",
+   "want_years": "2008-03 〜 2017-03"
+  },
+  {
+   "code": "8945",
+   "name": "サンネクスタグループ",
+   "fy_month": 6,
+   "oldest_recorded_fy": "2017-06",
+   "oldest_values_split_adjusted": {
+    "2017-06": 15.5,
+    "2018-06": 18.0,
+    "2019-06": 22.0
+   },
+   "target_yuho_fy": "2017-06",
+   "want_years": "2007-06 〜 2016-06"
+  }
+ ]
+}
