@@ -216,6 +216,10 @@ def share_factor(new, old):
     if 0.7 <= r <= 1.05:
         return 1.0
     n = snap(r)
+    # 1.1〜1.25倍の小さな分割は、株数がほぼぴったり(1%以内)その倍率のときだけ。
+    # それ以外は増資・合併・新株予約権の行使などで株数が増えただけとみなす
+    if n and n < 1.3 and abs(r / n - 1) > 0.01:
+        return 1.0
     if n:
         return n
     return 1.0 if 1.05 < r < 1.3 else None
@@ -241,6 +245,15 @@ def within_filing(periods):
                 and it / vals[t - 1] > 0.5 / f ** 0.5):
             vals[t] = round(it / f + (vals[t] - it), 2)
             mixed[t] = True
+    # 期末日に分割の効力が出る会社は、その期の株数はもう分割後なのに配当は分割前の実額で載る
+    # (翌期に配当が「下がって」見える)。株数の跳ねを翌期の境目に移して、その期まで割り戻す
+    shares = list(shares)
+    for t in range(1, len(ps) - 1):
+        f = share_factor(shares[t], shares[t - 1])
+        if (f and f >= 1.5 and not mixed[t] and vals[t - 1] and vals[t] and vals[t + 1]
+                and vals[t] / vals[t - 1] >= 0.8 and vals[t + 1] / vals[t] < 0.8
+                and 0.95 <= vals[t + 1] / (vals[t] / f) <= 2.6):
+            shares[t] = shares[t - 1]
     out = [None] * len(ps)
     factor = 1.0
     out[-1] = vals[-1]
@@ -316,12 +329,12 @@ def build_code(docs_parsed):
                     return True
         return False
     for j in range(1, len(out)):
-        if out[j] > 0 and out[j - 1] / out[j] < 0.75 and split_near(j):
+        if out[j] > 0 and out[j - 1] > 0 and out[j - 1] / out[j] < 0.75 and split_near(j):
             out = out[:j]
             break
     # 古い期が5倍以上大きいのは、分割を割り戻せていない実額とみなし、それより古い期を外す
     for j in range(1, len(out)):
-        if out[j] > 0 and out[j - 1] / out[j] < 0.2:
+        if out[j] > 0 and out[j - 1] > 0 and out[j - 1] / out[j] < 0.2:
             out = out[:j]
             break
     # 3倍を超える増配は上場前の年度などの混入とみなし、それより古い期を外す

@@ -22,6 +22,8 @@ import fetch_history as fh  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STATE = os.path.join(ROOT, "tools", "edinet", "state.json")
 MANUAL = os.path.join(ROOT, "data", "manual-dividends.json")
+SPLITS = os.path.join(ROOT, "data", "splits.json")
+SPLITS_APPLIED = os.path.join(ROOT, "data", "splits-applied.json")
 MAX_PERIODS = 35  # 自動は最大14期。手で足した過去の分も含めて残す上限
 CODELIST = "https://disclosure2dl.edinet-fsa.go.jp/searchdocument/codelist/Edinetcode.zip"
 
@@ -71,7 +73,52 @@ def parse(text):
 
     base["payout"] = cur("PayoutRatioSummaryOfBusinessResults")
     base["interim"] = cur("InterimDividendPaidPerShareSummaryOfBusinessResults")
+    fill_current_dps(base, text)
     return base
+
+
+def surplus_rows(text):
+    """「配当の状況」(剰余金の配当)の表の行: [(1株配当, 配当総額)]。決議の順。"""
+    rows = {}
+    for r in csv.reader(io.StringIO(text), delimiter="\t"):
+        if len(r) >= 9 and r[0] in ("jpcrp_cor:DividendPerShareDividendsOfSurplus",
+                                    "jpcrp_cor:TotalAmountOfDividendsDividendsOfSurplus"):
+            m = re.search(r"Row(\d+)Member", r[2])
+            if not m:
+                continue
+            try:
+                v = float(str(r[8]).replace(",", ""))
+            except ValueError:
+                continue
+            rows.setdefault(int(m.group(1)), {})["dps" if "PerShare" in r[0] else "amt"] = v
+    return [(x["dps"], x.get("amt")) for _, x in sorted(rows.items()) if x.get("dps")]
+
+
+def fill_current_dps(base, text):
+    """当期の1株配当が「－」の有報を補う。
+
+    - 期の途中で分割した年は、年間の合計に意味がないので「－」になる。「配当の状況」の表の
+      1株配当と総額から株数を逆算し、分割前の回を倍率で割り戻して、期末の株数基準の年間配当にする。
+    - 中間も期末も無い(表に行が無い)ときは無配として 0 にする。
+    """
+    ps = base.get("periods") or []
+    if not ps or ps[0].get("dps") is not None:
+        return
+    rows = surplus_rows(text)
+    if not rows:
+        if base.get("interim") in (None, 0):
+            ps[0]["dps"] = 0.0
+            base["filled"] = "無配"
+        return
+    if any(a is None for _, a in rows):
+        return
+    last = rows[-1][1] / rows[-1][0]
+    total = 0.0
+    for d, a in rows:
+        f = fh.snap(last / (a / d)) or 1.0
+        total += d / f
+    ps[0]["dps"] = round(total, 2)
+    base["filled"] = "分割の年(配当の状況から計算)"
 
 
 def download(doc_id):
@@ -157,6 +204,37 @@ def fy_key(s):
     """「2011-03」「2011/3」「2011年3月」などを「2011-03」に"""
     m = re.match(r"^\s*(\d{4})\D+(\d{1,2})", str(s))
     return "%s-%02d" % (m.group(1), int(m.group(2))) if m else None
+
+
+
+
+def apply_splits(info, state, path_splits, path_applied):
+    """決算後の株式分割(data/splits.json)で、最新の有報の期末より前の1株配当を割り戻す。一度だけ。"""
+    if not os.path.exists(path_splits):
+        return {}
+    splits = json.load(open(path_splits, encoding="utf-8"))
+    applied = json.load(open(path_applied, encoding="utf-8")) if path_applied and os.path.exists(path_applied) else {}
+    log = {}
+    for code, e in splits.items():
+        if code.startswith("_") or not isinstance(e, dict):
+            continue
+        day, ratio = e.get("効力発生日"), float(e.get("比率") or 0)
+        v = info.get(code)
+        key = "%s@%s" % (code, day)
+        if key in applied or not day or ratio <= 0 or not v or len(v) < 4 or not v[3]:
+            continue
+        fy = state.get(code)
+        if not fy or fy >= day:
+            # 分割より後の期の有報がもう入っている(有報の側で割り戻し済み)
+            applied[key] = {"期末": fy, "割り戻し": False}
+            log.setdefault("有報で反映済み", []).append(code)
+            continue
+        v[3] = [round(x / ratio, 2) for x in v[3]]
+        applied[key] = {"期末": fy, "割り戻し": True}
+        log.setdefault("分割で割り戻した", []).append("%s(÷%g)" % (code, ratio))
+    if path_applied:
+        json.dump(applied, open(path_applied, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    return log
 
 
 def apply_manual(info, state):
@@ -258,6 +336,8 @@ def main():
 
     for how, codes in apply_manual(info, state).items():
         log.setdefault("手入力: " + how, []).extend(codes)
+    for how, codes in apply_splits(info, state, SPLITS, None if a.dry_run else SPLITS_APPLIED).items():
+        log.setdefault("決算後の分割: " + how, []).extend(codes)
     for how, codes in sorted(log.items()):
         print("%s: %d社 %s%s" % (how, len(codes), " ".join(codes[:30]), " …" if len(codes) > 30 else ""))
     if a.dry_run:
