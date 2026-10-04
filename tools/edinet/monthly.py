@@ -223,6 +223,10 @@ def apply_splits(info, state, path_splits, path_applied):
         key = "%s@%s" % (code, day)
         if key in applied or not day or ratio <= 0 or not v or len(v) < 4 or not v[3]:
             continue
+        if day > dt.date.today().isoformat():
+            # 効力発生日がまだ先の分割は、その日を過ぎた週次更新で割り戻す
+            log.setdefault("効力発生日待ち", []).append("%s(%s)" % (code, day))
+            continue
         fy = state.get(code)
         if not fy or fy >= day:
             # 分割より後の期の有報がもう入っている(有報の側で割り戻し済み)
