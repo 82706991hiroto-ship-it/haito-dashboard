@@ -6,6 +6,12 @@
 <title>高配当株ポートフォリオダッシュボード</title>
 <meta name="description" content="保有する高配当株を入力すると、業種別・銘柄別の配当構成比、配当金カレンダー、増配率、目標達成の見通しまで自動で集計します。登録不要・データは端末内にのみ保存。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2216%22%20fill%3D%22%231a5f7a%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2245%22%20font-size%3D%2238%22%20font-family%3D%22Helvetica%2CArial%2Csans-serif%22%20font-weight%3D%22bold%22%20fill%3D%22%23fff%22%20text-anchor%3D%22middle%22%3E%C2%A5%3C%2Ftext%3E%3C%2Fsvg%3E">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1a5f7a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="HAITO">
 <meta property="og:type" content="website">
 <meta property="og:title" content="高配当株ポートフォリオダッシュボード">
 <meta property="og:description" content="保有する高配当株を入力すると、業種別・銘柄別の配当構成比、配当金カレンダー、増配率、目標達成の見通しまで自動で集計します。登録不要・データは端末内にのみ保存。">
@@ -576,6 +582,25 @@
     font-size: 12px; color: var(--text-2); margin: 14px 0 0; line-height: 1.8;
     background: var(--field); border-radius: 12px; padding: 11px 14px;
   }
+  .nisa-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 28px; }
+  .nisa-item .k { font-size: 12px; color: var(--text-2); font-weight: 700; }
+  .nisa-item .v { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; margin: 2px 0 6px; }
+  .nisa-item .v small { font-size: 12px; font-weight: 500; color: var(--text-2); }
+  .nisa-bar { height: 6px; background: var(--field); border-radius: 3px; overflow: hidden; }
+  .nisa-bar i { display: block; height: 6px; background: var(--accent); }
+  .nisa-bar.is-high i { background: var(--warn); }
+  .nisa-bar.is-over i { background: var(--crit); }
+  .nisa-item .sub { font-size: 12px; color: var(--text-2); margin-top: 6px; }
+  .nisa-extra { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-top: 18px; }
+  .nisa-note { font-size: 12px; color: var(--muted); margin: 14px 0 0; line-height: 1.7; }
+  .buy-nisa { font-size: 12px; margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--text); }
+  .buy-nisa.is-over { background: var(--crit-soft); color: var(--crit); }
+  .install-card { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px 18px; margin: 0 0 18px; background: var(--card); }
+  .install-card h3 { margin: 0 0 6px; font-size: 15px; }
+  .install-card p, .install-card li { font-size: 13px; color: var(--text-2); line-height: 1.7; margin: 0; }
+  .install-card ol { margin: 6px 0 0; padding-left: 1.4em; }
+  .install-card .toolbar { margin-top: 10px; }
+  @media (max-width: 640px) { .nisa-grid, .nisa-extra { grid-template-columns: 1fr; } }
   .backup-status.is-warn { color: var(--crit); background: var(--crit-soft); }
   .backup-status:empty { display: none; }
 
@@ -892,6 +917,8 @@
     <button class="btn" id="clearSampleBtn">消して自分の銘柄を入れる</button>
   </p>
 
+  <div class="install-card" id="installCard" data-view="home" hidden></div>
+
   <section class="hero" id="heroSection" data-view="home">
     <div class="stage">
       <span class="tag"><svg class="crest" viewBox="0 0 64 64" aria-hidden="true"><path fill="var(--gold-hi)" d="M32 4 L39 24 L60 24 L43 37 L50 58 L32 45 L14 58 L21 37 L4 24 L25 24 Z"/></svg><span id="stageTag"></span><span class="pips" id="stagePips"><i></i><i></i><i></i><i></i><i></i></span></span>
@@ -1035,6 +1062,7 @@
         <input type="number" id="buyPrice" min="0" step="any" inputmode="decimal">
       </label>
       <div class="buy-preview" id="buyPreview"></div>
+      <p class="buy-nisa" id="buyNisa" hidden></p>
       <p class="hint" id="buyHistory"></p>
       <div class="toolbar">
         <button class="btn primary" id="buyApplyBtn" type="button">記録する</button>
@@ -2799,6 +2827,7 @@
     function paint() {
       var s0 = num(h.shares), c0 = num(h.cost), n = num(sh.value), p = num(pr.value), d = num(h.div);
       var box = document.getElementById("buyPreview");
+      paintNisaHint(h, n, p);
       if (!(n > 0) || !(p > 0)) {
         box.innerHTML = '<div class="r"><span>今の保有</span><b>' + s0.toLocaleString("ja-JP") + "株 @ " + fmtPerShare(c0) + "</b></div>";
         return;
@@ -3684,7 +3713,12 @@
 
   document.getElementById("exportBtn").addEventListener("click", function () {
     state.lastExport = new Date().toISOString();
-    var blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    // チェックシート(同じサイト)の採点・保存した評価・株価も一緒に控える
+    var out = Object.assign({}, state);
+    CHECK_KEYS.forEach(function (k) {
+      try { var v = localStorage.getItem(k); if (v) out[CHECK_EXPORT[k]] = JSON.parse(v); } catch (e) {}
+    });
+    var blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
@@ -3693,6 +3727,9 @@
     URL.revokeObjectURL(url);
     save(); renderBackupStatus();
   });
+
+  var CHECK_EXPORT = { irCheckV1: "irCheck", irPrices: "irPrices" };
+  var CHECK_KEYS = Object.keys(CHECK_EXPORT);
 
   // データはこの端末のlocalStorageにしか無いため、バックアップの鮮度を明示する。
   var BACKUP_STALE_DAYS = 30;
@@ -3706,7 +3743,7 @@
 
     if (!state.lastExport) {
       el.classList.add("is-warn");
-      el.textContent = "このデータはブラウザ内にのみ保存されています。閲覧データを消すと失われるため、「JSONエクスポート」で控えを取っておいてください。";
+      el.textContent = "このデータはブラウザ内にのみ保存されています。閲覧データを消すと失われるため、「JSONエクスポート」で控えを取っておいてください(チェックシートの採点も一緒に控えます)。";
       return;
     }
 
@@ -3732,8 +3769,15 @@
       try {
         var parsed = JSON.parse(reader.result);
         if (!parsed || !Array.isArray(parsed.holdings)) throw new Error("invalid");
+        var restored = 0;
+        CHECK_KEYS.forEach(function (k) {
+          var v = parsed[CHECK_EXPORT[k]];
+          delete parsed[CHECK_EXPORT[k]];
+          if (v && typeof v === "object") { try { localStorage.setItem(k, JSON.stringify(v)); restored++; } catch (e2) {} }
+        });
         state = loadStateFromObject(parsed);
         save(); renderAll();
+        showToast("読み込みました: 保有 " + state.holdings.length + "銘柄" + (restored ? "とチェックシートの採点・保存した評価" : ""));
       } catch (err) {
         alert("読み込みに失敗しました。正しいJSONファイルか確認してください。");
       }
@@ -5350,6 +5394,92 @@
     paintBasis();
   }
 
+  // ---------- NISA枠 ----------
+  // 新NISAの上限: 年間 成長投資枠240万円・つみたて投資枠120万円、生涯 1,800万円(うち成長投資枠1,200万円)。
+  // 生涯枠は今の保有の取得額(株数×取得単価)で数える。売った分の枠は翌年に戻るが、売却は記録していないので数えない。
+  // 今年の使用額は、今年の買い増し記録と、今年登録した銘柄の最初の購入分を足した目安。アプリの外で買った分は手で足す。
+  var NISA_LIMIT = { yearGrowth: 2400000, yearTsumitate: 1200000, lifeGrowth: 12000000, life: 18000000 };
+
+  function nisaKind(h) {
+    return h.account === "新NISA成長" ? "Growth" : h.account === "新NISAつみたて" ? "Tsumitate" : null;
+  }
+
+  function nisaUsage() {
+    var year = String(new Date().getFullYear());
+    var u = { lifeGrowth: 0, lifeTsumitate: 0, yearGrowth: 0, yearTsumitate: 0, year: year };
+    state.holdings.forEach(function (h) {
+      var kind = nisaKind(h);
+      if (!kind) return;
+      var sh = num(h.shares), total = sh * num(h.cost);
+      u["life" + kind] += total;
+      var bShares = 0, bCost = 0;
+      (Array.isArray(h.buys) ? h.buys : []).forEach(function (b) {
+        bShares += num(b.shares); bCost += num(b.shares) * num(b.price);
+        if (String(b.date || "").slice(0, 4) === year) u["year" + kind] += num(b.shares) * num(b.price);
+      });
+      // 今年登録した銘柄は、買い増し分を除いた最初の購入分も今年の枠に数える
+      if (String(h.addedAt || "").slice(0, 4) === year && sh > bShares) u["year" + kind] += Math.max(0, total - bCost);
+    });
+    var n = state.nisa && state.nisa.year === year ? state.nisa : {};
+    u.extraGrowth = num(n.extraGrowth); u.extraTsumitate = num(n.extraTsumitate);
+    u.yearGrowth += u.extraGrowth; u.yearTsumitate += u.extraTsumitate;
+    return u;
+  }
+
+  function nisaGauge(label, used, limit) {
+    var pct = limit > 0 ? used / limit * 100 : 0;
+    var cls = pct > 100 ? " is-over" : pct >= 90 ? " is-high" : "";
+    var rest = limit - used;
+    return '<div class="nisa-item"><div class="k">' + label + '</div>' +
+      '<div class="v">' + fmtYen(used) + ' <small>/ ' + fmtYen(limit) + '</small></div>' +
+      '<div class="nisa-bar' + cls + '"><i style="width:' + Math.min(100, pct).toFixed(1) + '%"></i></div>' +
+      '<div class="sub">' + (rest >= 0 ? "残り " + fmtYen(rest) : "上限を " + fmtYen(-rest) + " 超えています") + '</div></div>';
+  }
+
+  function renderNisa() {
+    var el = document.getElementById("nisaBody");
+    if (!el) return;
+    var u = nisaUsage();
+    var has = state.holdings.some(function (h) { return !!nisaKind(h); });
+    if (!has && !u.extraGrowth && !u.extraTsumitate) {
+      el.innerHTML = '<p class="nisa-note">保有銘柄の口座を「新NISA成長」か「新NISAつみたて」にすると、枠の使い方が出ます。</p>';
+      return;
+    }
+    el.innerHTML =
+      '<div class="nisa-grid">' +
+      nisaGauge(u.year + "年 成長投資枠", u.yearGrowth, NISA_LIMIT.yearGrowth) +
+      nisaGauge(u.year + "年 つみたて投資枠", u.yearTsumitate, NISA_LIMIT.yearTsumitate) +
+      nisaGauge("生涯 成長投資枠", u.lifeGrowth, NISA_LIMIT.lifeGrowth) +
+      nisaGauge("生涯 合計", u.lifeGrowth + u.lifeTsumitate, NISA_LIMIT.life) +
+      '</div>' +
+      '<div class="nisa-extra">' +
+      '<label class="field">今年、このアプリの外で使った成長投資枠(円)<input type="number" id="nisaExtraGrowth" min="0" step="1000" inputmode="numeric" value="' + (u.extraGrowth || "") + '"></label>' +
+      '<label class="field">今年、このアプリの外で使ったつみたて投資枠(円)<input type="number" id="nisaExtraTsumitate" min="0" step="1000" inputmode="numeric" value="' + (u.extraTsumitate || "") + '"></label>' +
+      '</div>' +
+      '<p class="nisa-note">今年の使用額は、今年の「＋買い増し」の記録と、今年登録した銘柄の取得額から出した目安です。投資信託の積立など、ここに入れていない買付は上の欄に足してください(毎年1月に空になります)。生涯枠は今の保有の取得額で数えています。売った分の枠は翌年に戻りますが、売却は記録していないので反映されません。正確な残りは証券会社の画面で確かめてください。</p>';
+    ["Growth", "Tsumitate"].forEach(function (k) {
+      document.getElementById("nisaExtra" + k).addEventListener("change", function (e) {
+        var y = String(new Date().getFullYear());
+        if (!state.nisa || state.nisa.year !== y) state.nisa = { year: y, extraGrowth: 0, extraTsumitate: 0 };
+        state.nisa["extra" + k] = Math.max(0, num(e.target.value));
+        save(); renderNisa();
+      });
+    });
+  }
+
+  // 買い増しの画面: 新NISAの口座なら、今年の枠の残りと、この買付で超えるかを出す
+  function paintNisaHint(h, n, p) {
+    var nb = document.getElementById("buyNisa"), kind = nisaKind(h);
+    if (!kind) { nb.hidden = true; return; }
+    var u = nisaUsage(), lim = kind === "Growth" ? NISA_LIMIT.yearGrowth : NISA_LIMIT.yearTsumitate;
+    var rest = lim - u["year" + kind], pay = n > 0 && p > 0 ? n * p : 0;
+    var label = kind === "Growth" ? "成長投資枠" : "つみたて投資枠";
+    nb.hidden = false;
+    nb.classList.toggle("is-over", pay > Math.max(0, rest));
+    nb.textContent = "今年の" + label + "の残り(目安): " + fmtYen(Math.max(0, rest)) +
+      (pay > 0 ? (pay > rest ? " ・ この買付で上限を " + fmtYen(pay - Math.max(0, rest)) + " 超えます" : " → 買うと残り " + fmtYen(rest - pay)) : "");
+  }
+
   function dashboardTemplate() {
     var tabsHtml = AXIS_ORDER.map(function (k, i) {
       return '<button class="axis-tab' + (k === currentAxis ? ' active' : '') + '" data-axis="' + k + '">' + AXIS_CONFIG[k].label + '</button>';
@@ -5393,6 +5523,10 @@
       '<div class="panel" data-view="analysis">' +
       '  <h2><span class="chap">七</span>目標対比</h2>' +
       '  <div class="goal-actual" id="goalActual"></div>' +
+      '</div>' +
+      '<div class="panel" data-view="analysis" id="nisaPanel">' +
+      '  <h2><span class="chap">◆</span>NISA枠 <span class="hint">新NISAの口座の取得額(簿価)から計算</span></h2>' +
+      '  <div id="nisaBody"></div>' +
       '</div>' +
       '<div class="panel" data-view="analysis">' +
       '  <h2><span class="chap">八</span>将来見通し <span class="hint">前提を変えると試算が変わります</span></h2>' +
@@ -5480,6 +5614,7 @@
     renderChangeSummary(agg);
     renderYields(agg);
     renderSimulation(agg);
+    renderNisa();
     renderBackupStatus();
 
     // goal vs actual
@@ -5718,6 +5853,68 @@
     if (done.length) showToast("株式分割を反映しました: " + done.join("、") + "。株数・1株配当・取得単価を直しています。");
   }
 
+
+  // ---------- ホーム画面に追加 ----------
+  // iPhoneのSafariは7日間開かないサイトのデータを消すことがあるが、ホーム画面から開くアプリは対象外。
+  // ただしiPhoneでは、ホーム画面のアプリとSafariは保存場所が別なので、控え(JSON)で移してもらう。
+  var installPrompt = null;
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); installPrompt = e; renderInstallCard(); });
+
+  function isStandalone() {
+    return window.navigator.standalone === true ||
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  }
+  function isIOS() {
+    return /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+
+  function renderInstallCard() {
+    var el = document.getElementById("installCard");
+    if (!el) return;
+    var html = "";
+    if (isStandalone()) {
+      // ホーム画面から開いた最初の一回: Safariのデータを移す案内
+      if (isIOS() && state.holdings.length === 0 && !state.installMoved) {
+        html = '<h3>Safariで使っていたデータを移す</h3>' +
+          '<p>ホーム画面のHAITOは、Safariとは別の場所に保存します。Safariで「保有銘柄」タブの「JSONエクスポート」を押して控えを作り、ここで読み込んでください。チェックシートの採点も一緒に移ります。</p>' +
+          '<div class="toolbar"><button class="btn primary" type="button" data-act="import">控えを読み込む</button>' +
+          '<button class="btn" type="button" data-act="moved">新しく始める</button></div>';
+      }
+    } else if (!state.installDismissed && (isIOS() || installPrompt)) {
+      html = '<h3>ホーム画面に追加しておくと安心です</h3>' +
+        (isIOS()
+          ? '<p>iPhoneのSafariは、7日間開かないとこのサイトのデータを消すことがあります。ホーム画面に追加したHAITOから開けば対象外です。</p>' +
+            '<ol><li>先に控えを作る(下のボタン)。ホーム画面のHAITOはSafariと保存場所が別なので、これで移します</li>' +
+            '<li>Safariの共有ボタン(□に↑)→「ホーム画面に追加」→「追加」</li>' +
+            '<li>ホーム画面のHAITOを開き、「控えを読み込む」で読み込む</li></ol>' +
+            '<p>チェックシートもHAITOの中から開けば、同じデータを使えます。</p>'
+          : '<p>アプリのように1タップで開けて、ブラウザのタブを閉じても見失いません。データはこのまま引き継がれます。</p>') +
+        '<div class="toolbar">' +
+        (isIOS() ? '<button class="btn primary" type="button" data-act="export">控えを作る(JSON)</button>'
+                 : '<button class="btn primary" type="button" data-act="install">ホーム画面に追加</button>') +
+        '<button class="btn" type="button" data-act="dismiss">閉じる</button></div>';
+    }
+    el.innerHTML = html;
+    el.hidden = !html;
+  }
+
+  document.getElementById("installCard").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-act]");
+    if (!b) return;
+    var act = b.dataset.act;
+    if (act === "export") document.getElementById("exportBtn").click();
+    if (act === "import") document.getElementById("importFile").click();
+    if (act === "install" && installPrompt) {
+      installPrompt.prompt();
+      installPrompt.userChoice.then(function () { installPrompt = null; renderInstallCard(); });
+      return;
+    }
+    if (act === "dismiss") state.installDismissed = todayIso();
+    if (act === "moved") state.installMoved = true;
+    save(); renderInstallCard();
+  });
+
   function renderAll() {
     setTab(document.body.dataset.tab || "home", true);
     fixUnknownSectors();
@@ -5729,6 +5926,7 @@
     renderDashboard();
     renderBackupStatus();
     renderOnboarding();
+    renderInstallCard();
     var dl = document.getElementById("dateline");
     if (dl) {
       var d = new Date();

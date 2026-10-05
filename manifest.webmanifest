@@ -1,0 +1,16 @@
+{
+  "name": "HAITO 高配当株ポートフォリオ",
+  "short_name": "HAITO",
+  "description": "高配当株の配当を集計するダッシュボード。データは端末の中だけに保存します。",
+  "start_url": "/haito-dashboard/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a5f7a",
+  "lang": "ja",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
