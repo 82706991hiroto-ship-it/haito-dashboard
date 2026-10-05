@@ -600,6 +600,9 @@
   .install-card p, .install-card li { font-size: 13px; color: var(--text-2); line-height: 1.7; margin: 0; }
   .install-card ol { margin: 6px 0 0; padding-left: 1.4em; }
   .install-card .toolbar { margin-top: 10px; }
+  .install-card.is-quiet { margin: 24px 0 8px; padding: 12px 16px; }
+  .install-card.is-quiet summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--accent); }
+  .install-card.is-quiet details[open] summary { margin-bottom: 8px; }
   @media (max-width: 640px) { .nisa-grid, .nisa-extra { grid-template-columns: 1fr; } }
   .backup-status.is-warn { color: var(--crit); background: var(--crit-soft); }
   .backup-status:empty { display: none; }
@@ -1227,6 +1230,8 @@
   </section>
 
   <section id="dashboardSection"></section>
+
+  <div class="install-card is-quiet" id="installTip" data-view="home" hidden></div>
 
   <details class="panel" id="sectorRefPanel" data-view="analysis">
     <summary><span class="chap">附</span>業種一覧・景気感応度分類(東証33業種、編集可)</summary>
@@ -5870,9 +5875,9 @@
   }
 
   function renderInstallCard() {
-    var el = document.getElementById("installCard");
-    if (!el) return;
-    var html = "";
+    var el = document.getElementById("installCard"), tip = document.getElementById("installTip");
+    if (!el || !tip) return;
+    var html = "", tipHtml = "";
     if (isStandalone()) {
       // ホーム画面から開いた最初の一回: Safariのデータを移す案内
       if (isIOS() && state.holdings.length === 0 && !state.installMoved) {
@@ -5882,7 +5887,8 @@
           '<button class="btn" type="button" data-act="moved">新しく始める</button></div>';
       }
     } else if (!state.installDismissed && (isIOS() || installPrompt)) {
-      html = '<h3>ホーム画面に追加しておくと安心です</h3>' +
+      // ホームの一番上ではなく、ホームの最後に控えめに出す
+      tipHtml = '<details><summary>ホーム画面に追加しておくと安心です</summary>' +
         (isIOS()
           ? '<p>iPhoneのSafariは、7日間開かないとこのサイトのデータを消すことがあります。ホーム画面に追加したHAITOから開けば対象外です。</p>' +
             '<ol><li>先に控えを作る(下のボタン)。ホーム画面のHAITOはSafariと保存場所が別なので、これで移します</li>' +
@@ -5893,13 +5899,15 @@
         '<div class="toolbar">' +
         (isIOS() ? '<button class="btn primary" type="button" data-act="export">控えを作る(JSON)</button>'
                  : '<button class="btn primary" type="button" data-act="install">ホーム画面に追加</button>') +
-        '<button class="btn" type="button" data-act="dismiss">閉じる</button></div>';
+        '<button class="btn" type="button" data-act="dismiss">今後は出さない</button></div></details>';
     }
     el.innerHTML = html;
     el.hidden = !html;
+    tip.innerHTML = tipHtml;
+    tip.hidden = !tipHtml;
   }
 
-  document.getElementById("installCard").addEventListener("click", function (e) {
+  function onInstallClick(e) {
     var b = e.target.closest("button[data-act]");
     if (!b) return;
     var act = b.dataset.act;
@@ -5913,7 +5921,9 @@
     if (act === "dismiss") state.installDismissed = todayIso();
     if (act === "moved") state.installMoved = true;
     save(); renderInstallCard();
-  });
+  }
+  document.getElementById("installCard").addEventListener("click", onInstallClick);
+  document.getElementById("installTip").addEventListener("click", onInstallClick);
 
   function renderAll() {
     setTab(document.body.dataset.tab || "home", true);
