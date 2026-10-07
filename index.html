@@ -5767,6 +5767,8 @@
   document.getElementById("startBtn").addEventListener("click", openQuickEntry);
 
   function openQuickEntry() {
+    // 入力欄は「保有銘柄」タブにあるので、先にタブを切り替える(ホームのままだと見えず、何も起きないように見える)
+    setTab("holdings");
     var details = document.querySelectorAll(".paste-import")[0];
     if (details) details.open = true;
     var area = document.getElementById("quickEntryArea");
