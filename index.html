@@ -1152,7 +1152,7 @@
       <summary>かんたん一括入力(1行に1銘柄を並べて登録)</summary>
       <div class="paste-import-body">
         <p class="hint">
-          1行に1銘柄を、<strong>コード 株数 取得単価 年間配当/株 前年配当/株</strong> の順に並べてください。後ろの3つは省略できます。行のどこかに「NISA」と書くとNISA口座として登録します。区切りは半角スペース・カンマ・タブのいずれでも構いません。銘柄名と業種は証券コードから自動補完します。
+          1行に1銘柄を、<strong>コード 株数 取得単価 年間配当/株 前年配当/株</strong> の順に並べてください。後ろの3つは省略できます。行のどこかに「NISA」と書くとNISA口座として登録します。米国株は先頭をティッカー(例: VYM)にすると、取得単価と配当をドルとして登録します。区切りは半角スペース・カンマ・タブのいずれでも構いません。銘柄名と業種は証券コードから自動補完します。
         </p>
         <pre class="hint-example">8306 100 1500
 9433 20 4000 145 NISA
@@ -1169,7 +1169,7 @@
       <summary>証券会社の保有証券画面から貼り付けて読み込む</summary>
       <div class="paste-import-body">
         <p class="hint">
-          証券会社サイトの保有証券一覧を、見出し行を含めて選択・コピーし、下に貼り付けてください。「コード」「保有数」「取得単価」などの列名から自動で判別します(列の並び順は問いません)。業種の列が無くても、証券コードから東証33業種を自動補完します。同じコード・口座の組み合わせは上書き更新されます。Yahoo!ファイナンスのポートフォリオ(コード・市場・名称/現在値/業種/購入価格/保有数/1株配当/配当利回り/メモ/前日比の表示設定)にも対応しています。メモ・口座欄に「NISA」と入っていればNISA口座として取り込みます。
+          証券会社サイトの保有証券一覧を、見出し行を含めて選択・コピーし、下に貼り付けてください。「コード」「保有数」「取得単価」などの列名から自動で判別します(列の並び順は問いません)。業種の列が無くても、証券コードから東証33業種を自動補完します。同じコード・口座の組み合わせは上書き更新されます。Yahoo!ファイナンスのポートフォリオ(コード・市場・名称/現在値/業種/購入価格/保有数/1株配当/配当利回り/メモ/前日比の表示設定)にも対応しています。メモ・口座欄に「NISA」と入っていればNISA口座として取り込みます。SBI証券の米国株は、パソコン版サイトの「口座管理」→「口座(外貨建)」の保有一覧を、銘柄の表から参考為替レートまでまとめて選択・コピーして貼り付けてください。
         </p>
         <textarea id="yahooPasteArea" rows="5" placeholder="ここに証券会社の保有証券一覧からコピーした内容を貼り付け"></textarea>
         <div class="toolbar">
@@ -2504,9 +2504,57 @@
     return { results: results, skipped: skipped, fx: fx };
   }
 
+  // SBI証券(PCサイト)の「口座(外貨建)」の保有一覧をコピーした文字。
+  // 「VYM NYSEArca」のようなティッカーの行のあとに、保有数量・取得単価・現在値の順で数字が続く。
+  // 口座は「米国株式(特定預り)」「米国株式(NISA預り(成長投資枠))」の見出しから決める。
+  function parseSbiForeign(text, priceDate) {
+    var tokens = text.replace(/\r/g, "").split(/\n/).map(function (l) { return l.trim(); });
+    var results = [], account = "特定", fx = null;
+    for (var i = 0; i < tokens.length; i++) {
+      var t = tokens[i];
+      if (/米国株式\s*[(（]/.test(t)) account = accountFromText(t) || "特定";
+      var fxm = t.match(/^米ドル\s*[\/／]\s*円(?:[\s\t]+([0-9.,]+))?$|^米ドル\s*[\/／]\s*円[\s\t]+([0-9.,]+)/);
+      if (fxm) {
+        var fv = fxm[1] || fxm[2] || tokens[i + 1];
+        if (parsePasteNum(fv) > 0) fx = parsePasteNum(fv);
+      }
+      var m = t.match(/(?:^|[\s\t])([A-Z][A-Z0-9.\-]{0,6})\s+(NYSE\s*Arca|NYSEArca|NYSE|NASDAQ|Nasdaq|AMEX|NYSE\s*American|BATS|Cboe)\b/);
+      if (!m) continue;
+      // ティッカーの後ろ(同じ行の残りと、続く行)から数字を3つ拾う
+      var rest = t.slice(t.indexOf(m[0]) + m[0].length);
+      var nums = [];
+      var pool = [rest].concat(tokens.slice(i + 1, i + 12));
+      for (var k = 0; k < pool.length && nums.length < 3; k++) {
+        if (k > 0 && /[A-Z][A-Z0-9.\-]{0,6}\s+(NYSE|NASDAQ|Nasdaq|AMEX|BATS|Cboe)/.test(pool[k])) break;
+        (pool[k].match(/[+\-]?[0-9][0-9,]*(?:\.[0-9]+)?/g) || []).forEach(function (x) {
+          if (nums.length < 3 && !/^[+\-]/.test(x)) nums.push(parsePasteNum(x));
+        });
+      }
+      if (nums.length < 2) continue;
+      // 銘柄名はティッカーの行より前の、数字を含まない行
+      var nameParts = [];
+      for (var j = i - 1; j >= 0 && j >= i - 4; j--) {
+        var tj = tokens[j];
+        // 数字だけの行(前の銘柄の評価額など)や見出し・ボタンの文字で止める
+        if (!tj || /^[+\-]?[0-9,.\s]+$/.test(tj) || /買付|売却|積立|取引|評価|保有数量|銘柄|取得単価|現在値|円換算|売却注文/.test(tj)) break;
+        nameParts.unshift(tj.split("\t").pop());
+      }
+      var before = t.slice(0, t.indexOf(m[0])).trim();
+      if (before) nameParts.push(before);
+      results.push({
+        market: "us", code: m[1], name: nameParts.join("").replace(/\s+/g, " ").trim() || m[1],
+        sector: US_SECTOR, account: account, shares: nums[0], usdCost: nums[1],
+        usdPrice: nums[2] !== undefined ? nums[2] : "", priceDate: priceDate || todayStamp(), months: [3, 6, 9, 12]
+      });
+    }
+    return { results: results, skipped: 0, fx: fx };
+  }
+
   function parseHoldingsPaste(text, priceDate) {
     var generic = parseHeaderTableFormat(text, priceDate);
     if (generic.results.length > 0) return generic;
+    var sbi = parseSbiForeign(text, priceDate);
+    if (sbi.results.length > 0) return sbi;
     return parseBlockFormat(text);
   }
 
@@ -2521,10 +2569,12 @@
           h = { id: uid(), code: r.code, name: r.name, account: r.account, addedAt: todayIso(), prevDiv: "" };
           state.holdings.push(h); added++;
         } else updated++;
-        h.market = "us"; h.name = r.name; h.sector = r.sector; h.shares = r.shares;
+        h.market = "us"; if (r.name && (r.name !== r.code || !h.name)) h.name = r.name; h.sector = r.sector; h.shares = r.shares;
         h.usd = h.usd || { div: "", prevDiv: "" };
         h.usd.cost = r.usdCost;
-        if (r.usdPrice !== "" && r.usdPrice !== undefined) { h.usd.price = r.usdPrice; h.priceDate = r.priceDate; }
+        if (r.usdPrice !== "" && r.usdPrice !== undefined) { h.usd.price = r.usdPrice; h.priceDate = r.priceDate || todayStamp(); }
+        if (r.usdDiv !== "" && r.usdDiv !== undefined) h.usd.div = r.usdDiv;
+        if (r.usdPrevDiv !== "" && r.usdPrevDiv !== undefined) h.usd.prevDiv = r.usdPrevDiv;
         if (!h.months || !h.months.length) h.months = r.months;
         syncUsd(h);
         return;
@@ -2595,10 +2645,19 @@
       if (parts.length === 0) return;
 
       var code = parts[0];
-      if (!/^[0-9][0-9A-Za-z]{2,4}$/.test(code)) { skipped++; return; }
-
       var nums = parts.slice(1).map(parsePasteNum);
       function at(i) { return nums[i] === undefined ? "" : nums[i]; }
+
+      // 英字で始まるのは米国株のティッカー。取得単価・配当はドル
+      if (/^[A-Za-z][A-Za-z0-9.\-]{0,6}$/.test(code)) {
+        results.push({
+          market: "us", code: code.toUpperCase(), name: code.toUpperCase(), sector: US_SECTOR,
+          account: lineAccount || "特定", shares: at(0), usdCost: at(1), usdPrice: "",
+          usdDiv: at(2), usdPrevDiv: at(3), months: [3, 6, 9, 12]
+        });
+        return;
+      }
+      if (!/^[0-9][0-9A-Za-z]{2,4}$/.test(code)) { skipped++; return; }
 
       // 配当が省略されたら、コードから取得済みの年度別配当で補う
       var autoDivs = dividendsFor(code) || [];
