@@ -878,6 +878,9 @@
   .show-all { margin-top: 10px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--accent); background: none; border: none; padding: 6px 0; cursor: pointer; }
 
   td.sum { display: none; }
+  td.yield-cell b { display: block; font-variant-numeric: tabular-nums; }
+  td.yield-cell b.muted { color: var(--muted); font-weight: 500; }
+  td.yield-cell small { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; }
   body:not([data-tab="home"]) header.top p, body:not([data-tab="home"]) header.top .dateline { display: none; }
   @media (max-width: 700px) {
     /* 保有銘柄: 1銘柄1行。押すと入力欄が開く */
@@ -886,12 +889,17 @@
     #holdingsTable tr:not(.open) td:not(.sum) { display: none; }
     #holdingsTable td.sum { display: block; order: -1; padding: 0; border: none; }
     #holdingsTable td.sum::before { content: none; }
-    td.sum button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; width: 100%; text-align: left; background: none; border: none;
+    td.sum button { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 10px; width: 100%; text-align: left; background: none; border: none;
       padding: 13px 0; font: inherit; color: var(--text); cursor: pointer; }
-    td.sum button::after { content: "›"; grid-row: 1 / span 2; grid-column: 2; align-self: center; color: var(--muted); font-size: 20px; transition: transform .2s var(--ease); }
+    td.sum button::after { content: "›"; grid-row: 1 / span 2; grid-column: 3; align-self: center; color: var(--muted); font-size: 20px; transition: transform .2s var(--ease); }
     #holdingsTable tr.open td.sum button::after { transform: rotate(90deg); }
     .sum-name { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .sum-meta { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+    .sum-meta { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; grid-column: 1; grid-row: 2; }
+    .sum-name { grid-column: 1; grid-row: 1; }
+    .sum-yield { grid-column: 2; grid-row: 1 / span 2; align-self: center; text-align: right; line-height: 1.15; }
+    .sum-yield b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+    .sum-yield small { font-size: 10px; color: var(--muted); }
+    .sum-yield .muted { color: var(--muted); font-weight: 500; }
     .sum-meta em { font-style: normal; font-weight: 700; }
     .sum-meta em.up { color: var(--accent); } .sum-meta em.down { color: var(--crit); }
 
@@ -1001,7 +1009,7 @@
             <th>コード</th><th>銘柄名</th><th>業種</th><th>口座</th>
             <th>株数</th><th>取得単価(円)</th><th>配当/株(税引前)</th>
             <th>前年配当/株</th><th>配当動向</th><th>権利確定月</th>
-            <th>年間配当金</th><th>取得額</th><th></th>
+            <th>年間配当金</th><th>利回り</th><th>取得額</th><th></th>
           </tr>
         </thead>
         <tbody id="holdingsBody"></tbody>
@@ -1527,6 +1535,16 @@
       tdDiv.textContent = fmtYen(c.divPre);
       tr.appendChild(tdDiv);
 
+      // 利回り: 株価があれば現在利回り、下に取得単価に対する利回り(簿価利回り)
+      var tdYield = document.createElement("td");
+      tdYield.className = "num yield-cell";
+      tdYield.dataset.label = "利回り";
+      var yNow = currentYieldOf(h), yBook = bookYieldOf(h);
+      tdYield.innerHTML = (yNow !== null ? '<b>' + yNow.toFixed(2) + '%</b>' : '<b class="muted">―</b>') +
+        '<small>取得 ' + (yBook !== null && yBook > 0 ? yBook.toFixed(2) + "%" : "―") + '</small>';
+      tdYield.title = "上: 現在の株価に対する利回り(株価を入れると出ます) / 下: 取得単価に対する利回り";
+      tr.appendChild(tdYield);
+
       var tdAcq = document.createElement("td");
       tdAcq.className = "num";
       tdAcq.dataset.label = "取得額";
@@ -2036,9 +2054,14 @@
   var openRows = {};
   function summaryHtml(h, c) {
     var t = c.trend === "up" ? '<em class="up">▲</em>' : c.trend === "down" ? '<em class="down">▽</em>' : "";
+    var yNow = currentYieldOf(h), yBook = bookYieldOf(h);
+    var yv = yNow !== null ? yNow : (yBook !== null && yBook > 0 ? yBook : null);
+    var yl = yNow !== null ? "利回り" : "取得利回り";
     return '<span class="sum-name">' + escapeHtml((h.code ? h.code + " " : "") + String(h.name || "銘柄を入力").normalize("NFKC")) + '</span>' +
+      '<span class="sum-yield">' + (yv !== null ? '<b>' + yv.toFixed(2) + '%</b><small>' + yl + '</small>' : '<b class="muted">―</b><small>利回り</small>') + '</span>' +
       '<span class="sum-meta">' + (num(h.shares) ? num(h.shares).toLocaleString("ja-JP") + "株 ・ " : "") +
-      "年" + fmtYen(c.divPre) + " " + t + '</span>';
+      "年" + fmtYen(c.divPre) + " " + t +
+      (yNow !== null && yBook !== null && yBook > 0 ? " ・ 取得 " + yBook.toFixed(2) + "%" : "") + '</span>';
   }
   function makeSummaryCell(h, c, tr) {
     var td = document.createElement("td");
