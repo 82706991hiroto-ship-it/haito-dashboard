@@ -352,6 +352,26 @@
     font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,.45);
     max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  /* 縦に余裕のあるタイルは2行まで折り返して、名前を切らずに見せる */
+  .tm-tile .tm-name.is-wrap {
+    white-space: normal; word-break: break-all; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.15;
+  }
+  .tm-tile.is-light { color: #0d1b24; }
+  .tm-tile.is-light .tm-name, .tm-tile.is-light .tm-pct { text-shadow: none; }
+  /* NISA口座の印。名前の前に付けると文字が削られるので、角に小さく置く */
+  .tm-tile .tm-nisa {
+    position: absolute; top: 3px; left: 4px; font-size: 8px; line-height: 1; opacity: .8;
+  }
+  .tm-tile.is-selected { z-index: 3; box-shadow: inset 0 0 0 2px #fff; }
+  .tm-info {
+    margin: 10px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
+    font-size: 13px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+  }
+  .tm-info[hidden] { display: none; }
+  .tm-info b { font-size: 14px; }
+  .tm-info .k { color: var(--text-2); font-size: 12px; }
+  .tm-info .btn { margin-left: auto; padding: 6px 12px; font-size: 12px; }
   .tm-tile .tm-pct {
     opacity: .92; text-shadow: 0 1px 2px rgba(0,0,0,.45);
     font-variant-numeric: tabular-nums; white-space: nowrap;
@@ -4054,9 +4074,9 @@
   // ---------- 色の尺度 ----------
   // 値上がり/値下がりではなく、配当固有の指標(増配率・簿価利回り)を色に割り当てる。
   // 増配は藍の濃淡(明るいほど大きい増配)、減配は赤。アプリ全体の「増配=藍、減配=赤」と合わせる
-  var GROWTH_UP = ["#203a4a", "#22597a", "#2f7aa3", "#5aa9d2"];
-  var GROWTH_DOWN = ["#553438", "#8c2f36", "#c02b33", "#e04048"];
-  var GROWTH_FLAT = "#474e59";
+  var GROWTH_UP = ["#2b4352", "#2a6a8e", "#3b93c2", "#86c9ea"];
+  var GROWTH_DOWN = ["#5a3a3e", "#8f343b", "#c23a41", "#f07a7f"];
+  var GROWTH_FLAT = "#5a626e";
   var HEAT_NA = "#2b313a";
   var YIELD_RAMP = ["#3b3c34", "#6a5822", "#98791c", "#c69c17", "#edc02d"];
 
@@ -4134,8 +4154,59 @@
   // グループの頭に名前の帯を置く(銘柄別はグループ=銘柄なので帯を出さない)。
   var HEAT_GAP = 3, HEAT_HEAD = 16;
 
+  // タイルに出す短い名前。全角英数を半角にし、長い定型語を略す(明細や一覧はそのままの名前)
+  function shortStockName(name) {
+    var t = String(name || "");
+    try { t = t.normalize("NFKC"); } catch (e) {}
+    return t.replace(/株式会社|\(株\)/g, "")
+      .replace(/ホールディングス|ホールディング|ホールディン|ホールデ|HLDGS|ＨＬＤＧＳ/g, "HD")
+      .replace(/フィナンシャルグループ|フィナンシャルG|フィナンシャル・グループ/g, "FG")
+      .replace(/コーポレーション/g, "")
+      .replace(/\s+/g, "").trim() || name;
+  }
+
+  // 明るい色のタイルは白文字が読みにくいので、濃い文字に切り替える
+  function isLightColor(css) {
+    var m = String(css).match(/\d+/g);
+    if (!m || m.length < 3) return false;
+    var l = (0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]) / 255;
+    return l > 0.62;
+  }
+
+  // タイルを押したときに下に出す内容(スマホでは吹き出しが出ないため)
+  var TILE_INFO = {};
+  function showTileInfo(id) {
+    var box = document.getElementById("tmInfo"), d = TILE_INFO[id];
+    Array.prototype.forEach.call(document.querySelectorAll(".tm-tile.is-selected"), function (t) { t.classList.remove("is-selected"); });
+    if (!box || !d) return;
+    var tile = document.querySelector('.tm-tile[data-holding-id="' + id + '"]');
+    if (tile) tile.classList.add("is-selected");
+    var r = d.row;
+    box.innerHTML = "";
+    var title = document.createElement("b");
+    title.textContent = (r.code ? r.code + " " : "") + (r.name || "") + (isTaxFree(r.account) ? " ◆" : "");
+    box.appendChild(title);
+    [["業種など", d.group], ["構成比", fmtPct(d.pct) + "(" + fmtYen(d.value) + ")"],
+     ["増配率", COLOR_MODES.growth.text(growthOf(r))], ["現在利回り", COLOR_MODES.current.text(currentYieldOf(r))],
+     ["簿価利回り", COLOR_MODES.yield.text(bookYieldOf(r))]].forEach(function (kv) {
+      var sp = document.createElement("span");
+      sp.innerHTML = '<span class="k"></span> ';
+      sp.firstChild.textContent = kv[0];
+      sp.appendChild(document.createTextNode(kv[1]));
+      box.appendChild(sp);
+    });
+    var btn = document.createElement("button");
+    btn.type = "button"; btn.className = "btn"; btn.textContent = "明細を開く";
+    btn.addEventListener("click", function () { focusHolding(id); });
+    box.appendChild(btn);
+    box.hidden = false;
+  }
+
   function renderTreemap(container, agg, axisKey, colorKey) {
     container.innerHTML = "";
+    TILE_INFO = {};
+    var info = document.getElementById("tmInfo");
+    if (info) info.hidden = true;
     var rect = container.getBoundingClientRect();
     var W = rect.width, H = rect.height;
     if (agg.totalDivPre <= 0 || W <= 0) {
@@ -4168,7 +4239,7 @@
 
     groupRects.forEach(function (gr) {
       var group = groupMap[gr.item.key];
-      var showHead = axisKey !== "stock" && gr.w >= 58 && gr.h >= 48;
+      var showHead = axisKey !== "stock" && gr.w >= 44 && gr.h >= 40;
       var head = showHead ? HEAT_HEAD : 0;
       var ix = gr.x + HEAT_GAP, iy = gr.y + HEAT_GAP + head;
       var iw = Math.max(0, gr.w - HEAT_GAP * 2), ih = Math.max(0, gr.h - HEAT_GAP * 2 - head);
@@ -4204,24 +4275,37 @@
         tile.style.background = mode.color ? mode.color(metric) : colorMap[gr.item.key];
         var valueText = mode.text ? mode.text(metric) : fmtPct(pct);
 
-        var nisaMark = isTaxFree(row.account) ? "◆ " : "";
         var name = row.name || row.code || "無名銘柄";
+        if (isLightColor(tile.style.background)) tile.classList.add("is-light");
+        TILE_INFO[row.id] = { row: row, pct: pct, value: tr.item.value, group: group.label };
         tile.dataset.holdingId = row.id;
         tile.tabIndex = 0;
         tile.setAttribute("role", "button");
-        tile.setAttribute("aria-label", name + " の明細へ移動");
+        tile.setAttribute("aria-label", name + " の詳しい情報を表示");
         tile.title = group.label + " / " + name + "\n構成比 " + fmtPct(pct) + " (" + fmtYen(tr.item.value) + ")"
           + "\n増配率 " + COLOR_MODES.growth.text(growthOf(row))
           + " / 現在利回り " + COLOR_MODES.current.text(currentYieldOf(row))
           + " / 簿価利回り " + COLOR_MODES.yield.text(bookYieldOf(row));
 
         // タイルの大きさに合わせて文字を拡縮し、市場ヒートマップの見え方に近づける
+        if (isTaxFree(row.account) && tr.w >= 40 && tr.h >= 44) {
+          var nm = document.createElement("span");
+          nm.className = "tm-nisa";
+          nm.textContent = "◆";
+          tile.appendChild(nm);
+        }
         if (tr.w > 30 && tr.h > 15) {
           var fs = Math.max(9.5, Math.min(18, Math.sqrt(tr.w * tr.h) / 5.6));
           var nameEl = document.createElement("div");
-          nameEl.className = "tm-name";
+          var label = shortStockName(name);
+          // 1行に収まらず、縦に2行分の余裕があれば折り返す
+          // 少しだけはみ出す名前は、変な位置で2行に割らず、文字を少し小さくして1行に収める
+          var over = label.length * fs / Math.max(1, tr.w - 6);
+          if (over > 1 && over <= 1.4) { fs = Math.max(9, fs / over); over = 1; }
+          var wrap = over > 1 && tr.h > fs * 2.3 + (tr.h > 28 ? fs * 0.9 : 0) + 4;
+          nameEl.className = "tm-name" + (wrap ? " is-wrap" : "");
           nameEl.style.fontSize = fs.toFixed(1) + "px";
-          nameEl.textContent = nisaMark + name;
+          nameEl.textContent = label;
           tile.appendChild(nameEl);
           if (tr.h > 28) {
             var pctEl = document.createElement("div");
@@ -5494,12 +5578,13 @@
     }).join('');
     return '' +
       '<div class="panel" data-view="analysis">' +
-      '  <h2><span class="chap">三</span>構成 <span class="hint">面積は年間配当金額・◆はNISA口座・タイルを押すと明細へ</span></h2>' +
+      '  <h2><span class="chap">三</span>構成 <span class="hint">面積は年間配当金額・◆はNISA口座・タイルを押すと詳しく</span></h2>' +
       '  <div class="heat-controls">' +
       '    <div class="ctl-row"><span class="ctl-label">分け方</span><div class="axis-tabs" id="axisTabs">' + tabsHtml + '</div></div>' +
       '    <div class="ctl-row"><span class="ctl-label">色</span><div class="axis-tabs" id="colorTabs">' + colorTabsHtml + '</div></div>' +
       '  </div>' +
       '  <div class="treemap" id="treemapEl"></div>' +
+      '  <div class="tm-info" id="tmInfo" hidden></div>' +
       '  <div class="heat-scale" id="heatScale"></div>' +
       '  <p class="heat-note" id="heatNote"></p>' +
       '  <ul class="legend" id="axisLegend"></ul>' +
@@ -5592,14 +5677,14 @@
       var tmEl = document.getElementById("treemapEl");
       tmEl.addEventListener("click", function (e) {
         var tile = e.target.closest(".tm-tile");
-        if (tile && tile.dataset.holdingId) focusHolding(tile.dataset.holdingId);
+        if (tile && tile.dataset.holdingId) showTileInfo(tile.dataset.holdingId);
       });
       tmEl.addEventListener("keydown", function (e) {
         if (e.key !== "Enter" && e.key !== " ") return;
         var tile = e.target.closest(".tm-tile");
         if (!tile || !tile.dataset.holdingId) return;
         e.preventDefault();
-        focusHolding(tile.dataset.holdingId);
+        showTileInfo(tile.dataset.holdingId);
       });
       bindTabs("calendarTabs", function (btn) {
         calendarMode = btn.dataset.mode;
