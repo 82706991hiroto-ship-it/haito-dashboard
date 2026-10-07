@@ -2227,7 +2227,7 @@
   // 形式B: 多くの証券会社のように、ヘッダー行+1銘柄1行のタブ(またはカンマ)区切り表としてコピーされる形式。
   // 列の並び順は問わず、ヘッダーの文言から列を自動判定する。
   var HEADER_SYNONYMS = {
-    code: ["コード", "銘柄コード", "証券コード", "ｺｰﾄﾞ"],
+    code: ["コード", "銘柄コード", "証券コード", "ｺｰﾄﾞ", "銘柄コード・ティッカー", "銘柄コード/ティッカー", "ティッカー"],
     name: ["銘柄名", "銘柄", "名称"],
     shares: ["保有数量", "保有数", "数量", "口数", "株数", "保有株数"],
     cost: ["取得単価", "平均取得単価", "平均取得価額", "平均単価", "取得価額", "取得価格", "購入価格", "買付単価", "簿価単価"],
@@ -2403,7 +2403,7 @@
     var nisa = parsed.results.filter(function (r) { return isTaxFree(r.account); }).length;
     var msg = merged.added + "件追加、" + merged.updated + "件更新しました。"
       + "(NISA " + nisa + "件 / 特定 " + (parsed.results.length - nisa) + "件)";
-    if (parsed.skipped > 0) msg += " 形式が一致しない行を" + parsed.skipped + "件スキップしました。";
+    if (parsed.skipped > 0) msg += " 日本株以外(米国株・投資信託など)や合計の行など、" + parsed.skipped + "行は読み込んでいません。";
     statusEl.textContent = msg;
     return true;
   }
