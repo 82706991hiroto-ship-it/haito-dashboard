@@ -37,6 +37,10 @@ jobs:
           else
             python3 tools/edinet/monthly.py --days "${{ inputs.days || '45' }}"
           fi
+      - name: 米国の個別株の配当(SEC EDGAR)を更新
+        if: github.event_name != 'push'
+        continue-on-error: true
+        run: python3 tools/us/sec_dividends.py
       - name: 変わっていればコミットして公開
         env:
           GH_TOKEN: ${{ github.token }}

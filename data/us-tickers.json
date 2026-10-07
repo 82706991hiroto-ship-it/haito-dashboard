@@ -1,0 +1,11 @@
+{
+  "_説明": "SECの決算書(10-K)から年間の1株配当を自動で取る米国の個別株。ETFは運用会社の規約で自動取得できないので入れない。足したいティッカーはここに書く(米国の会社で10-Kを出しているもの)。",
+  "tickers": ["NVDA", "AAPL", "MSFT", "AVGO", "TXN", "CSCO", "INTC", "IBM", "QCOM",
+              "KO", "PEP", "PG", "CL", "KMB", "GIS", "KHC", "MDLZ", "MO", "PM", "HSY",
+              "JNJ", "PFE", "MRK", "ABBV", "BMY", "AMGN", "GILD", "LLY",
+              "XOM", "CVX", "COP", "T", "VZ", "DUK", "SO", "D", "NEE", "ED", "AEP",
+              "JPM", "BAC", "WFC", "C", "GS", "MS", "BLK", "USB", "PNC",
+              "HD", "LOW", "MCD", "WMT", "TGT", "COST", "SBUX",
+              "MMM", "LMT", "RTX", "CAT", "DE", "UPS", "UNP", "HON", "GD", "ITW", "EMR",
+              "O", "SPG", "PLD", "AMT", "V", "MA"]
+}
