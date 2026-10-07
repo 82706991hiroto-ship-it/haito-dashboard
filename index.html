@@ -879,6 +879,12 @@
 
   td.sum { display: none; }
   td.yield-cell b { display: block; font-variant-numeric: tabular-nums; }
+  .fx-bar { font-size: 13px; margin: 12px 0 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .fx-bar input { width: 90px; }
+  .usd-tag { font-size: 11px; color: var(--muted); margin-left: 3px; }
+  .us-badge { display: inline-block; font-size: 10px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; margin-right: 4px; vertical-align: 1px; }
+  .market-filter { display: flex; gap: 6px; margin: 0 0 6px; }
+  .market-filter[hidden] { display: none; }
   td.yield-cell b.muted { color: var(--muted); font-weight: 500; }
   td.yield-cell small { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; }
   body:not([data-tab="home"]) header.top p, body:not([data-tab="home"]) header.top .dateline { display: none; }
@@ -1024,6 +1030,11 @@
       <input type="file" id="importFile" accept="application/json" style="display:none">
     </div>
     <p class="backup-status" id="backupStatus"></p>
+
+    <p class="fx-bar" id="fxBar" hidden>
+      米国株の換算: 1ドル = <input type="number" id="fxUsd" min="1" step="0.01" inputmode="decimal"> 円
+      <span class="hint" id="fxNote"></span>
+    </p>
 
     <div class="missing-box" id="missingBox" hidden>
       <h3>入力が足りない項目</h3>
@@ -1295,6 +1306,23 @@
 
   var STORAGE_KEY = "haitoDashboardV1";
   var TAX_RATE = 0.20315;
+  // 米国株の配当は、米国で10%引かれたあと日本で20.315%(NISAは日本の分なし)
+  var US_WITHHOLD = 0.10;
+  var US_SECTOR = "米国株・ETF";
+  var US_FX_FALLBACK = 150;
+  function isUS(h) { return !!h && h.market === "us"; }
+  function usdRate() { return state.fx && num(state.fx.usd) > 0 ? num(state.fx.usd) : US_FX_FALLBACK; }
+  // 米国株はドルの値(h.usd)を正として持ち、円の欄(取得単価・配当・株価)は為替で換算して入れておく。
+  // こうしておくと、集計・カレンダー・利回りなど円で計算している所がそのまま使える。
+  function syncUsd(h) {
+    if (!isUS(h)) return;
+    var u = h.usd = h.usd || {};
+    var fx = usdRate();
+    function y(v) { return v === "" || v == null || !(num(v) > 0) ? "" : Math.round(num(v) * fx * 100) / 100; }
+    h.cost = y(u.cost); h.div = y(u.div); h.prevDiv = y(u.prevDiv);
+    if (num(u.price) > 0) h.price = y(u.price);
+  }
+  function syncAllUsd() { (state.holdings || []).forEach(syncUsd); }
 
   // 口座区分。非課税かどうかだけが税計算に効くが、内訳を分けて持てると
   // 「新NISAの枠をどれだけ使ったか」を口座別の構成で見られる。
@@ -1318,7 +1346,9 @@
     "輸送用機器": "景気敏感", "精密機器": "景気敏感", "海運業": "景気敏感", "空運業": "景気敏感",
     "銀行業": "景気敏感", "証券、商品先物取引業": "景気敏感", "その他金融業": "景気敏感", "卸売業": "景気敏感",
     // ETF・REITなど、内蔵データに業種が無いもの。区分は業種の区分表で変えられる
-    "未分類": "景気敏感"
+    "未分類": "景気敏感",
+    // 米国株・米国ETF。中身が分散しているETFが多いので、区分は業種の区分表で変えられる
+    "米国株・ETF": "景気敏感"
   };
   var UNCLASSIFIED = "未分類";
   var SECTOR_NAMES = Object.keys(SECTOR_DEFAULT_CLASS);
@@ -1377,6 +1407,7 @@
   }
 
   var state = loadState();
+  syncAllUsd();
 
   function save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
@@ -1407,7 +1438,8 @@
     var shares = num(h.shares), cost = num(h.cost), div = num(h.div);
     var acquisition = shares * cost;
     var divPre = shares * div;
-    var divPost = isTaxFree(h.account) ? divPre : divPre * (1 - TAX_RATE);
+    var afterUs = isUS(h) ? divPre * (1 - US_WITHHOLD) : divPre;
+    var divPost = isTaxFree(h.account) ? afterUs : afterUs * (1 - TAX_RATE);
     var trend = null;
     var p = prevDivOf(h);
     if (p) {
@@ -1485,7 +1517,20 @@
   function fmtPct(n, d) { return (isFinite(n) ? n : 0).toFixed(d == null ? 1 : d) + "%"; }
 
   // ---------- Holdings table ----------
+  function renderFxBar() {
+    var bar = document.getElementById("fxBar");
+    if (!bar) return;
+    var has = state.holdings.some(isUS);
+    bar.hidden = !has;
+    if (!has) return;
+    var inp = document.getElementById("fxUsd");
+    if (document.activeElement !== inp) inp.value = usdRate();
+    document.getElementById("fxNote").textContent = state.fx && state.fx.date
+      ? "(" + state.fx.date + " 時点。楽天証券のCSVを読み込むと更新)" : "(仮の値です。今のレートを入れてください)";
+  }
+
   function renderTable() {
+    renderFxBar();
     renderMissingList();
     var tbody = document.getElementById("holdingsBody");
     tbody.innerHTML = "";
@@ -1597,7 +1642,17 @@
     wireSuggest(codeInput, pickStock);
     wireSuggest(nameInput, pickStock);
     codeInput.addEventListener("input", function () {
-      var info = CODE_INFO_MAP[codeInput.value.trim()];
+      var raw = codeInput.value.trim();
+      // 英字で始まるコードは米国株のティッカーとして扱う(VYM、SPYD、KO など)
+      if (/^[A-Za-z][A-Za-z0-9.\-]{0,6}$/.test(raw) && !CODE_INFO_MAP[raw] && !isUS(h)) {
+        h.code = raw.toUpperCase(); h.market = "us";
+        h.usd = { cost: "", div: "", prevDiv: "", price: "" };
+        h.sector = US_SECTOR;
+        if (!h.months || !h.months.length) h.months = [3, 6, 9, 12];
+        syncUsd(h); save(); renderTable(); renderDashboard();
+        return;
+      }
+      var info = CODE_INFO_MAP[raw];
       if (!info) return;
       nameInput.value = info[0]; h.name = info[0];
       if (SECTOR_NAMES.indexOf(info[1]) !== -1) { sectorSelect.value = info[1]; h.sector = info[1]; }
@@ -1769,6 +1824,23 @@
         if (pa && pa.auto) input.placeholder = pa.v + "(自動)";
       }
     }
+    var usdField = isUS(h) && (field === "cost" || field === "div" || field === "prevDiv");
+    if (usdField) {
+      h.usd = h.usd || {};
+      td.dataset.label = (FIELD_LABELS[field] || "") + "(ドル)";
+      input.placeholder = field === "cost" ? "ドル" : "ドル(年間)";
+      input.title = "米国株はドルで入れます。円には 1ドル=" + usdRate() + "円 で換算します";
+      input.value = h.usd[field] == null ? "" : h.usd[field];
+      input.addEventListener("input", function () {
+        h.usd[field] = input.value;
+        syncUsd(h); save(); updateRowComputedCells(h.id); renderDashboard();
+      });
+      td.appendChild(input);
+      var cur = document.createElement("span");
+      cur.className = "usd-tag"; cur.textContent = "$";
+      td.appendChild(cur);
+      return td;
+    }
     input.value = h[field] == null ? "" : h[field];
     if (field === "div") {
       var divBefore = h.div;
@@ -1914,7 +1986,8 @@
     document.getElementById("detailStreak").textContent = dstk
       ? dstk.text + " ・ 1株配当 " + dser.slice().reverse().map(function (v) { return fmtPerShare(v); }).join(" → ")
       : "";
-    price.value = h.price == null ? "" : h.price;
+    price.value = isUS(h) ? (h.usd && h.usd.price != null ? h.usd.price : "") : (h.price == null ? "" : h.price);
+    price.placeholder = isUS(h) ? "ドル" : "";
     perk.value = h.perk == null ? "" : h.perk;
     payout.value = h.payout == null ? "" : h.payout;
     exclude.checked = !!h.excluded;
@@ -1954,6 +2027,13 @@
     var priceOnInput = price.oninput;
     price.oninput = function () {
       h.priceDate = price.value === "" ? undefined : todayStamp();
+      if (isUS(h)) {
+        // 米国株の株価はドルで受け取り、円に換算して入れる
+        h.usd = h.usd || {}; h.usd.price = price.value;
+        if (price.value === "") h.price = undefined; else syncUsd(h);
+        save(); paintYield(); renderTable(); renderDashboard();
+        return;
+      }
       priceOnInput();
     };
     bind(perk, "perk", true);
@@ -2057,7 +2137,7 @@
     var yNow = currentYieldOf(h), yBook = bookYieldOf(h);
     var yv = yNow !== null ? yNow : (yBook !== null && yBook > 0 ? yBook : null);
     var yl = yNow !== null ? "利回り" : "取得利回り";
-    return '<span class="sum-name">' + escapeHtml((h.code ? h.code + " " : "") + String(h.name || "銘柄を入力").normalize("NFKC")) + '</span>' +
+    return '<span class="sum-name">' + (isUS(h) ? '<span class="us-badge">米</span>' : "") + escapeHtml((h.code ? h.code + " " : "") + String(h.name || "銘柄を入力").normalize("NFKC")) + '</span>' +
       '<span class="sum-yield">' + (yv !== null ? '<b>' + yv.toFixed(2) + '%</b><small>' + yl + '</small>' : '<b class="muted">―</b><small>利回り</small>') + '</span>' +
       '<span class="sum-meta">' + (num(h.shares) ? num(h.shares).toLocaleString("ja-JP") + "株 ・ " : "") +
       "年" + fmtYen(c.divPre) + " " + t +
@@ -2281,6 +2361,7 @@
     cost: ["取得単価", "平均取得単価", "平均取得価額", "平均単価", "取得価額", "取得価格", "購入価格", "買付単価", "簿価単価"],
     sector: ["業種", "業種名"],
     account: ["口座", "口座区分", "預り区分", "口座種別", "口座種類", "保管区分", "預り", "課税区分"],
+    kind: ["種別", "商品", "商品区分", "商品種別"],
     div: ["1株配当", "予想配当", "配当金(1株)", "1株当り配当金"],
     // 「現在値［円］」の後ろに「現在値（前日比）［円］」が並ぶ形式がある。
     // 括弧以降を落とすとどちらも「現在値」になるが、先に出た列を採るので現在値が入る。
@@ -2354,10 +2435,13 @@
     if (lines.length < 2) return { results: [], skipped: 0 };
 
     var colMap = null, sectionAccount = null;
-    var results = [], skipped = 0;
+    var results = [], skipped = 0, fx = null;
 
     lines.forEach(function (line) {
       var row = splitRow(line);
+
+      // 楽天証券の「参考為替レート」の行(米ドル, 158.42, 円/USD)
+      if (/^(米ドル|USD|米国ドル)$/.test((row[0] || "").trim()) && parsePasteNum(row[1]) > 0) { fx = parsePasteNum(row[1]); return; }
 
       var marker = detectSectionAccount(row);
       if (marker) {
@@ -2373,6 +2457,24 @@
       if (!colMap) return;
 
       var code = colMap.code !== undefined ? (row[colMap.code] || "").trim() : "";
+      // 米国株: 種別が「米国株式」か、単価の単位がUSDの行
+      var kind = colMap.kind !== undefined ? (row[colMap.kind] || "") : "";
+      var usdUnit = (colMap.cost !== undefined && /USD|ドル/.test(row[colMap.cost + 1] || "")) ||
+                    (colMap.price !== undefined && /USD|ドル/.test(row[colMap.price + 1] || ""));
+      if ((/米国/.test(kind) || usdUnit) && /^[A-Za-z][A-Za-z0-9.\-]{0,6}$/.test(code)) {
+        var accRaw = colMap.account !== undefined ? (row[colMap.account] || "").trim() : "";
+        var usPrice = colMap.price !== undefined ? parsePasteNum(row[colMap.price]) : "";
+        results.push({
+          market: "us", code: code.toUpperCase(),
+          name: (colMap.name !== undefined ? cleanName(row[colMap.name]) : "") || code.toUpperCase(),
+          sector: US_SECTOR, account: accountFromText(accRaw) || sectionAccount || "特定",
+          shares: colMap.shares !== undefined ? parsePasteNum(row[colMap.shares]) : "",
+          usdCost: colMap.cost !== undefined ? parsePasteNum(row[colMap.cost]) : "",
+          usdPrice: usPrice, priceDate: usPrice !== "" ? (priceDate || todayStamp()) : undefined,
+          months: [3, 6, 9, 12]
+        });
+        return;
+      }
       if (!/^[0-9][0-9A-Za-z]{2,4}$/.test(code)) { skipped++; return; }
 
       var name = colMap.name !== undefined ? cleanName(row[colMap.name]) : "";
@@ -2399,7 +2501,7 @@
         priceDate: colMap.price !== undefined ? (priceDate || todayStamp()) : undefined
       });
     });
-    return { results: results, skipped: skipped };
+    return { results: results, skipped: skipped, fx: fx };
   }
 
   function parseHoldingsPaste(text, priceDate) {
@@ -2412,6 +2514,21 @@
     var added = 0, updated = 0;
     results.forEach(function (r) {
       var existing = state.holdings.find(function (h) { return h.code === r.code && h.account === r.account; });
+      if (r.market === "us") {
+        // 米国株: 株数・取得単価・株価(ドル)だけ取り込み、手で入れた配当(ドル)は残す
+        var h = existing;
+        if (!h) {
+          h = { id: uid(), code: r.code, name: r.name, account: r.account, addedAt: todayIso(), prevDiv: "" };
+          state.holdings.push(h); added++;
+        } else updated++;
+        h.market = "us"; h.name = r.name; h.sector = r.sector; h.shares = r.shares;
+        h.usd = h.usd || { div: "", prevDiv: "" };
+        h.usd.cost = r.usdCost;
+        if (r.usdPrice !== "" && r.usdPrice !== undefined) { h.usd.price = r.usdPrice; h.priceDate = r.priceDate; }
+        if (!h.months || !h.months.length) h.months = r.months;
+        syncUsd(h);
+        return;
+      }
       if (existing) {
         existing.name = r.name; existing.sector = r.sector;
         recordDivChange(existing, existing.div, r.div);
@@ -2445,13 +2562,19 @@
       return false;
     }
     state.isSample = false;
+    if (parsed.fx > 0) { state.fx = { usd: parsed.fx, date: todayIso() }; }
     var merged = mergePastedResults(parsed.results);
+    syncAllUsd();
     save(); renderTable(); renderDashboard();
     // 口座の判定は誤ると税額・利回りがずれるので、内訳を出して気づけるようにする
     var nisa = parsed.results.filter(function (r) { return isTaxFree(r.account); }).length;
+    var us = parsed.results.filter(function (r) { return r.market === "us"; }).length;
     var msg = merged.added + "件追加、" + merged.updated + "件更新しました。"
-      + "(NISA " + nisa + "件 / 特定 " + (parsed.results.length - nisa) + "件)";
-    if (parsed.skipped > 0) msg += " 日本株以外(米国株・投資信託など)や合計の行など、" + parsed.skipped + "行は読み込んでいません。";
+      + "(NISA " + nisa + "件 / 特定 " + (parsed.results.length - nisa) + "件"
+      + (us ? " / うち米国株 " + us + "件" : "") + ")";
+    if (us) msg += " 米国株の1株配当(ドル・年間)は自動では入らないので、保有銘柄の欄に入れてください。"
+      + (parsed.fx > 0 ? "為替は1ドル=" + parsed.fx + "円にしました。" : "");
+    if (parsed.skipped > 0) msg += " 投資信託や合計の行など、" + parsed.skipped + "行は読み込んでいません。";
     statusEl.textContent = msg;
     return true;
   }
@@ -2870,15 +2993,17 @@
     var dlg = document.getElementById("buyDialog");
     document.getElementById("buyTitle").textContent = (h.code ? h.code + " " : "") + (h.name || "") + " を買い増し";
     var sh = document.getElementById("buyShares"), pr = document.getElementById("buyPrice");
+    var us = isUS(h), fx = us ? usdRate() : 1;
+    pr.closest("label").firstChild.textContent = us ? "約定単価(ドル)" : "約定単価(円)";
     sh.value = preset && preset.shares ? preset.shares : "";
-    pr.value = preset && preset.price ? preset.price : (num(h.price) > 0 ? h.price : "");
+    pr.value = preset && preset.price ? preset.price : (us ? (num(h.usd && h.usd.price) > 0 ? h.usd.price : "") : (num(h.price) > 0 ? h.price : ""));
     var hist = Array.isArray(h.buys) ? h.buys.slice(-5).reverse() : [];
     document.getElementById("buyHistory").textContent = hist.length === 0 ? ""
       : "最近の買い増し: " + hist.map(function (b) {
           return b.date.slice(5).replace("-", "/") + " " + b.shares + "株@" + fmtPerShare(b.price);
         }).join(" / ");
     function paint() {
-      var s0 = num(h.shares), c0 = num(h.cost), n = num(sh.value), p = num(pr.value), d = num(h.div);
+      var s0 = num(h.shares), c0 = num(h.cost), n = num(sh.value), p = num(pr.value) * fx, d = num(h.div);
       var box = document.getElementById("buyPreview");
       paintNisaHint(h, n, p);
       if (!(n > 0) || !(p > 0)) {
@@ -2908,10 +3033,19 @@
     var n = num(document.getElementById("buyShares").value), p = num(document.getElementById("buyPrice").value);
     if (!h || !(n > 0) || !(p > 0)) return;
     var s0 = num(h.shares), c0 = num(h.cost), s1 = s0 + n;
-    h.cost = round2((s0 * c0 + n * p) / s1);
-    h.shares = s1;
     if (!Array.isArray(h.buys)) h.buys = [];
-    h.buys.push({ date: todayIso(), shares: n, price: p });
+    if (isUS(h)) {
+      // 米国株はドルの平均取得単価を計算し直し、円の欄は換算で入れ直す
+      h.usd = h.usd || {};
+      h.usd.cost = Math.round((s0 * num(h.usd.cost) + n * p) / s1 * 10000) / 10000;
+      h.shares = s1;
+      h.buys.push({ date: todayIso(), shares: n, price: round2(p * usdRate()), usd: p });
+      syncUsd(h);
+    } else {
+      h.cost = round2((s0 * c0 + n * p) / s1);
+      h.shares = s1;
+      h.buys.push({ date: todayIso(), shares: n, price: p });
+    }
     document.getElementById("buyDialog").close();
     save(); renderTable(); renderDashboard();
   });
@@ -3764,6 +3898,13 @@
     save(); renderTable(); renderDashboard();
   });
 
+  document.getElementById("fxUsd").addEventListener("change", function (e) {
+    var v = num(e.target.value);
+    if (!(v > 0)) return;
+    state.fx = { usd: v, date: todayIso() };
+    syncAllUsd(); save(); renderTable(); renderDashboard();
+  });
+
   document.getElementById("exportBtn").addEventListener("click", function () {
     state.lastExport = new Date().toISOString();
     // チェックシート(同じサイト)の採点・保存した評価・株価も一緒に控える
@@ -3916,9 +4057,10 @@
   var AXIS_ORDER = ["sector", "stock", "sensitivity", "account"];
   var currentAxis = "sector";
 
-  function aggregate() {
+  function aggregate(market) {
     // 「配当の集計から除外」した銘柄は、配当だけ0として扱う(取得額には残す)
-    var rows = state.holdings.map(function (h) {
+    var src = market === "us" ? state.holdings.filter(isUS) : market === "jp" ? state.holdings.filter(function (h) { return !isUS(h); }) : state.holdings;
+    var rows = src.map(function (h) {
       var c = computeRow(h);
       if (h.excluded) { c.divPre = 0; c.divPost = 0; c.trend = null; }
       return Object.assign({}, h, c);
@@ -4488,7 +4630,9 @@
 
   function renderComposition(agg) {
     paintHeatPresets();
-    var result = renderTreemap(document.getElementById("treemapEl"), agg, currentAxis, currentColor);
+    // 米国株だけを見るときは業種が1つ(米国株・ETF)にまとまるので、業種別は銘柄別で描く
+    var axis = currentMarket === "us" && currentAxis === "sector" ? "stock" : currentAxis;
+    var result = renderTreemap(document.getElementById("treemapEl"), agg, axis, currentColor);
     renderHeatScale(document.getElementById("heatScale"), currentColor);
     var noteEl = document.getElementById("heatNote");
     if (noteEl) noteEl.textContent = (COLOR_MODES[currentColor] || COLOR_MODES.group).note;
@@ -5040,7 +5184,7 @@
         b.type = "button";
         b.className = "axis-tab" + (basis === t[0] ? " active" : "");
         b.textContent = t[1];
-        b.addEventListener("click", function () { yieldBasis = t[0]; renderYields(aggregate()); });
+        b.addEventListener("click", function () { yieldBasis = t[0]; renderYields(marketAgg()); });
         tabs.appendChild(b);
       });
       el.appendChild(tabs);
@@ -5599,6 +5743,10 @@
   }
 
   // 「分け方×色」の16通りから選ぶのは迷うので、知りたいことから選べる組み合わせを用意する
+  // 分析タブの「全体/日本株/米国株」。米国株を持っているときだけ出す
+  var currentMarket = "all";
+  function marketAgg() { return aggregate(currentMarket); }
+
   var HEAT_PRESETS = [
     { key: "growth", label: "増配してる?", axis: "sector", color: "growth",
       lead: "青いほど前年より増配、赤は減配です。灰色は据え置きか前年の配当が分からない銘柄です。" },
@@ -5628,6 +5776,8 @@
       return '<button class="axis-tab' + (k === currentColor ? ' active' : '') + '" data-color="' + k + '">' + COLOR_MODES[k].label + '</button>';
     }).join('');
     return '' +
+      '<div class="axis-tabs market-filter" id="marketFilter" data-view="analysis" hidden>' +
+      '<button class="axis-tab active" data-market="all">全体</button><button class="axis-tab" data-market="jp">日本株</button><button class="axis-tab" data-market="us">米国株</button></div>' +
       '<div class="panel" data-view="analysis">' +
       '  <h2><span class="chap">三</span>構成 <span class="hint">面積は年間配当金額・◆はNISA口座・タイルを押すと詳しく</span></h2>' +
       '  <div class="axis-tabs heat-presets" id="heatPresets">' + HEAT_PRESETS.map(function (p) {
@@ -5724,18 +5874,26 @@
       }
       bindTabs("axisTabs", function (btn) {
         currentAxis = btn.dataset.axis;
-        renderComposition(aggregate());
+        renderComposition(marketAgg());
       });
       bindTabs("colorTabs", function (btn) {
         currentColor = btn.dataset.color;
-        renderComposition(aggregate());
+        renderComposition(marketAgg());
+      });
+      document.getElementById("marketFilter").addEventListener("click", function (e) {
+        var b = e.target.closest("button[data-market]");
+        if (!b) return;
+        currentMarket = b.dataset.market;
+        Array.prototype.forEach.call(document.querySelectorAll("#marketFilter .axis-tab"), function (x) { x.classList.toggle("active", x === b); });
+        var a = marketAgg();
+        renderComposition(a); renderChangeSummary(a); renderYields(a);
       });
       document.getElementById("heatPresets").addEventListener("click", function (e) {
         var b = e.target.closest("button[data-preset]");
         if (!b) return;
         var pr = HEAT_PRESETS.filter(function (p) { return p.key === b.dataset.preset; })[0];
         currentAxis = pr.axis; currentColor = pr.color;
-        renderComposition(aggregate());
+        renderComposition(marketAgg());
       });
       var tmEl = document.getElementById("treemapEl");
       tmEl.addEventListener("click", function (e) {
@@ -5761,11 +5919,16 @@
     var agg = aggregate();
 
     renderHero(agg);
-    renderComposition(agg);
+    var mf = document.getElementById("marketFilter");
+    var hasUS = state.holdings.some(isUS);
+    if (mf) mf.hidden = !hasUS;
+    if (!hasUS) currentMarket = "all";
+    var magg = currentMarket === "all" ? agg : aggregate(currentMarket);
+    renderComposition(magg);
     renderActual(agg);
     renderCalendar(agg);
-    renderChangeSummary(agg);
-    renderYields(agg);
+    renderChangeSummary(magg);
+    renderYields(magg);
     renderSimulation(agg);
     renderNisa();
     renderBackupStatus();
