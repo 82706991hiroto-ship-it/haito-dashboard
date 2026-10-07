@@ -320,7 +320,12 @@
   .axis-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* ---- 構成(ヒートマップ) ---- */
-  .heat-controls { display: grid; gap: 9px; margin-bottom: 14px; }
+  .heat-controls { display: grid; gap: 9px; margin: 10px 0 4px; }
+  .heat-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 6px; }
+  .heat-presets .axis-tab { padding: 8px 2px; font-size: 12.5px; text-align: center; white-space: nowrap; }
+  .heat-lead { font-size: 13px; color: var(--text-2); line-height: 1.7; margin: 4px 0 8px; }
+  .heat-more { margin: 0 0 12px; }
+  .heat-more summary { cursor: pointer; font-size: 12px; color: var(--muted); }
   .ctl-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .ctl-label {
     font-size: 11px; font-weight: 700; color: var(--muted);
@@ -4459,6 +4464,7 @@
   }
 
   function renderComposition(agg) {
+    paintHeatPresets();
     var result = renderTreemap(document.getElementById("treemapEl"), agg, currentAxis, currentColor);
     renderHeatScale(document.getElementById("heatScale"), currentColor);
     var noteEl = document.getElementById("heatNote");
@@ -5569,6 +5575,28 @@
       (pay > 0 ? (pay > rest ? " ・ この買付で上限を " + fmtYen(pay - Math.max(0, rest)) + " 超えます" : " → 買うと残り " + fmtYen(rest - pay)) : "");
   }
 
+  // 「分け方×色」の16通りから選ぶのは迷うので、知りたいことから選べる組み合わせを用意する
+  var HEAT_PRESETS = [
+    { key: "growth", label: "増配してる?", axis: "sector", color: "growth",
+      lead: "青いほど前年より増配、赤は減配です。灰色は据え置きか前年の配当が分からない銘柄です。" },
+    { key: "balance", label: "偏ってない?", axis: "sector", color: "group",
+      lead: "大きいブロックほど、その業種から受け取る配当が多いということです。1つの業種が大きすぎないか見ます。" },
+    { key: "yield", label: "利回りは?", axis: "stock", color: "current",
+      lead: "金色が濃いほど、今の株価に対する利回りが高い銘柄です。株価を入れていない銘柄は灰色です。" },
+    { key: "nisa", label: "NISAは?", axis: "account", color: "group",
+      lead: "口座ごとに受け取る配当の割合です。NISAの分は税金がかかりません。" }
+  ];
+  function paintHeatPresets() {
+    var hit = HEAT_PRESETS.filter(function (p) { return p.axis === currentAxis && p.color === currentColor; })[0];
+    Array.prototype.forEach.call(document.querySelectorAll("#heatPresets .axis-tab"), function (b) {
+      b.classList.toggle("active", !!hit && b.dataset.preset === hit.key);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#axisTabs .axis-tab"), function (b) { b.classList.toggle("active", b.dataset.axis === currentAxis); });
+    Array.prototype.forEach.call(document.querySelectorAll("#colorTabs .axis-tab"), function (b) { b.classList.toggle("active", b.dataset.color === currentColor); });
+    var lead = document.getElementById("heatLead");
+    if (lead) lead.textContent = hit ? hit.lead : "分け方と色を自分で選んで表示しています。";
+  }
+
   function dashboardTemplate() {
     var tabsHtml = AXIS_ORDER.map(function (k, i) {
       return '<button class="axis-tab' + (k === currentAxis ? ' active' : '') + '" data-axis="' + k + '">' + AXIS_CONFIG[k].label + '</button>';
@@ -5579,10 +5607,15 @@
     return '' +
       '<div class="panel" data-view="analysis">' +
       '  <h2><span class="chap">三</span>構成 <span class="hint">面積は年間配当金額・◆はNISA口座・タイルを押すと詳しく</span></h2>' +
+      '  <div class="axis-tabs heat-presets" id="heatPresets">' + HEAT_PRESETS.map(function (p) {
+        return '<button class="axis-tab' + (p.axis === currentAxis && p.color === currentColor ? ' active' : '') + '" data-preset="' + p.key + '">' + p.label + '</button>';
+      }).join('') + '</div>' +
+      '  <p class="heat-lead" id="heatLead"></p>' +
+      '  <details class="heat-more"><summary>詳しく選ぶ(分け方・色)</summary>' +
       '  <div class="heat-controls">' +
       '    <div class="ctl-row"><span class="ctl-label">分け方</span><div class="axis-tabs" id="axisTabs">' + tabsHtml + '</div></div>' +
       '    <div class="ctl-row"><span class="ctl-label">色</span><div class="axis-tabs" id="colorTabs">' + colorTabsHtml + '</div></div>' +
-      '  </div>' +
+      '  </div></details>' +
       '  <div class="treemap" id="treemapEl"></div>' +
       '  <div class="tm-info" id="tmInfo" hidden></div>' +
       '  <div class="heat-scale" id="heatScale"></div>' +
@@ -5672,6 +5705,13 @@
       });
       bindTabs("colorTabs", function (btn) {
         currentColor = btn.dataset.color;
+        renderComposition(aggregate());
+      });
+      document.getElementById("heatPresets").addEventListener("click", function (e) {
+        var b = e.target.closest("button[data-preset]");
+        if (!b) return;
+        var pr = HEAT_PRESETS.filter(function (p) { return p.key === b.dataset.preset; })[0];
+        currentAxis = pr.axis; currentColor = pr.color;
         renderComposition(aggregate());
       });
       var tmEl = document.getElementById("treemapEl");
