@@ -6392,7 +6392,7 @@
   }
   function syncUrl(id, extra) {
     var base = SYNC_CFG.base || "https://firestore.googleapis.com/v1";
-    return base + "/projects/" + encodeURIComponent(SYNC_CFG.projectId) + "/databases/(default)/documents/vaults/" + id +
+    return base + "/projects/" + encodeURIComponent(SYNC_CFG.projectId) + "/databases/" + encodeURIComponent(SYNC_CFG.databaseId || "(default)") + "/documents/vaults/" + id +
       "?key=" + encodeURIComponent(SYNC_CFG.apiKey || "") + (extra || "");
   }
   // 同期する中身(端末ごとの表示の都合は除く)
