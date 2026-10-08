@@ -11,7 +11,7 @@ HAITOの「ほかの端末と同期」は、Google の無料サービス Firebas
 
 ## 2. データベース(Cloud Firestore)を作る
 1. 左のメニュー「構築」→「Firestore Database」→「データベースを作成」
-2. データベースIDは `haito` と入れる(英小文字・数字・ハイフンのみ)。ロケーションは `asia-northeast1 (Tokyo)` を選ぶ
+2. データベースIDは `(default)` のまま。ロケーションは `asia-northeast1 (Tokyo)` を選ぶ(画面の不具合でIDが空のままエラーになるときは、Google Cloud の Firestore 画面から `haito` などの名前で作り、手順5で `databaseId` を書く)
 3. 「本番環境モードで開始」を選んで作成
 
 ## 3. ルール(誰が読み書きできるか)を貼る
@@ -27,7 +27,10 @@ HAITOの「ほかの端末と同期」は、Google の無料サービス Firebas
 1. GitHub の haito-dashboard リポジトリで `sync-config.js` を開き、鉛筆マーク(Edit)を押す
 2. `window.HAITO_SYNC_CONFIG = null;` の行を、次のように書き換える
    ```js
-   window.HAITO_SYNC_CONFIG = { projectId: "ここにprojectId", apiKey: "ここにapiKey", databaseId: "haito" };
+   window.HAITO_SYNC_CONFIG = { projectId: "ここにprojectId", apiKey: "ここにapiKey" };
+   ```
+   (データベースに名前を付けたときだけ `, databaseId: "haito"` を足す)
+   ```
    ```
 3. 「Commit changes」で保存。1〜2分でサイトに反映されます
 
