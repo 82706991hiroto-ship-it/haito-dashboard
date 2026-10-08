@@ -6355,7 +6355,7 @@
   var SYNC_CODE_KEY = "haitoSyncCode", SYNC_META_KEY = "haitoSyncMeta";
   var SYNC_LOCAL_ONLY = ["lastExport", "installDismissed", "installMoved"];
   var SYNC_ALPHA = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // 見間違えやすい I L O 0 1 を除く
-  var syncTimer = null, syncBusy = false, syncKeyCache = null, syncErr = "", syncShowCode = false;
+  var syncTimer = null, syncBusy = false, syncAgain = 0, syncRetry = null, syncKeyCache = null, syncErr = "", syncShowCode = false;
 
   function syncCode() { try { return localStorage.getItem(SYNC_CODE_KEY) || ""; } catch (e) { return ""; } }
   function syncMeta() {
@@ -6452,7 +6452,10 @@
 
   // 1回の同期: 相手の方が新しく編集されていれば取り込み、こちらが新しければ送る
   function syncNow(manual) {
-    if (!syncOn() || syncBusy) return Promise.resolve();
+    if (!syncOn()) return Promise.resolve();
+    // 通信中に編集や「今すぐ同期」が重なったら、終わってからもう一度回す
+    if (syncBusy) { syncAgain = Math.max(syncAgain, manual ? 2 : 1); return Promise.resolve(); }
+    clearTimeout(syncRetry);
     if (!navigator.onLine) { syncErr = "オフライン"; renderSync(); return Promise.resolve(); }
     syncBusy = true;
     var code = syncCode(), meta = syncMeta();
@@ -6462,22 +6465,28 @@
     return syncFetch(code).then(function (remote) {
       if (remote && remote.rev !== meta.rev && (!dirty || remote.t >= meta.editT)) {
         applySyncData(remote.data);
-        var mineNow = syncPayload();
-        setSyncMeta({ rev: remote.rev, t: remote.t, hash: syncHash(mineNow), at: Date.now() });
+        setSyncMeta({ rev: remote.rev, t: remote.t, hash: syncHash(syncPayload()), at: Date.now() });
         if (dirty) showToast("ほかの端末でより新しく編集された内容に合わせました");
         else if (manual) showToast("ほかの端末の内容を取り込みました");
         return;
       }
-      if (!dirty && remote) { meta.at = Date.now(); setSyncMeta(meta); if (manual) showToast("最新の状態です"); return; }
+      if (!dirty && remote) { setSyncMeta(Object.assign(syncMeta(), { at: Date.now() })); if (manual) showToast("最新の状態です"); return; }
       var t = Math.max(meta.editT || Date.now(), remote ? remote.t + 1 : 0);
       return syncPut(code, mine, t, remote ? remote.rev : null).then(function (rev) {
-        if (!rev) { syncBusy = false; return syncNow(manual); } // 書き込みが重なった→もう一度
-        setSyncMeta({ rev: rev, t: t, hash: h, at: Date.now() });
+        if (!rev) { syncAgain = Math.max(syncAgain, manual ? 2 : 1); return; } // 書き込みが重なった→もう一度
+        // 通信中に重ねて編集されていたら、その編集時刻(lh/editT)は残して次の回に送る
+        var m3 = syncMeta(), next = { rev: rev, t: t, hash: h, at: Date.now() };
+        if (m3.lh && m3.lh !== h) { next.lh = m3.lh; next.editT = m3.editT; }
+        setSyncMeta(next);
         if (manual) showToast("ほかの端末へ送りました");
       });
     }).then(function () { syncErr = ""; }, function (e) {
       syncErr = e && e.message === "decrypt" ? "同期コードが合いません" : "つながりません";
-    }).then(function () { syncBusy = false; renderSync(); });
+      if (syncErr === "つながりません") syncRetry = setTimeout(function () { syncNow(false); }, 20000);
+    }).then(function () {
+      syncBusy = false; renderSync();
+      if (syncAgain) { var m2 = syncAgain === 2; syncAgain = 0; syncNow(m2); }
+    });
   }
   // 中身が本当に変わったときだけ編集時刻を残す(描画のついでの保存は数えない)
   function noteEdit() {
