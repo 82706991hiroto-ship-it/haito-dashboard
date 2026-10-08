@@ -1,0 +1,15 @@
+rules_version = '2';
+// HAITOの端末間同期。文書IDは同期コードのハッシュ(64桁の16進)で、中身は端末側で暗号化済み。
+// コードを知る端末だけが自分の文書を読み書きできる。一覧の取得と削除は誰にもさせない。
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /vaults/{id} {
+      allow get: if id.matches('^[0-9a-f]{64}$');
+      allow create, update: if id.matches('^[0-9a-f]{64}$')
+        && request.resource.data.keys().hasOnly(['v', 'iv', 'ct', 't'])
+        && request.resource.data.ct is string
+        && request.resource.data.ct.size() < 900000;
+      allow list, delete: if false;
+    }
+  }
+}

@@ -1,0 +1,5 @@
+// 端末間の同期の接続先(Firebase)。ここに書くのは公開して問題ない識別子だけ。
+// データは端末の中で同期コードを鍵に暗号化してから送るので、接続先からは中身を読めない。
+// 未設定(null)のあいだは同期の欄に「準備中」と出る。設定の手順は docs/sync-setup.md。
+window.HAITO_SYNC_CONFIG = null;
+// 例: window.HAITO_SYNC_CONFIG = { projectId: "haito-sync-xxxxx", apiKey: "AIza..." };
