@@ -188,6 +188,20 @@ def code_list():
     return out
 
 
+def listed_codes():
+    """EDINETコードリストで「上場」になっている証券コード(上場をやめた会社を足さないため)"""
+    import requests
+    r = requests.get(CODELIST, timeout=90)
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    text = z.read(next(n for n in z.namelist() if n.lower().endswith(".csv"))).decode("cp932")
+    rows = list(csv.reader(io.StringIO(text)))
+    head = next(i for i, r in enumerate(rows) if "証券コード" in r)
+    h = rows[head]
+    ic, il = h.index("証券コード"), h.index("上場区分")
+    return {r[ic].strip()[:4].upper() for r in rows[head + 1:]
+            if len(r) > max(ic, il) and r[ic].strip() and r[il].strip() == "上場"}
+
+
 def short_name(n):
     return re.sub(r"^株式会社|株式会社$", "", n.strip()).strip()
 
@@ -322,6 +336,8 @@ def main():
     ap.add_argument("--html", default=os.path.join(ROOT, "index.html"))
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--manual-only", action="store_true", help="EDINETは見ず、手で足した過去の配当だけ反映する")
+    ap.add_argument("--only-missing", action="store_true",
+                    help="内蔵データに無い上場会社(名証・福証・札証だけの会社など)だけ足す。--days 400 で1年分を見る")
     a = ap.parse_args()
 
     html = open(a.html, encoding="utf-8").read()
@@ -332,6 +348,9 @@ def main():
     filings = {} if a.manual_only else recent_filings(a.days)
     todo = [(c, x) for c, x in filings.items()
             if re.match(r"^[1-9][0-9A-Z]{3}$", c) and state.get(c, "") < x["periodEnd"]]
+    if a.only_missing:
+        listed = listed_codes()
+        todo = [(c, x) for c, x in todo if c not in info and c in listed]
     print("有報", len(filings), "件のうち、未取り込みの期", len(todo), "件", flush=True)
     names = code_list() if any(c not in info for c, _ in todo) else {}
     if any(c not in info for c, _ in todo) and not names:

@@ -14,6 +14,9 @@ on:
       days:
         description: "何日前までの提出を見るか"
         default: "45"
+      only_missing:
+        description: "内蔵データに無い上場会社(名証・福証・札証だけの会社など)だけ足す(true のとき。days は 400 に)"
+        default: "false"
 permissions:
   contents: write
   pages: write
@@ -34,6 +37,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             python3 tools/edinet/monthly.py --manual-only
+          elif [ "${{ inputs.only_missing }}" = "true" ]; then
+            python3 tools/edinet/monthly.py --days "${{ inputs.days || '400' }}" --only-missing
           else
             python3 tools/edinet/monthly.py --days "${{ inputs.days || '45' }}"
           fi
