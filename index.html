@@ -1331,6 +1331,7 @@
 </div>
 
 <script src="sync-config.js"></script>
+<script src="sync-core.js"></script>
 <script>
 (function () {
   "use strict";
@@ -1464,7 +1465,7 @@
 
   function save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
-    if (typeof syncSoon === "function") syncSoon();
+    if (window.HaitoSync) window.HaitoSync.soon();
   }
 
   function sectorClassOf(sector) {
@@ -6474,170 +6475,22 @@
   document.getElementById("installCard").addEventListener("click", onInstallClick);
   document.getElementById("installTip").addEventListener("click", onInstallClick);
 
-  // ---------- 端末間の同期 ----------
-  // 同期コード(端末で作るランダムな26文字)から、文書ID(SHA-256)と暗号鍵(PBKDF2→AES-GCM)を作る。
-  // 送るのは暗号文だけなので、接続先(Firebase)からは中身を読めない。コードを失くすと誰にも戻せない。
-  // 衝突は「最後に編集した端末が勝つ」。チェックシート(同じサイト)の採点も一緒に送る。
-  var SYNC_CFG = window.HAITO_SYNC_CONFIG || null;
-  var SYNC_CODE_KEY = "haitoSyncCode", SYNC_META_KEY = "haitoSyncMeta";
-  var SYNC_LOCAL_ONLY = ["lastExport", "installDismissed", "installMoved"];
-  var SYNC_ALPHA = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // 見間違えやすい I L O 0 1 を除く
-  var syncTimer = null, syncBusy = false, syncAgain = 0, syncRetry = null, syncKeyCache = null, syncErr = "", syncShowCode = false;
-
-  function syncCode() { try { return localStorage.getItem(SYNC_CODE_KEY) || ""; } catch (e) { return ""; } }
-  function syncMeta() {
-    try { return JSON.parse(localStorage.getItem(SYNC_META_KEY) || "{}") || {}; } catch (e) { return {}; }
-  }
-  function setSyncMeta(m) { try { localStorage.setItem(SYNC_META_KEY, JSON.stringify(m)); } catch (e) {} }
-  function syncOn() { return !!(SYNC_CFG && syncCode() && window.crypto && crypto.subtle); }
-  function normCode(c) { return String(c || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); }
-  function fmtCode(c) { return normCode(c).replace(/(.{4})(?=.)/g, "$1-"); }
-  function newSyncCode() {
-    var b = new Uint8Array(26), out = "";
-    crypto.getRandomValues(b);
-    for (var i = 0; i < b.length; i++) out += SYNC_ALPHA[b[i] % SYNC_ALPHA.length];
-    return out;
-  }
-  function b64(buf) {
-    var s = "", a = new Uint8Array(buf);
-    for (var i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000));
-    return btoa(s);
-  }
-  function unb64(s) { var r = atob(s), a = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) a[i] = r.charCodeAt(i); return a; }
-  function syncKeys(code) {
-    code = normCode(code);
-    if (syncKeyCache && syncKeyCache.code === code) return Promise.resolve(syncKeyCache);
-    var enc = new TextEncoder();
-    var idP = crypto.subtle.digest("SHA-256", enc.encode("haito-sync-id:" + code)).then(function (h) {
-      return Array.prototype.map.call(new Uint8Array(h), function (x) { return ("0" + x.toString(16)).slice(-2); }).join("");
-    });
-    var keyP = crypto.subtle.importKey("raw", enc.encode(code), "PBKDF2", false, ["deriveKey"]).then(function (base) {
-      return crypto.subtle.deriveKey({ name: "PBKDF2", salt: enc.encode("haito-sync-key"), iterations: 150000, hash: "SHA-256" },
-        base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
-    });
-    return Promise.all([idP, keyP]).then(function (r) { syncKeyCache = { code: code, id: r[0], key: r[1] }; return syncKeyCache; });
-  }
-  function syncUrl(id, extra) {
-    var base = SYNC_CFG.base || "https://firestore.googleapis.com/v1";
-    return base + "/projects/" + encodeURIComponent(SYNC_CFG.projectId) + "/databases/" + encodeURIComponent(SYNC_CFG.databaseId || "(default)") + "/documents/vaults/" + id +
-      "?key=" + encodeURIComponent(SYNC_CFG.apiKey || "") + (extra || "");
-  }
-  // 同期する中身(端末ごとの表示の都合は除く)
-  function syncPayload() {
-    var st = {};
-    Object.keys(state).forEach(function (k) { if (SYNC_LOCAL_ONLY.indexOf(k) === -1) st[k] = state[k]; });
-    var out = { state: st };
-    CHECK_KEYS.forEach(function (k) {
-      try { var v = localStorage.getItem(k); if (v) out[CHECK_EXPORT[k]] = JSON.parse(v); } catch (e) {}
-    });
-    return JSON.stringify(out);
-  }
-  function syncHash(s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return s.length + ":" + h; }
-
-  function syncFetch(code) {
-    return syncKeys(code).then(function (k) {
-      return fetch(syncUrl(k.id)).then(function (r) {
-        if (r.status === 404) return null;
-        if (!r.ok) throw new Error("http " + r.status);
-        return r.json().then(function (doc) {
-          var f = doc.fields || {};
-          var iv = unb64(f.iv.stringValue), ct = unb64(f.ct.stringValue);
-          return crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, k.key, ct).then(function (pt) {
-            return { rev: doc.updateTime, t: Number(f.t.integerValue), data: new TextDecoder().decode(pt) };
-          }, function () { throw new Error("decrypt"); });
-        });
-      });
-    });
-  }
-  function syncPut(code, plain, t, rev) {
-    return syncKeys(code).then(function (k) {
-      var iv = crypto.getRandomValues(new Uint8Array(12));
-      return crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, k.key, new TextEncoder().encode(plain)).then(function (ct) {
-        var body = { fields: { v: { integerValue: "1" }, iv: { stringValue: b64(iv) }, ct: { stringValue: b64(ct) }, t: { integerValue: String(t) } } };
-        var pre = rev ? "&currentDocument.updateTime=" + encodeURIComponent(rev) : "&currentDocument.exists=false";
-        return fetch(syncUrl(k.id, pre), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-          .then(function (r) {
-            if (r.ok) return r.json().then(function (d) { return d.updateTime; });
-            if (r.status === 400 || r.status === 409 || r.status === 412) return null; // 先に他の端末が書いた
-            throw new Error("http " + r.status);
-          });
-      });
-    });
-  }
-  function applySyncData(plain) {
-    var d = JSON.parse(plain), keep = {};
-    SYNC_LOCAL_ONLY.forEach(function (k) { if (k in state) keep[k] = state[k]; });
-    CHECK_KEYS.forEach(function (k) {
-      var v = d[CHECK_EXPORT[k]];
-      try { if (v && typeof v === "object") localStorage.setItem(k, JSON.stringify(v)); else localStorage.removeItem(k); } catch (e) {}
-    });
-    state = Object.assign(loadStateFromObject(d.state || {}), keep);
-    syncAllUsd();
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
-    renderAll();
-  }
-
-  // 1回の同期: 相手の方が新しく編集されていれば取り込み、こちらが新しければ送る
-  function syncNow(manual) {
-    if (!syncOn()) return Promise.resolve();
-    // 通信中に編集や「今すぐ同期」が重なったら、終わってからもう一度回す
-    if (syncBusy) { syncAgain = Math.max(syncAgain, manual ? 2 : 1); return Promise.resolve(); }
-    clearTimeout(syncRetry);
-    if (!navigator.onLine) { syncErr = "オフライン"; renderSync(); return Promise.resolve(); }
-    syncBusy = true;
-    var code = syncCode(), meta = syncMeta();
-    var mine = syncPayload(), h = syncHash(mine);
-    var dirty = meta.hash !== h;
-    if (dirty && !meta.editT) meta.editT = Date.now(); // 閉じている間にチェックシートで変えた分など
-    return syncFetch(code).then(function (remote) {
-      if (remote && remote.rev !== meta.rev && (!dirty || remote.t >= meta.editT)) {
-        applySyncData(remote.data);
-        setSyncMeta({ rev: remote.rev, t: remote.t, hash: syncHash(syncPayload()), at: Date.now() });
-        if (dirty) showToast("ほかの端末でより新しく編集された内容に合わせました");
-        else if (manual) showToast("ほかの端末の内容を取り込みました");
-        return;
-      }
-      if (!dirty && remote) { setSyncMeta(Object.assign(syncMeta(), { at: Date.now() })); if (manual) showToast("最新の状態です"); return; }
-      var t = Math.max(meta.editT || Date.now(), remote ? remote.t + 1 : 0);
-      return syncPut(code, mine, t, remote ? remote.rev : null).then(function (rev) {
-        if (!rev) { syncAgain = Math.max(syncAgain, manual ? 2 : 1); return; } // 書き込みが重なった→もう一度
-        // 通信中に重ねて編集されていたら、その編集時刻(lh/editT)は残して次の回に送る
-        var m3 = syncMeta(), next = { rev: rev, t: t, hash: h, at: Date.now() };
-        if (m3.lh && m3.lh !== h) { next.lh = m3.lh; next.editT = m3.editT; }
-        setSyncMeta(next);
-        if (manual) showToast("ほかの端末へ送りました");
-      });
-    }).then(function () { syncErr = ""; }, function (e) {
-      syncErr = e && e.message === "decrypt" ? "同期コードが合いません" : "つながりません";
-      if (syncErr === "つながりません") syncRetry = setTimeout(function () { syncNow(false); }, 20000);
-    }).then(function () {
-      syncBusy = false; renderSync();
-      if (syncAgain) { var m2 = syncAgain === 2; syncAgain = 0; syncNow(m2); }
-    });
-  }
-  // 中身が本当に変わったときだけ編集時刻を残す(描画のついでの保存は数えない)
-  function noteEdit() {
-    var m = syncMeta(), h = syncHash(syncPayload());
-    if (h !== m.hash && h !== m.lh) { m.lh = h; m.editT = Date.now(); setSyncMeta(m); }
-  }
-  function syncSoon() {
-    if (!syncOn()) return;
-    noteEdit();
-    clearTimeout(syncTimer);
-    syncTimer = setTimeout(function () { syncNow(false); }, 2500);
-  }
+  // ---------- 端末間の同期(中身は sync-core.js、ここは画面だけ) ----------
+  var SYNC = window.HaitoSync || null;
+  var syncShowCode = false;
+  function syncSoon() { if (SYNC) SYNC.soon(); }
 
   function renderSync() {
     var card = document.getElementById("syncCard"), body = document.getElementById("syncBody"), st = document.getElementById("syncState");
     if (!card) return;
-    var m = syncMeta();
     st.className = "sync-state";
-    if (!SYNC_CFG) {
+    if (!SYNC || !SYNC.configured()) {
       st.textContent = "準備中";
       body.innerHTML = "<p>同期の接続先がまだ設定されていません。設定されるまでは「JSONエクスポート/インポート」で移してください。</p>";
       return;
     }
-    if (!syncCode()) {
+    var m = SYNC.meta();
+    if (!SYNC.code()) {
       st.textContent = "オフ";
       body.innerHTML =
         "<p>MacとiPhoneなど、同じ同期コードを入れた端末どうしで保有銘柄とチェックシートの採点が自動でそろいます。" +
@@ -6649,15 +6502,15 @@
         "<div class=\"toolbar\"><button class=\"btn primary\" data-sync=\"joinGo\">つなぐ</button></div></div>";
       return;
     }
-    if (syncErr) { st.textContent = syncErr; st.classList.add("is-err"); }
+    if (SYNC.status.error) { st.textContent = SYNC.status.error; st.classList.add("is-err"); }
     else {
       st.classList.add("is-on");
       st.textContent = m.at ? "オン・" + new Date(m.at).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) + " に同期" : "オン";
     }
     body.innerHTML =
-      "<p>この端末で変えた内容は数秒でほかの端末へ送られ、アプリを開いたときにほかの端末の変更を取り込みます。</p>" +
+      "<p>この端末で変えた内容は数秒でほかの端末へ送られ、アプリを開いたときにほかの端末の変更を取り込みます。チェックシートで保存した評価も一緒に送ります。</p>" +
       (syncShowCode
-        ? "<p>ほかの端末で「同期コードを入力する」を押して、このコードを入れてください。</p><div class=\"sync-code\">" + fmtCode(syncCode()) + "</div>" +
+        ? "<p>ほかの端末で「同期コードを入力する」を押して、このコードを入れてください。</p><div class=\"sync-code\">" + SYNC.fmt(SYNC.code()) + "</div>" +
           "<p class=\"sync-warn\">このコードを知っている人は中身を読めます。人に見せないでください。また、すべての端末でコードを失くすと誰にも戻せないので、メモに控えておいてください。</p>"
         : "") +
       "<div class=\"toolbar\"><button class=\"btn primary\" data-sync=\"now\">今すぐ同期</button>" +
@@ -6668,64 +6521,51 @@
 
   document.getElementById("syncCard").addEventListener("click", function (e) {
     var b = e.target.closest("[data-sync]");
-    if (!b) return;
+    if (!b || !SYNC) return;
     var act = b.dataset.sync;
     if (act === "start") {
       if (state.isSample && !confirm("いまはサンプルのデータです。このまま同期を始めますか？")) return;
-      var code = newSyncCode();
       b.disabled = true;
-      syncKeys(code).then(function (k) {
-        // 万一同じ文書がすでにあれば上書きしない(作り直す)
-        return syncPut(code, syncPayload(), Date.now(), null).then(function (rev) {
-          if (!rev) throw new Error("exists");
-          try { localStorage.setItem(SYNC_CODE_KEY, code); } catch (e2) {}
-          setSyncMeta({ rev: rev, t: Date.now(), hash: syncHash(syncPayload()), at: Date.now() });
-          syncShowCode = true; syncErr = "";
-          renderSync();
-          showToast("同期を始めました。ほかの端末でこの同期コードを入れてください");
-        });
+      save();
+      SYNC.startNew().then(function () {
+        syncShowCode = true; renderSync();
+        showToast("同期を始めました。ほかの端末でこの同期コードを入れてください");
       }).catch(function () { b.disabled = false; alert("同期を始められませんでした。通信状態を確かめて、もう一度お試しください。"); });
     } else if (act === "join") {
       document.getElementById("syncJoin").hidden = false;
       document.getElementById("syncCodeInput").focus();
     } else if (act === "joinGo") {
-      var c = normCode(document.getElementById("syncCodeInput").value);
+      var c = SYNC.norm(document.getElementById("syncCodeInput").value);
       if (c.length !== 26) { alert("同期コードは26文字です(ハイフンは入れても入れなくてもかまいません)。"); return; }
       b.disabled = true;
-      syncFetch(c).then(function (remote) {
+      SYNC.peek(c).then(function (remote) {
         if (!remote) { b.disabled = false; alert("この同期コードのデータが見つかりません。コードを確かめてください。"); return; }
         if (state.holdings.length && !state.isSample &&
             !confirm("この端末の保有銘柄(" + state.holdings.length + "件)は、同期先の内容に置き換わります。よろしいですか？")) { b.disabled = false; return; }
-        try { localStorage.setItem(SYNC_CODE_KEY, c); } catch (e2) {}
-        applySyncData(remote.data);
-        setSyncMeta({ rev: remote.rev, t: remote.t, hash: syncHash(syncPayload()), at: Date.now() });
-        syncErr = ""; renderSync();
+        SYNC.adopt(c, remote);
+        renderSync();
         showToast("同期をつなぎました: 保有 " + state.holdings.length + "銘柄");
       }).catch(function (err) {
         b.disabled = false;
         alert(err && err.message === "decrypt" ? "同期コードが合いません。" : "つながりませんでした。通信状態を確かめてください。");
       });
     } else if (act === "now") {
-      syncNow(true);
+      SYNC.syncNow(true);
     } else if (act === "show") {
       syncShowCode = !syncShowCode; renderSync();
     } else if (act === "copy") {
-      var t = fmtCode(syncCode());
+      var t = SYNC.fmt(SYNC.code());
       (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(
         function () { showToast("同期コードをコピーしました"); },
         function () { prompt("同期コード", t); });
     } else if (act === "off") {
       if (!confirm("この端末の同期をやめます。この端末のデータはそのまま残り、ほかの端末にも影響しません。")) return;
-      try { localStorage.removeItem(SYNC_CODE_KEY); localStorage.removeItem(SYNC_META_KEY); } catch (e3) {}
-      syncKeyCache = null; syncShowCode = false; syncErr = "";
+      SYNC.off(); syncShowCode = false;
       renderSync();
     }
   });
-  // チェックシートを別のタブで使ったときも送る
-  window.addEventListener("storage", function (e) { if (CHECK_KEYS.indexOf(e.key) !== -1) syncSoon(); });
-  window.addEventListener("online", function () { syncNow(false); });
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) syncNow(false); });
-  setInterval(function () { if (!document.hidden) syncNow(false); }, 60000);
+  // 同期で中身が入れ替わったとき・同じ端末のチェックシートが保存したときは、保存された内容を読み直す
+  function reloadFromStorage() { state = loadState(); syncAllUsd(); renderAll(); }
 
   document.getElementById("heroSubstats").addEventListener("click", function (e) {
     var b = e.target.closest("[data-jump]");
@@ -6755,7 +6595,12 @@
 
   takeWatchFromUrl();
   renderAll();
-  syncNow(false);
+  if (SYNC) SYNC.init({
+    onApplied: reloadFromStorage,
+    onExternal: function (key) { if (key === STORAGE_KEY) reloadFromStorage(); else renderWatchList(); },
+    onStatus: renderSync,
+    toast: showToast
+  });
   // チェックシートで採点して戻ってきたときに結果を出し直す
   window.addEventListener("pageshow", function (e) { if (e.persisted) renderWatchList(); });
   document.addEventListener("visibilitychange", function () { if (!document.hidden) renderWatchList(); });
