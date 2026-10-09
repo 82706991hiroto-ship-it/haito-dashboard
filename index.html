@@ -860,6 +860,20 @@
     .tier-5 #heroValue, .tier-5 .hero-value .yen { animation: sheen 5s linear infinite; }
     @keyframes sheen { from { background-position: 120% 0; } to { background-position: -120% 0; } }
     .data-table tbody tr, .watch-item { transition: transform .25s var(--ease); }
+    /* タブを切り替えたとき: 中身がふわっと出て、棒グラフは下から伸び、ヒートマップのタイルは順に現れる */
+    .tab-enter .panel:not([hidden]), .tab-enter .hero { animation: rise .45s var(--ease) both; }
+    .tab-enter .panel:nth-of-type(2) { animation-delay: .04s } .tab-enter .panel:nth-of-type(3) { animation-delay: .08s }
+    .tab-enter .panel:nth-of-type(n+4) { animation-delay: .12s }
+    .tab-enter .cal-bar { animation: grow .7s var(--ease) both; transform-origin: bottom; }
+    .tab-enter .cal-col:nth-child(2n) .cal-bar { animation-delay: .03s } .tab-enter .cal-col:nth-child(3n) .cal-bar { animation-delay: .06s }
+    .tab-enter .tm-tile { animation: tileIn .5s var(--ease) both; }
+    .tab-enter .tm-tile:nth-child(3n+1) { animation-delay: .05s } .tab-enter .tm-tile:nth-child(3n+2) { animation-delay: .1s }
+    @keyframes tileIn { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+    /* 前提を変えて将来見通しを描き直したときも、棒が伸びる */
+    .sim-chart.is-new .cal-bar { animation: grow .6s var(--ease) both; transform-origin: bottom; }
+    /* ボタンを押したときの小さな手応え */
+    button.btn, .axis-tab, .tab { transition: transform .12s var(--ease); }
+    button.btn:active, .axis-tab:active, .tab:active { transform: scale(.97); }
   }
   @media (max-width: 700px) {
     .app { padding: 14px 16px 64px; }
@@ -5622,6 +5636,7 @@
     };
   }
 
+  var simAnimate = false;  // 再投資・期間を切り替えたときだけ棒を伸ばし直す(金額の入力中は動かさない)
   function renderSimulation(agg) {
     var el = document.getElementById("simBody");
     el.innerHTML = "";
@@ -5663,7 +5678,8 @@
     el.appendChild(basisNote);
 
     var chart = document.createElement("div");
-    chart.className = "calendar-chart sim-chart";
+    chart.className = "calendar-chart sim-chart" + (simAnimate ? " is-new" : "");
+    simAnimate = false;
     var shown = sim.series.filter(function (s) { return s.year <= 20; });
     var max = Math.max.apply(null, shown.map(function (s) { return s.div; }));
     shown.forEach(function (s) {
@@ -5902,7 +5918,7 @@
     });
     reinvest.addEventListener("change", function () {
       state.sim.reinvest = reinvest.checked;
-      save(); renderSimulation(aggregate());
+      simAnimate = true; save(); renderSimulation(aggregate());
     });
     var basisTabs = document.getElementById("simBasisTabs");
     function paintBasis() {
@@ -5917,7 +5933,7 @@
       state.sim.basis = num(b.dataset.years);
       // 期間を選んだら手入力の増配率は外して、実績の平均に戻す
       state.sim.growth = null; growth.value = "";
-      paintBasis(); save(); renderSimulation(aggregate());
+      paintBasis(); simAnimate = true; save(); renderSimulation(aggregate());
     });
     growth.addEventListener("input", paintBasis);
     paintBasis();
@@ -6280,6 +6296,13 @@
     });
     try { localStorage.setItem("haitoTab", t); } catch (e) {}
     if (changed) {
+      if (!quiet) {
+        document.body.classList.remove("tab-enter");
+        void document.body.offsetWidth;  // 続けて切り替えたときも動きをやり直す
+        document.body.classList.add("tab-enter");
+        clearTimeout(setTab.t);
+        setTab.t = setTimeout(function () { document.body.classList.remove("tab-enter"); }, 900);
+      }
       // 隠れている間は幅が0なので、ツリーマップなど幅で描く図は表示してから描き直す
       if (t === "analysis" || t === "home") renderDashboard();
       if (!quiet) window.scrollTo(0, 0);
