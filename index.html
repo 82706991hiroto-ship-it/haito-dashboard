@@ -2905,7 +2905,8 @@
     var divs = dividendsFor(w.code);
     // 予想配当は、保有していれば自分で入れた値(決算で書き換えた値)を使う
     var heldDiv = held.map(function (h) { return num(h.div); }).filter(function (v) { return v > 0; })[0];
-    var div = heldDiv || (divs ? divs[0] : 0);
+    // 保有の値 → チェックシートで入れた会社予想 → 内蔵の直近実績 の順
+    var div = heldDiv || num(w.fdiv) || (divs ? divs[0] : 0);
     // 株価は監視側と保有側のうち新しいほう
     var price = num(w.price), priceDate = w.priceDate || "";
     held.forEach(function (h) {
@@ -2917,7 +2918,7 @@
     var targetPrice = target > 0 && div > 0 ? div / (target / 100) : null;
     return {
       w: w, name: info ? String(info[0]).normalize("NFKC") : w.code, sector: info ? info[1] : "",
-      div: div, divFromHolding: !!heldDiv, price: price, priceDate: priceDate,
+      div: div, divFromHolding: !!heldDiv, divFromForecast: !heldDiv && num(w.fdiv) > 0, price: price, priceDate: priceDate,
       yieldNow: price > 0 && div > 0 ? (div / price) * 100 : null,
       targetPrice: targetPrice,
       gapPct: targetPrice && price > 0 ? (targetPrice / price - 1) * 100 : null,
@@ -3068,6 +3069,8 @@
     }
     var price = num(q.get("price"));
     if (price > 0) { w.price = price; w.priceDate = todayStamp(); }
+    var fdiv = num(q.get("fdiv"));
+    if (fdiv > 0) w.fdiv = fdiv; else delete w.fdiv;
     save();
     var back = document.getElementById("backToCheck");
     back.innerHTML = "チェックシートに戻る<small>" + escapeHtml(code + " " + String(info[0]).normalize("NFKC")) + " の採点</small>";
@@ -3132,7 +3135,7 @@
         save(); renderWatchList();
       });
       cell("株価" + (v.priceDate ? "(" + v.priceDate.slice(5) + ")" : ""), priceIn);
-      cell("1株配当" + (v.divFromHolding ? "(保有の値)" : "(直近実績)"), v.div > 0 ? fmtPerShare(v.div) : "—");
+      cell("1株配当" + (v.divFromHolding ? "(保有の値)" : v.divFromForecast ? "(会社予想)" : "(直近実績)"), v.div > 0 ? fmtPerShare(v.div) : "—");
       cell("今の利回り", v.yieldNow !== null ? fmtPct(v.yieldNow, 2) : "—");
       var tIn = document.createElement("input");
       tIn.type = "number"; tIn.min = "0"; tIn.step = "0.1"; tIn.inputMode = "decimal";
