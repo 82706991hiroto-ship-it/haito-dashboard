@@ -1,1 +1,221 @@
-{}
+{
+  "VOO": {
+    "fy": "2025-12-31",
+    "d": [
+      7.068,
+      6.704,
+      6.357,
+      5.947,
+      5.437
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/36405/000110465926021519/tm263123d8_ncsr.htm"
+    ],
+    "備考": "Vanguard Index Funds の N-CSR(2026-02-27提出, 期末2025-12-31)の 500 Index Fund Financial Highlights『ETF Shares』の Total Distributions(Dividends from Net Investment Income のみ、Realized Capital Gains は全期間ゼロ)。5期分が同一表に載っている。"
+  },
+  "VTI": {
+    "fy": "2025-12-31",
+    "d": [
+      3.757,
+      3.674,
+      3.413,
+      3.183,
+      2.93
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/36405/000110465926021502/tm263123d1_ncsr.htm"
+    ],
+    "備考": "Vanguard Index Funds の N-CSR(2026-02-27提出, 期末2025-12-31)の Total Stock Market Index Fund Financial Highlights『ETF Shares』の Total Distributions(実現益分配は全期間ゼロ)。"
+  },
+  "VIG": {
+    "fy": "2026-01-31",
+    "d": [
+      3.558,
+      3.379,
+      3.208,
+      2.973,
+      2.66
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/734383/000110465926036006/tm265717d4_ncsr.htm"
+    ],
+    "備考": "Vanguard Specialized Funds の N-CSR(2026-03-27提出, 期末2026-01-31)の Dividend Appreciation Index Fund Financial Highlights『ETF Shares』。決算期は1月末。実現益分配は全期間ゼロ。"
+  },
+  "VT": {
+    "fy": "2025-10-31",
+    "d": [
+      2.335,
+      2.217,
+      1.979,
+      2.043,
+      1.722
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/857489/000110465925125085/tm2530396d11_ncsr.htm"
+    ],
+    "備考": "Vanguard International Equity Index Funds の N-CSR(2025-12-30提出, 期末2025-10-31)の Total World Stock Index Fund Financial Highlights『ETF Shares』。実現益分配は全期間ゼロ。"
+  },
+  "VYM": {
+    "fy": "2025-10-31",
+    "d": [
+      3.518,
+      3.63,
+      3.353,
+      3.216,
+      2.967
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/1004655/000110465925125080/tm2530396d8_ncsr.htm"
+    ],
+    "備考": "Vanguard Whitehall Funds の N-CSR(2025-12-30提出, 期末2025-10-31)の High Dividend Yield Index Fund Financial Highlights『ETF Shares』。実現益分配は全期間ゼロ。"
+  },
+  "SPYD": {
+    "fy": "2026-06-30",
+    "d": [
+      2.03,
+      1.92,
+      1.83,
+      1.78,
+      1.57
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/1064642/000119312526383187/d123272dncsr.htm"
+    ],
+    "備考": "SPDR Series Trust の N-CSR(2026-09-04提出, 期末2026-06-30)の Selected data for a share outstanding(Financial Highlights)の『Distributions to shareholders from: Net investment income』。実現益・資本の払い戻しの行は無し。"
+  },
+  "QQQ": {
+    "fy": "2025-09-30",
+    "d": [
+      2.84,
+      3.04,
+      2.17,
+      1.97,
+      1.77
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/1067839/000119312525249697/d29525dn30b2.htm",
+      "https://www.sec.gov/Archives/edgar/data/1067839/000119312522313828/d385116dn30b2.htm"
+    ],
+    "備考": "UITの年次報告書(EDGAR上の書類種別は N-30B-2、期末9月末)の Financial Highlights『Distributions to shareholders from: Net investment income』。5期分は2025年版の表。2021・2022は2022年版でも同値を確認(1.77, 1.97)。実現益・資本の払い戻しの行は無し。2026-03期以降は中間報告 N-CSRS が出ており、投資会社(開放型)への移行後の書式。"
+  },
+  "HDV": {
+    "fy": "2026-04-30",
+    "d": [
+      0.79,
+      0.814,
+      0.738,
+      0.798,
+      0.68
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/1100663/000119312526293720/d29874dncsr.htm",
+      "https://www.sec.gov/Archives/edgar/data/1100663/000119312525154694/d11791dncsr.htm"
+    ],
+    "備考": "2026-04-28の1→5分割後の口数ベース。2026期は分割後の実額0.79、2025期以前は分割前の実額÷5。2025年版N-CSR(期末2025-04-30, 2025-07-02提出)の Financial Highlights『Distributions from net investment income』=分割前の実額(4.07/3.69/3.99/3.40/3.54)。2026年版(期末2026-04-30)は5対1分割(2026-04-28引け後)を反映した表で、2026期は0.79(分割後)。配列は分割前基準にそろえ、2026期は0.79×5=3.95(換算値、丸め誤差±0.03程度)。実現益・資本の払い戻しの行は無し。決算期は4月末。 確認を「未」にした理由: 先頭の2026期の値だけが換算値のため(2021〜2025期は書類記載の実額で確認済)。"
+  },
+  "QYLD": {
+    "fy": "2025-10-31",
+    "d": [
+      2.21,
+      2.09,
+      2.04,
+      2.59,
+      2.58
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/1432353/000093041326000081/c114720_ncsr.htm"
+    ],
+    "備考": "Global X Funds の N-CSR(2026-01-09提出, 期末2025-10-31)の Financial Highlights(Distributions: Net Investment Income / Realized Gains / Return of Capital と Total from Distributions)。決算期は10月末。資本の払い戻しが大きい(2023期は全額)。"
+  },
+  "XOM": {
+    "fy": "2025-12-31",
+    "d": [
+      4.0,
+      3.84,
+      3.68,
+      3.55,
+      3.49
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/34088/000003408826000045/xom-20251231.htm",
+      "https://www.sec.gov/Archives/edgar/data/34088/000003408824000018/xom-20231231.htm"
+    ],
+    "備考": "10-K MD&A『Dividend payments on common shares ... $X per share』と注記の『Dividends paid per common share』。支払ベース(宣言額ではない)。2025-2023は2025年版、2022・2021は2023年版の記述(『$3.55 per share from $3.49』)。10-K自体は旧CIK 34088で提出されている(SEC一覧ではXOMのティッカーはExxonMobil Holdings Corp, CIK 2115436にも紐づく)。"
+  },
+  "C": {
+    "fy": "2025-12-31",
+    "d": [
+      2.32,
+      2.18,
+      2.08,
+      2.04,
+      2.04
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/831001/000083100126000011/c-20251231.htm"
+    ],
+    "備考": "2025年版10-K の『Dividends declared per common share』(5期表)。宣言額。四半期の宣言額(2025: 0.56×2+0.60×2=2.32, 2024: 0.53×2+0.56×2=2.18, 2023: 0.51×2+0.53×2=2.08)と一致。"
+  },
+  "GD": {
+    "fy": "2025-12-31",
+    "d": [
+      6.0,
+      5.68,
+      5.28,
+      5.04,
+      4.76
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/40533/000004053326000006/gd-20251231.htm",
+      "https://www.sec.gov/Archives/edgar/data/40533/000004053324000007/gd-20231231.htm"
+    ],
+    "備考": "10-K MD&A『Dividends per Share. Our Board declared dividends per share of ...』。宣言額。2025-2023は2025年版、2022・2021は2023年版。"
+  },
+  "HSY": {
+    "fy": "2025-12-31",
+    "d": [
+      5.48,
+      5.48,
+      4.456,
+      3.874,
+      3.41
+    ],
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/47111/000162828026008586/hsy-20251231.htm",
+      "https://www.sec.gov/Archives/edgar/data/47111/000004711124000009/hsy-20231231.htm",
+      "https://www.sec.gov/Archives/edgar/data/47111/000004711123000012/hsy-20221231.htm"
+    ],
+    "備考": "10-K MD&A『Dividend payments』の『Dividends per share of Common Stock』(支払ベース)。Class B Stock は別(2025/2024は4.980)。2025・2024は同額(四半期1.370×4)。2025年版・2023年版・2022年版から取得。宣言額の表は未確認のため、支払ベースの値であることに注意。"
+  },
+  "PLD": {
+    "fy": "2025-12-31",
+    "d": [
+      4.04,
+      3.84,
+      3.48,
+      3.16,
+      2.52
+    ],
+    "固定": true,
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/1045609/000119312526051453/pld-20251231.htm",
+      "https://www.sec.gov/Archives/edgar/data/1045609/000095017024014539/pld-20231231.htm"
+    ],
+    "備考": "10-K の株主資本計算書の見出し『Dividends ($X per common share) and other distributions』(宣言額)。2025-2023は2025年版(4.04, 3.84, 3.48)、2023-2021は2023年版(3.48, 3.16, 2.52)で2023は両方で一致。四半期額(2025: 1.01、2024: 0.96、2023: 0.87、2022: 0.79)×4とも整合。優先株の配当は含まない。"
+  },
+  "CL": {
+    "fy": "2025-12-31",
+    "d": [
+      2.06,
+      1.98,
+      1.91,
+      1.86
+    ],
+    "固定": true,
+    "出典": [
+      "https://www.sec.gov/Archives/edgar/data/21665/000002166526000006/cl-20251231.htm",
+      "https://www.sec.gov/Archives/edgar/data/21665/000002166524000003/cl-20231231.htm"
+    ],
+    "備考": "支払ベース(10-K MD&A)。宣言ベースは2024年に5回分の宣言が入り2.48となるため使わない。10-K の株主資本変動表『Dividends ($X)/per share』(宣言額)。2.08/2.48/1.91 は書類どおりで正しい。ただし2025年版の脚注に『Four dividends were declared in 2025. Five dividends were declared in 2024. Four dividends were declared in 2023.』とあり、2024の2.48は宣言が5回分入っているための見かけの値(株式分割・特別配当ではない)。支払ベース(MD&A)では 2025: 2.06、2024: 1.98、2023: 1.91、2022: 1.86 で滑らか。ダッシュボードには支払ベースの方が実態に合う。2021の1.79は2023年版の株主資本変動表(宣言額)で、支払額は未確認。"
+  }
+}
