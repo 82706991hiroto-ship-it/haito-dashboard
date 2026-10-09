@@ -1024,7 +1024,7 @@
             <th>コード</th><th>銘柄名</th><th>業種</th><th>口座</th>
             <th>株数</th><th>取得単価(円)</th><th>配当/株(税引前)</th>
             <th>前年配当/株</th><th>配当動向</th><th>権利確定月</th>
-            <th>年間配当金<br><small>構成比</small></th><th>利回り</th><th>評価額・損益<br><small>取得額</small></th><th></th>
+            <th>年間配当金<br><small>構成比</small></th><th>利回り<br><small>PER</small></th><th>評価額・損益<br><small>取得額</small></th><th></th>
           </tr>
         </thead>
         <tbody id="holdingsBody"></tbody>
@@ -1569,6 +1569,31 @@
       ? "(" + state.fx.date + " 時点。楽天証券のCSVを読み込むと更新)" : "(仮の値です。今のレートを入れてください)";
   }
 
+  // 実績PER: 株価 ÷ 前期の1株利益。1株利益はチェックシート(同じサイトの ../ir-check/fin/)が有報から作った数字を使う。
+  // 証券コードの先頭の数字ごとのファイルを、株価のある銘柄の分だけ読む
+  var FIN = {}, finAsked = {};
+  function loadFinForHoldings() {
+    var need = {};
+    state.holdings.forEach(function (h) {
+      var c = String(h.code || "").trim().toUpperCase();
+      if (!isUS(h) && /^[1-9][0-9A-Z]{3}$/.test(c) && num(h.price) > 0 && !finAsked[c[0]]) need[c[0]] = true;
+    });
+    var ds = Object.keys(need);
+    if (!ds.length) return;
+    ds.forEach(function (d) { finAsked[d] = true; });
+    Promise.all(ds.map(function (d) {
+      return fetch("../ir-check/fin/" + d + ".json").then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { if (j) FIN[d] = j; }, function () {});
+    })).then(function () { renderTable(); });
+  }
+  function perOf(h) {
+    var c = String(h.code || "").trim().toUpperCase(), p = num(h.price);
+    if (isUS(h) || !(p > 0) || !FIN[c[0]]) return null;
+    var rec = FIN[c[0]][c], e = rec && rec.eps ? rec.eps[rec.eps.length - 1] : null;
+    if (e == null) return null;
+    return e > 0 ? { v: p / e, eps: e } : { deficit: true };
+  }
+
   // 年間配当のうちその銘柄が占める割合(除外した銘柄は分母に入れない)
   function totalDivPreOf() {
     return state.holdings.reduce(function (t, h) { return h.excluded ? t : t + computeRow(h).divPre; }, 0);
@@ -1599,6 +1624,7 @@
   function renderTable() {
     renderFxBar();
     renderMissingList();
+    loadFinForHoldings();
     var tbody = document.getElementById("holdingsBody");
     tbody.innerHTML = "";
     if (state.holdings.length === 0) {
@@ -1655,9 +1681,11 @@
       tdYield.className = "num yield-cell";
       tdYield.dataset.label = "利回り";
       var yNow = currentYieldOf(h), yBook = bookYieldOf(h);
+      var per = perOf(h);
       tdYield.innerHTML = (yNow !== null ? '<b>' + yNow.toFixed(2) + '%</b>' : '<b class="muted">―</b>') +
-        '<small>取得 ' + (yBook !== null && yBook > 0 ? yBook.toFixed(2) + "%" : "―") + '</small>';
-      tdYield.title = "上: 現在の株価に対する利回り(株価を入れると出ます) / 下: 取得単価に対する利回り";
+        '<small>取得 ' + (yBook !== null && yBook > 0 ? yBook.toFixed(2) + "%" : "―") + '</small>' +
+        (per ? '<small>PER ' + (per.deficit ? "―(赤字)" : per.v.toFixed(1) + "倍") + '</small>' : "");
+      tdYield.title = "上: 現在の株価に対する利回り(株価を入れると出ます) / 中: 取得単価に対する利回り / 下: 実績PER(株価 ÷ 前期の1株利益。有報から)";
       tr.appendChild(tdYield);
 
       var tdAcq = document.createElement("td");
