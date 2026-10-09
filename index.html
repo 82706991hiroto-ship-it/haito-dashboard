@@ -3660,7 +3660,9 @@
     var lack = [];
     if (h.div === "" || h.div == null) lack.push("配当");
     if (!prevDivOf(h)) lack.push("前年配当");
-    if (monthsOf(h).length === 0) lack.push("権利確定月");
+    // 無配(配当0円)の銘柄は権利確定月が無くても困らない
+    var zero = h.div !== "" && h.div != null && num(h.div) === 0;
+    if (monthsOf(h).length === 0 && !zero) lack.push("権利確定月");
     return lack;
   }
 
@@ -3950,17 +3952,49 @@
       var h = x.h;
       var li = document.createElement("li");
 
+      var code = String(h.code || "").trim().toUpperCase();
+      var blank = !code && !String(h.name || "").trim();
       var name = document.createElement("span");
       name.className = "mname";
-      name.textContent = (h.name || "無名銘柄") + (h.code ? "(" + h.code + ")" : "");
+      name.textContent = blank ? "空の行" : (h.name || "銘柄名なし") + (h.code ? "(" + h.code + ")" : "");
       li.appendChild(name);
 
       var lack = document.createElement("span");
       lack.className = "mlack";
-      lack.textContent = x.lack.join("・") + " が空欄";
+      lack.textContent = blank ? "コードも銘柄名も入っていません" :
+        x.lack.join("・") + " が空欄" + (ETF_LINKS[code] ? "(ETFの分配金は自動で取れないため手入力)" : "");
       li.appendChild(lack);
 
-      if (nameFor(String(h.code || "").trim())) {
+      function act(label, title, fn) {
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "mjump"; b.textContent = label; b.title = title;
+        b.addEventListener("click", fn);
+        li.appendChild(b);
+      }
+      if (blank) {
+        act("この行を消す", "何も入っていない行を消します", function () {
+          state.holdings = state.holdings.filter(function (y) { return y.id !== h.id; });
+          save(); renderTable(); renderDashboard();
+        });
+        list.appendChild(li);
+        return;
+      }
+      // 配当を出していない会社(内蔵データにも配当が無い)は、0円と入れれば以後は空欄扱いしない
+      var noDivData = !isUS(h) && !dividendsFor(code);
+      if (noDivData && x.lack.indexOf("配当") !== -1) {
+        act("無配(0円)にする", "配当を出していない銘柄なら、配当と前年配当を0円にしてこの一覧から外します", function () {
+          h.div = "0"; if (h.prevDiv === "" || h.prevDiv == null) h.prevDiv = "0";
+          save(); renderTable(); renderDashboard();
+          showToast((h.name || h.code) + " を無配(0円)にしました");
+        });
+      }
+
+      if (ETF_LINKS[code]) {
+        var e = document.createElement("a");
+        e.className = "mlink"; e.href = ETF_LINKS[code]; e.target = "_blank"; e.rel = "noopener noreferrer";
+        e.textContent = "運用会社で分配金を調べる";
+        li.appendChild(e);
+      } else if (nameFor(code)) {
         var a = document.createElement("a");
         a.className = "mlink";
         a.href = "https://irbank.net/" + String(h.code).trim() + "/dividend";
