@@ -807,6 +807,14 @@
   .hero-substats .label { font-size: 11px; font-weight: 700; letter-spacing: .12em; color: var(--muted); }
   .hero-substats .value { font-size: 24px; font-weight: 800; letter-spacing: -.03em; }
   .hero-actions { margin-top: 18px; justify-content: flex-start; }
+  .hero-substats .stat-jump {
+    grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    font: inherit; text-align: left; color: inherit; cursor: pointer; background: none; border: none;
+    border-bottom: 1px solid var(--line); padding: 14px 0 12px !important; border-left: none !important;
+  }
+  .hero-substats .stat-jump .label { color: var(--accent); }
+  .hero-substats .stat-jump .value { font-size: 20px; }
+  #simPanel { scroll-margin-top: 72px; }
 
   /* 節目: 年間配当の金額で全員共通。越えるごとに一番上が一段華やかになる */
   .tier-2 .hero-value .yen, .tier-3 .hero-value .yen { color: var(--gold); }
@@ -4892,8 +4900,13 @@
       { label: "銘柄", value: agg.stockCount + "" },
       { label: "業種", value: agg.sectorCount + "" }
     ];
+    // 目標までの見通し(下の「将来見通し」と同じ試算)。押すとその欄へ
+    var sim = !done && goal > 0 ? simulate(agg) : null;
+    if (sim) subs.push({ label: "目標到達", value: sim.reached === null ? SIM_MAX_YEARS + "年超" : "約" + sim.reached + "年後(" + (new Date().getFullYear() + sim.reached) + "年)", jump: "simPanel" });
     document.getElementById("heroSubstats").innerHTML = subs.map(function (s) {
-      return '<div class="stat"><div class="label">' + s.label + '</div><div class="value">' + s.value + '</div></div>';
+      return s.jump
+        ? '<button type="button" class="stat stat-jump" data-jump="' + s.jump + '"><div class="label">' + s.label + ' ›</div><div class="value">' + s.value + '</div></button>'
+        : '<div class="stat"><div class="label">' + s.label + '</div><div class="value">' + s.value + '</div></div>';
     }).join("");
     renderMilestones(annual);
   }
@@ -5967,7 +5980,7 @@
       '  <h2><span class="chap">◆</span>NISA枠 <span class="hint">新NISAの口座の取得額(簿価)から計算</span></h2>' +
       '  <div id="nisaBody"></div>' +
       '</div>' +
-      '<div class="panel" data-view="analysis">' +
+      '<div class="panel" data-view="home" id="simPanel">' +
       '  <h2><span class="chap">八</span>将来見通し <span class="hint">前提を変えると試算が変わります</span></h2>' +
       '  <div class="grid-inputs sim-inputs">' +
       '    <label class="field">毎月の追加投資額(円)' +
@@ -6633,6 +6646,12 @@
   window.addEventListener("online", function () { syncNow(false); });
   document.addEventListener("visibilitychange", function () { if (!document.hidden) syncNow(false); });
   setInterval(function () { if (!document.hidden) syncNow(false); }, 60000);
+
+  document.getElementById("heroSubstats").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-jump]");
+    var t = b && document.getElementById(b.dataset.jump);
+    if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
   function renderAll() {
     setTab(document.body.dataset.tab || "home", true);
