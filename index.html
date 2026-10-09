@@ -6277,6 +6277,31 @@
   })();
 
   // 以前は業種が分からない銘柄に先頭の「水産・農林業」が入っていた。内蔵データと食い違うものを直す
+  // 内蔵データに後から入った銘柄(名証だけの会社など)は、登録済みの行に配当が入っていない。
+  // 配当が空欄(または「無配(0円)にする」で0にした行)の日本株で、内蔵データに配当があれば補う
+  function fillFromBuiltin() {
+    var filled = [];
+    state.holdings.forEach(function (h) {
+      if (isUS(h)) return;
+      var code = String(h.code || "").trim().toUpperCase(), info = CODE_INFO_MAP[code];
+      if (!info) return;
+      if ((!h.sector || h.sector === UNCLASSIFIED) && SECTOR_NAMES.indexOf(info[1]) !== -1) h.sector = info[1];
+      if (!h.name) h.name = info[0];
+      var s = dividendsFor(code);
+      if (!s || !(s[0] > 0)) return;
+      var empty = h.div === "" || h.div == null;
+      var zeroed = !empty && num(h.div) === 0 && (h.prevDiv === "" || h.prevDiv == null || num(h.prevDiv) === 0);
+      if (!empty && !zeroed) return;
+      h.div = s[0];
+      if (zeroed) h.prevDiv = "";  // 前年配当は内蔵データから自動で出す
+      filled.push(h.name || code);
+    });
+    if (filled.length) {
+      save();
+      showToast("内蔵データの配当を入れました: " + filled.slice(0, 3).join("・") + (filled.length > 3 ? " ほか" + (filled.length - 3) + "件" : ""));
+    }
+  }
+
   function fixUnknownSectors() {
     var fixed = false;
     state.holdings.forEach(function (h) {
@@ -6497,6 +6522,7 @@
   function renderAll() {
     setTab(document.body.dataset.tab || "home", true);
     fixUnknownSectors();
+    if (!state.isSample) fillFromBuiltin();
     if (!state.isSample) applyHoldingSplits();
     bindGoalInputs();
     renderTable();
