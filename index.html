@@ -6294,7 +6294,8 @@
       b.setAttribute("aria-selected", on ? "true" : "false");
       b.tabIndex = on ? 0 : -1;
     });
-    try { localStorage.setItem("haitoTab", t); } catch (e) {}
+    // アプリを開いている間だけ覚える(終了して開き直したらホームから)
+    try { sessionStorage.setItem("haitoTab", t); } catch (e) {}
     if (changed) {
       if (!quiet) {
         document.body.classList.remove("tab-enter");
@@ -6313,7 +6314,7 @@
   });
   (function () {
     var t = (location.hash || "").replace("#", "");
-    if (TABS.indexOf(t) === -1) { try { t = localStorage.getItem("haitoTab"); } catch (e) { t = null; } }
+    if (TABS.indexOf(t) === -1) { try { t = sessionStorage.getItem("haitoTab"); } catch (e) { t = null; } }
     document.body.dataset.tab = TABS.indexOf(t) === -1 ? "home" : t;
   })();
 
