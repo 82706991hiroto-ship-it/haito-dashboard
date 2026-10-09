@@ -1202,10 +1202,12 @@
           <span class="paste-status" id="yahooImportStatus"></span>
         </div>
         <p class="hint" style="margin-top:14px;">
-          スマホの場合は、証券会社アプリ・サイトから保有証券のCSVファイルをダウンロードし、ここから選んでも読み込めます(コピー&貼り付けが難しい場合に便利です)。文字コードはUTF-8・Shift_JISのどちらでも自動判定します。
+          スマホの場合は、証券会社アプリ・サイトから保有証券のCSVファイルをダウンロードし、ここから選んでも読み込めます(コピー&貼り付けが難しい場合に便利です)。文字コードはUTF-8・Shift_JISのどちらでも自動判定します。<br>
+          自分で管理している表(スプレッドシート)からも読み込めます。「コード」「口座」「株数」「取得単価」「1株配当」「前年配当」「現在値」の列名を付けてCSVで書き出してください。コードが英字(VYM、KOなど)の行は米国株として、取得単価・配当・現在値をドルで読みます。「米ドル,155.2」の行があれば為替にも使います。
         </p>
         <div class="toolbar">
           <button class="btn" id="csvImportBtn">CSVファイルを選択して読み込む</button>
+          <button class="btn" id="csvTemplateBtn" type="button">自分の表用のCSVひな形</button>
           <input type="file" id="csvImportFile" accept=".csv,.txt,text/csv,text/plain,application/vnd.ms-excel" style="display:none">
           <span class="paste-status" id="csvImportStatus"></span>
         </div>
@@ -2413,14 +2415,15 @@
   // 形式B: 多くの証券会社のように、ヘッダー行+1銘柄1行のタブ(またはカンマ)区切り表としてコピーされる形式。
   // 列の並び順は問わず、ヘッダーの文言から列を自動判定する。
   var HEADER_SYNONYMS = {
-    code: ["コード", "銘柄コード", "証券コード", "ｺｰﾄﾞ", "銘柄コード・ティッカー", "銘柄コード/ティッカー", "ティッカー"],
+    code: ["コード", "銘柄コード", "証券コード", "ｺｰﾄﾞ", "銘柄コード・ティッカー", "銘柄コード/ティッカー", "ティッカー", "シンボル", "Ticker", "Symbol"],
     name: ["銘柄名", "銘柄", "名称"],
     shares: ["保有数量", "保有数", "数量", "口数", "株数", "保有株数"],
     cost: ["取得単価", "平均取得単価", "平均取得価額", "平均単価", "取得価額", "取得価格", "購入価格", "買付単価", "簿価単価"],
     sector: ["業種", "業種名"],
     account: ["口座", "口座区分", "預り区分", "口座種別", "口座種類", "保管区分", "預り", "課税区分"],
     kind: ["種別", "商品", "商品区分", "商品種別"],
-    div: ["1株配当", "予想配当", "配当金(1株)", "1株当り配当金"],
+    div: ["1株配当", "予想配当", "配当金(1株)", "1株当り配当金", "1株配当金", "年間配当", "1株年間配当", "分配金", "年間分配金", "1口分配金"],
+    prevDiv: ["前年配当", "前年1株配当", "前期配当", "前年分配金"],
     // 「現在値［円］」の後ろに「現在値（前日比）［円］」が並ぶ形式がある。
     // 括弧以降を落とすとどちらも「現在値」になるが、先に出た列を採るので現在値が入る。
     price: ["現在値", "現在株価", "株価", "時価単価"]
@@ -2467,7 +2470,9 @@
       var key = matchHeaderColumn(c);
       if (key && map[key] === undefined) map[key] = idx;
     });
-    return (map.code !== undefined && (map.shares !== undefined || map.cost !== undefined)) ? map : null;
+    // コードの列が無くても、種別と銘柄名があれば(銘柄名に米国株のティッカーが入る形式)見出しとみなす
+    var hasId = map.code !== undefined || (map.kind !== undefined && map.name !== undefined);
+    return (hasId && (map.shares !== undefined || map.cost !== undefined)) ? map : null;
   }
 
   function accountFromText(text) {
@@ -2519,7 +2524,14 @@
       var kind = colMap.kind !== undefined ? (row[colMap.kind] || "") : "";
       var usdUnit = (colMap.cost !== undefined && /USD|ドル/.test(row[colMap.cost + 1] || "")) ||
                     (colMap.price !== undefined && /USD|ドル/.test(row[colMap.price + 1] || ""));
-      if ((/米国/.test(kind) || usdUnit) && /^[A-Za-z][A-Za-z0-9.\-]{0,6}$/.test(code)) {
+      // コードの列に英字のティッカーがあれば米国株(日本株のコードは数字で始まる)。
+      // コードの列が空で「VYM バンガード…」「…(VYM)」のように銘柄名にティッカーがある形式も、米国株の行なら拾う
+      if (!code && (/米国/.test(kind) || usdUnit) && colMap.name !== undefined) {
+        var nm = String(row[colMap.name] || "").trim();
+        var tk = nm.match(/^([A-Z]{1,5}(?:\.[A-Z])?)[\s　]/) || nm.match(/[(（]([A-Z]{1,5}(?:\.[A-Z])?)[)）]/);
+        if (tk) code = tk[1];
+      }
+      if (/^[A-Za-z][A-Za-z0-9.\-]{0,6}$/.test(code) && !/^(合計|total)$/i.test(code)) {
         var accRaw = colMap.account !== undefined ? (row[colMap.account] || "").trim() : "";
         var usPrice = colMap.price !== undefined ? parsePasteNum(row[colMap.price]) : "";
         results.push({
@@ -2529,6 +2541,8 @@
           shares: colMap.shares !== undefined ? parsePasteNum(row[colMap.shares]) : "",
           usdCost: colMap.cost !== undefined ? parsePasteNum(row[colMap.cost]) : "",
           usdPrice: usPrice, priceDate: usPrice !== "" ? (priceDate || todayStamp()) : undefined,
+          usdDiv: colMap.div !== undefined ? parsePasteNum(row[colMap.div]) : "",
+          usdPrevDiv: colMap.prevDiv !== undefined ? parsePasteNum(row[colMap.prevDiv]) : "",
           months: [3, 6, 9, 12]
         });
         return;
@@ -2545,6 +2559,7 @@
       var div = colMap.div !== undefined ? parsePasteNum(row[colMap.div]) : "";
       if (div === "" && autoDivs.length > 0) div = autoDivs[0];
       var prevDiv = autoDivs.length > 1 ? autoDivs[1] : undefined;
+      if (colMap.prevDiv !== undefined && parsePasteNum(row[colMap.prevDiv]) !== "") prevDiv = parsePasteNum(row[colMap.prevDiv]);
 
       results.push({
         code: code,
@@ -2639,8 +2654,9 @@
       }
       if (existing) {
         existing.name = r.name; existing.sector = r.sector;
-        recordDivChange(existing, existing.div, r.div);
-        existing.shares = r.shares; existing.cost = r.cost; existing.div = r.div;
+        // 配当が分からない取り込み元(配当の列も内蔵データも無い)では、入力済みの配当を消さない
+        if (r.div !== "" && r.div != null) { recordDivChange(existing, existing.div, r.div); existing.div = r.div; }
+        existing.shares = r.shares; existing.cost = r.cost;
         if (r.months) existing.months = r.months;
         if (r.price !== undefined && r.price !== "") { existing.price = r.price; existing.priceDate = r.priceDate; }
         // 前年配当を持たない取り込み元(貼り付け・CSV)では既存の入力値を消さない
@@ -2680,8 +2696,15 @@
     var msg = merged.added + "件追加、" + merged.updated + "件更新しました。"
       + "(NISA " + nisa + "件 / 特定 " + (parsed.results.length - nisa) + "件"
       + (us ? " / うち米国株 " + us + "件" : "") + ")";
-    if (us) msg += " 米国株の1株配当(ドル・年間)は自動では入らないので、保有銘柄の欄に入れてください。"
-      + (parsed.fx > 0 ? "為替は1ドル=" + parsed.fx + "円にしました。" : "");
+    if (us) {
+      var usNoDiv = parsed.results.filter(function (r) {
+        if (r.market !== "us" || (r.usdDiv !== "" && r.usdDiv !== undefined)) return false;
+        var h = state.holdings.find(function (x) { return x.code === r.code && x.account === r.account; });
+        return !(h && num(h.div) > 0);
+      }).length;
+      if (usNoDiv) msg += " 米国株のうち" + usNoDiv + "件は1株配当(ドル・年間)が分からないので、保有銘柄の欄に入れてください(ETFは自動で取れません)。";
+      if (parsed.fx > 0) msg += "為替は1ドル=" + parsed.fx + "円にしました。";
+    }
     if (parsed.skipped > 0) msg += " 投資信託や合計の行など、" + parsed.skipped + "行は読み込んでいません。";
     statusEl.textContent = msg;
     return true;
@@ -2757,6 +2780,22 @@
     if (utf8Text.indexOf("�") === -1) return utf8Text;
     try { return new TextDecoder("shift_jis").decode(buffer); } catch (e) { return utf8Text; }
   }
+
+  // 自分の表から書き出すときの見本。日本株は円、米国株(英字のコード)はドル
+  document.getElementById("csvTemplateBtn").addEventListener("click", function () {
+    var csv = [
+      "コード,銘柄名,口座,株数,取得単価,1株配当,前年配当,現在値",
+      "8058,三菱商事,NISA,100,2500,110,100,3000",
+      "VYM,バンガード 米国高配当株式ETF,NISA,10,105.20,3.50,3.30,128.40",
+      "KO,コカ・コーラ,特定,20,58.00,2.04,1.94,70.10",
+      "米ドル,150.00"
+    ].join("\r\n") + "\r\n";
+    var blob = new Blob(["\ufeff" + csv], { type: "text/csv" });
+    var url = URL.createObjectURL(blob), link = document.createElement("a");
+    link.href = url; link.download = "haito-holdings-template.csv";
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  });
 
   document.getElementById("csvImportBtn").addEventListener("click", function () {
     document.getElementById("csvImportFile").click();
