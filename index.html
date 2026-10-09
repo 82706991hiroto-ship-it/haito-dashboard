@@ -907,6 +907,8 @@
   .market-filter[hidden] { display: none; }
   td.yield-cell b.muted { color: var(--muted); font-weight: 500; }
   td.yield-cell small { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .gain-up { color: var(--accent); font-weight: 700; } .gain-down { color: var(--crit); font-weight: 700; }
+  #holdingsTable th small { font-weight: 400; font-size: 10px; color: var(--muted); }
   body:not([data-tab="home"]) header.top p, body:not([data-tab="home"]) header.top .dateline { display: none; }
   @media (max-width: 700px) {
     /* 保有銘柄: 1銘柄1行。押すと入力欄が開く */
@@ -1035,7 +1037,7 @@
             <th>コード</th><th>銘柄名</th><th>業種</th><th>口座</th>
             <th>株数</th><th>取得単価(円)</th><th>配当/株(税引前)</th>
             <th>前年配当/株</th><th>配当動向</th><th>権利確定月</th>
-            <th>年間配当金</th><th>利回り</th><th>取得額</th><th></th>
+            <th>年間配当金<br><small>構成比</small></th><th>利回り</th><th>評価額・損益<br><small>取得額</small></th><th></th>
           </tr>
         </thead>
         <tbody id="holdingsBody"></tbody>
@@ -1580,6 +1582,33 @@
       ? "(" + state.fx.date + " 時点。楽天証券のCSVを読み込むと更新)" : "(仮の値です。今のレートを入れてください)";
   }
 
+  // 年間配当のうちその銘柄が占める割合(除外した銘柄は分母に入れない)
+  function totalDivPreOf() {
+    return state.holdings.reduce(function (t, h) { return h.excluded ? t : t + computeRow(h).divPre; }, 0);
+  }
+  function divShareOf(h, c, total) { return !h.excluded && total > 0 && c.divPre > 0 ? c.divPre / total * 100 : null; }
+  // 評価額と損益(株価があるときだけ)
+  function valuationOf(h, c) {
+    var p = num(h.price), sh = num(h.shares);
+    if (!(p > 0) || !(sh > 0)) return null;
+    var value = p * sh, gain = value - c.acquisition;
+    return { value: value, gain: gain, pct: c.acquisition > 0 ? gain / c.acquisition * 100 : null };
+  }
+  function signedYen(v) { return (v > 0 ? "+" : v < 0 ? "-" : "") + fmtYen(Math.abs(v)); }
+  function gainHtml(v) {
+    return '<span class="' + (v.gain > 0 ? "gain-up" : v.gain < 0 ? "gain-down" : "") + '">' + signedYen(v.gain) +
+      (v.pct !== null ? "(" + (v.pct > 0 ? "+" : "") + v.pct.toFixed(1) + "%)" : "") + '</span>';
+  }
+  function divCellHtml(h, c, total) {
+    var sh = divShareOf(h, c, total);
+    return '<b>' + fmtYen(c.divPre) + '</b><small>' + (sh !== null ? "配当の " + sh.toFixed(1) + "%" : "―") + '</small>';
+  }
+  function acqCellHtml(h, c) {
+    var v = valuationOf(h, c);
+    if (!v) return '<b>' + fmtYen(c.acquisition) + '</b><small>取得額(株価なし)</small>';
+    return '<b>' + fmtYen(v.value) + '</b><small>' + gainHtml(v) + '</small><small>取得 ' + fmtYen(c.acquisition) + '</small>';
+  }
+
   function renderTable() {
     renderFxBar();
     renderMissingList();
@@ -1595,8 +1624,10 @@
       tbody.appendChild(tr);
       return;
     }
+    var totalDiv = totalDivPreOf();
     state.holdings.forEach(function (h) {
       var c = computeRow(h);
+      c.totalDiv = totalDiv;
       var tr = document.createElement("tr");
       tr.dataset.id = h.id;
       if (h.excluded) tr.classList.add("is-excluded");
@@ -1626,9 +1657,10 @@
       tr.appendChild(makeMonthsCell(h));
 
       var tdDiv = document.createElement("td");
-      tdDiv.className = "num";
+      tdDiv.className = "num yield-cell c-div";
       tdDiv.dataset.label = "年間配当金";
-      tdDiv.textContent = fmtYen(c.divPre);
+      tdDiv.title = "下: 年間配当(税引前)の合計のうち、この銘柄が占める割合";
+      tdDiv.innerHTML = divCellHtml(h, c, totalDiv);
       tr.appendChild(tdDiv);
 
       // 利回り: 株価があれば現在利回り、下に取得単価に対する利回り(簿価利回り)
@@ -1642,9 +1674,10 @@
       tr.appendChild(tdYield);
 
       var tdAcq = document.createElement("td");
-      tdAcq.className = "num";
-      tdAcq.dataset.label = "取得額";
-      tdAcq.textContent = fmtYen(c.acquisition);
+      tdAcq.className = "num yield-cell c-acq";
+      tdAcq.dataset.label = "評価額・損益";
+      tdAcq.title = "上: 評価額(株価×株数) / 中: 損益(評価額−取得額) / 下: 取得額。株価は詳細・CSV・貼り付けで入ります";
+      tdAcq.innerHTML = acqCellHtml(h, c);
       tr.appendChild(tdAcq);
 
       var tdDel = document.createElement("td");
@@ -2201,7 +2234,8 @@
       '<span class="sum-yield">' + (yv !== null ? '<b>' + yv.toFixed(2) + '%</b><small>' + yl + '</small>' : '<b class="muted">―</b><small>利回り</small>') + '</span>' +
       '<span class="sum-meta">' + (num(h.shares) ? num(h.shares).toLocaleString("ja-JP") + "株 ・ " : "") +
       "年" + fmtYen(c.divPre) + " " + t +
-      (yNow !== null && yBook !== null && yBook > 0 ? " ・ 取得 " + yBook.toFixed(2) + "%" : "") + '</span>';
+      (function () { var sh = c.totalDiv !== undefined ? divShareOf(h, c, c.totalDiv) : null; return sh !== null ? "(配当の" + sh.toFixed(1) + "%)" : ""; })() +
+      (function () { var v = valuationOf(h, c); return v && v.pct !== null ? ' ・ 損益 <span class="' + (v.gain > 0 ? "gain-up" : v.gain < 0 ? "gain-down" : "") + '">' + (v.pct > 0 ? "+" : "") + v.pct.toFixed(1) + "%</span>" : ""; })() + '</span>';
   }
   function makeSummaryCell(h, c, tr) {
     var td = document.createElement("td");
@@ -2231,8 +2265,14 @@
     if (!trendSpan) return;
     trendSpan.className = "trend " + trendClass(c.trend);
     trendSpan.textContent = trendText(c.trend);
-    tr.children[10].textContent = fmtYen(c.divPre);
-    tr.children[11].textContent = fmtYen(c.acquisition);
+    c.totalDiv = totalDivPreOf();
+    var cDiv = tr.querySelector(".c-div"), cAcq = tr.querySelector(".c-acq");
+    // 構成比は合計が変わるとほかの行も変わる
+    state.holdings.forEach(function (o) {
+      var cell = o.id === h.id ? cDiv : document.querySelector('#holdingsBody tr[data-id="' + o.id + '"] .c-div');
+      if (cell) cell.innerHTML = divCellHtml(o, o.id === h.id ? c : computeRow(o), c.totalDiv);
+    });
+    if (cAcq) cAcq.innerHTML = acqCellHtml(h, c);
     var sumBtn = tr.querySelector(".sum button");
     if (sumBtn) sumBtn.innerHTML = summaryHtml(h, c);
   }
