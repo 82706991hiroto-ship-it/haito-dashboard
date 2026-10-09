@@ -907,6 +907,7 @@
   .market-filter[hidden] { display: none; }
   td.yield-cell b.muted { color: var(--muted); font-weight: 500; }
   td.yield-cell small { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .nowrap { white-space: nowrap; }
   .gain-up { color: var(--accent); font-weight: 700; } .gain-down { color: var(--crit); font-weight: 700; }
   #holdingsTable th small { font-weight: 400; font-size: 10px; color: var(--muted); }
   body:not([data-tab="home"]) header.top p, body:not([data-tab="home"]) header.top .dateline { display: none; }
@@ -2235,7 +2236,7 @@
       '<span class="sum-meta">' + (num(h.shares) ? num(h.shares).toLocaleString("ja-JP") + "株 ・ " : "") +
       "年" + fmtYen(c.divPre) + " " + t +
       (function () { var sh = c.totalDiv !== undefined ? divShareOf(h, c, c.totalDiv) : null; return sh !== null ? "(配当の" + sh.toFixed(1) + "%)" : ""; })() +
-      (function () { var v = valuationOf(h, c); return v && v.pct !== null ? ' ・ 損益 <span class="' + (v.gain > 0 ? "gain-up" : v.gain < 0 ? "gain-down" : "") + '">' + (v.pct > 0 ? "+" : "") + v.pct.toFixed(1) + "%</span>" : ""; })() + '</span>';
+      (function () { var v = valuationOf(h, c); return v && v.pct !== null ? ' ・ <span class="nowrap">損益 <span class="' + (v.gain > 0 ? "gain-up" : v.gain < 0 ? "gain-down" : "") + '">' + (v.pct > 0 ? "+" : "") + v.pct.toFixed(1) + "%</span></span>" : ""; })() + '</span>';
   }
   function makeSummaryCell(h, c, tr) {
     var td = document.createElement("td");
