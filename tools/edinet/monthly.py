@@ -24,6 +24,7 @@ STATE = os.path.join(ROOT, "tools", "edinet", "state.json")
 MANUAL = os.path.join(ROOT, "data", "manual-dividends.json")
 SPLITS = os.path.join(ROOT, "data", "splits.json")
 SPLITS_APPLIED = os.path.join(ROOT, "data", "splits-applied.json")
+SPECIAL = os.path.join(ROOT, "data", "special-dividends.json")
 MAX_PERIODS = 35  # 自動は最大14期。手で足した過去の分も含めて残す上限
 CODELIST = "https://disclosure2dl.edinet-fsa.go.jp/searchdocument/codelist/Edinetcode.zip"
 
@@ -267,6 +268,22 @@ def write_split_map(html):
     return re.sub(r"var SPLIT_MAP = \{.*?\};\n", lambda _: "var SPLIT_MAP = %s;\n" % body, html, count=1)
 
 
+def write_special_map(html, info, state):
+    """data/special-dividends.json(記念配当・特別配当)を、内蔵の1株配当の何期前かと割合にして SPECIAL_MAP に書く。"""
+    data = json.load(open(SPECIAL, encoding="utf-8")) if os.path.exists(SPECIAL) else {}
+    out = {}
+    for code, e in data.items():
+        fy, v = state.get(code), info.get(code)
+        if code.startswith("_") or not fy or not v or len(v) < 4 or not v[3]:
+            continue
+        for k, x in (e.get("期") or {}).items():
+            back = (int(fy[:4]) * 12 + int(fy[5:7]) - int(k[:4]) * 12 - int(k[5:7]))
+            if back % 12 == 0 and 0 <= back // 12 < len(v[3]) and 0 < x.get("割合", 0) < 1:
+                out.setdefault(code, {})[str(back // 12)] = x["割合"]
+    body = json.dumps(dict(sorted(out.items())), ensure_ascii=False, separators=(",", ":"))
+    return re.sub(r"var SPECIAL_MAP = \{.*?\};\n", lambda _: "var SPECIAL_MAP = %s;\n" % body, html, count=1)
+
+
 def split_factor(code):
     """data/splits.json の分割のうち、自動の記録を割り戻したもの(splits-applied.json)の比率の積。"""
     if not (os.path.exists(SPLITS) and os.path.exists(SPLITS_APPLIED)):
@@ -398,6 +415,7 @@ def main():
     body = json.dumps(info, ensure_ascii=False, separators=(",", ":"))
     html = html[:m.start(1)] + body + html[m.end(1):]
     html = write_split_map(html)
+    html = write_special_map(html, info, state)
     open(a.html, "w", encoding="utf-8").write(html)
     with open(STATE, "w") as f:
         json.dump(dict(sorted(state.items())), f, separators=(",", ":"))
