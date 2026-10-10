@@ -4729,6 +4729,9 @@
         var valueText = mode.text ? mode.text(metric) : fmtPct(pct);
 
         var name = row.name || row.code || "無名銘柄";
+        // 米国株は名前が長くて見分けにくいので、ティッカーを大きく出す(名前は説明・詳細に)
+        var us = isUS(row) && row.code;
+        if (us) name = String(row.code).toUpperCase() + " " + name;
         if (isLightColor(tile.style.background)) tile.classList.add("is-light");
         TILE_INFO[row.id] = { row: row, pct: pct, value: tr.item.value, group: group.label };
         tile.dataset.holdingId = row.id;
@@ -4750,7 +4753,7 @@
         if (tr.w > 30 && tr.h > 15) {
           var fs = Math.max(9.5, Math.min(18, Math.sqrt(tr.w * tr.h) / 5.6));
           var nameEl = document.createElement("div");
-          var label = shortStockName(name);
+          var label = us ? String(row.code).toUpperCase() : shortStockName(name);
           // 1行に収まらず、縦に2行分の余裕があれば折り返す
           // 少しだけはみ出す名前は、変な位置で2行に割らず、文字を少し小さくして1行に収める
           var over = label.length * fs / Math.max(1, tr.w - 6);
