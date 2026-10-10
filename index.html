@@ -4917,10 +4917,17 @@
         ul.appendChild(li);
       });
       wrap.appendChild(ul);
+      // 選んだ項目を真ん中に出す。同じものをもう一度押すと元に戻す
+      var picked = -1, c1 = wrap.querySelector(".ctr1"), c2 = wrap.querySelector(".ctr2");
+      function short(t) { return t.length > 7 ? t.slice(0, 6) + "…" : t; }
       function pick(i) {
-        Array.prototype.forEach.call(wrap.querySelectorAll("path"), function (p) { p.classList.toggle("is-dim", p.dataset.i !== String(i)); });
-        Array.prototype.forEach.call(ul.children, function (li) { li.classList.toggle("is-on", li.dataset.i === String(i)); });
-        if (onPick) onPick(items[i]);
+        picked = picked === i ? -1 : i;
+        Array.prototype.forEach.call(wrap.querySelectorAll("path"), function (p) { p.classList.toggle("is-dim", picked >= 0 && p.dataset.i !== String(picked)); });
+        Array.prototype.forEach.call(ul.children, function (li) { li.classList.toggle("is-on", li.dataset.i === String(picked)); });
+        c1.textContent = picked >= 0 ? short(items[picked].label) : center1;
+        c2.textContent = picked >= 0 ? fmtPct(items[picked].pct) : center2;
+        if (picked >= 0 && onPick) onPick(items[picked]);
+        else if (info) info.hidden = true;
       }
       wrap.addEventListener("click", function (e) {
         var t = e.target.closest("[data-i]");
