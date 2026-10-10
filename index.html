@@ -1353,6 +1353,21 @@
   var US_SECTOR = "米国株・ETF";
   var US_FX_FALLBACK = 150;
   function isUS(h) { return !!h && h.market === "us"; }
+  // 米国株は1つの「業種」にまとめると巨大な塊になるので、集計ではETFの種類・個別株に分ける(保存する業種は US_SECTOR のまま)
+  var US_GROUPS = [
+    ["米国高配当ETF", "ディフェンシブ", ["VYM", "HDV", "SPYD", "SCHD", "DVY", "FDVV", "SPHD", "DHS"]],
+    ["米国増配ETF", "ディフェンシブ", ["VIG", "SDY", "NOBL", "DGRO", "DGRW", "VIGI", "RDVY"]],
+    ["米国指数ETF", "景気敏感", ["VOO", "VTI", "VT", "SPY", "IVV", "QQQ", "QQQM", "ACWI", "VEA", "VWO", "VXUS", "VUG", "VTV", "SPLG", "RSP", "DIA"]],
+    ["米国カバードコール", "景気敏感", ["QYLD", "XYLD", "RYLD", "JEPI", "JEPQ", "DIVO"]],
+    ["米国債券ETF", "ディフェンシブ", ["AGG", "BND", "TLT", "IEF", "LQD", "HYG", "BNDX", "SHY", "TIP", "PFF"]],
+    ["米国REIT", "景気敏感", ["VNQ", "RWR", "SCHH", "XLRE", "IYR"]]
+  ];
+  var US_GROUP_OF = {}, US_GROUP_CLASS = { "米国個別株": "景気敏感" };
+  US_GROUPS.forEach(function (g) { US_GROUP_CLASS[g[0]] = g[1]; g[2].forEach(function (t) { US_GROUP_OF[t] = g[0]; }); });
+  function usGroupOf(h) {
+    var t = String(h.code || "").trim().toUpperCase();
+    return US_GROUP_OF[t] || (typeof US_DIV_MAP !== "undefined" && US_DIV_MAP[t] && !ETF_LINKS[t] ? "米国個別株" : US_SECTOR);
+  }
   // ETFの分配金は運用会社の規約で自動取得できないので、公式の商品ページへのリンクだけ置く
   var ETF_LINKS = {
     VYM: "https://investor.vanguard.com/investment-products/etfs/profile/vym",
@@ -1480,7 +1495,7 @@
   }
 
   function sectorClassOf(sector) {
-    return state.sectorClass[sector] || SECTOR_DEFAULT_CLASS[sector] || "景気敏感";
+    return state.sectorClass[sector] || SECTOR_DEFAULT_CLASS[sector] || US_GROUP_CLASS[sector] || "景気敏感";
   }
 
   function num(v) { var n = parseFloat(v); return isNaN(n) ? 0 : n; }
@@ -4346,7 +4361,9 @@
     var rows = src.map(function (h) {
       var c = computeRow(h);
       if (h.excluded) { c.divPre = 0; c.divPost = 0; c.trend = null; }
-      return Object.assign({}, h, c);
+      var r = Object.assign({}, h, c);
+      if (isUS(h)) r.sector = usGroupOf(h);
+      return r;
     }).filter(function (r) { return r.divPre > 0 || r.acquisition > 0; });
 
     var totalDivPre = rows.reduce(function (s, r) { return s + r.divPre; }, 0);
