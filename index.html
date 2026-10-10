@@ -341,6 +341,52 @@
   }
   /* 「増配してる?」は順位を見るので、面積のタイルではなく増配率順の横棒にする */
   .treemap.is-bars { height: auto; background: none; border-radius: 0; overflow: visible; }
+  /* 「偏ってない?」の円/棒 */
+  :root { --pie1: #2a78d6; --pie2: #eb6834; --pie3: #1baf7a; --pie4: #eda100; --pie5: #e87ba4; --pie6: #008300; --pie7: #6250d6; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --pie1: #3987e5; --pie2: #d95926; --pie3: #199e70; --pie4: #c98500; --pie5: #d55181; --pie6: #008300; --pie7: #9085e9; } }
+  :root[data-theme="dark"] { --pie1: #3987e5; --pie2: #d95926; --pie3: #199e70; --pie4: #c98500; --pie5: #d55181; --pie6: #008300; --pie7: #9085e9; }
+  .bal-switch { margin: 0 0 10px; }
+  .bal-switch[hidden] { display: none; }
+  .bal-h { font-size: 12.5px; font-weight: 700; color: var(--text-2); margin: 14px 0 6px; }
+  .bal-h:first-child { margin-top: 0; }
+  .bal-h small { font-weight: 400; color: var(--muted); }
+  .bal-pie { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .bal-pie svg { width: 150px; height: 150px; flex: none; }
+  .bal-pie svg path { stroke: var(--card); stroke-width: 2; cursor: pointer; }
+  .bal-pie svg path.is-dim { opacity: .3; }
+  .bal-pie .ctr1 { font-size: 11px; fill: var(--muted); }
+  .bal-pie .ctr2 { font-size: 19px; font-weight: 700; fill: var(--text); }
+  .bal-leg { list-style: none; margin: 0; padding: 0; flex: 1 1 160px; min-width: 0; font-size: 12.5px; }
+  .bal-leg li { display: grid; grid-template-columns: 10px 1fr auto; gap: 7px; align-items: center; padding: 3px 0; cursor: pointer; }
+  .bal-leg li.is-on { font-weight: 700; }
+  .bal-leg .sw { width: 10px; height: 10px; border-radius: 3px; }
+  .bal-leg .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bal-leg .v { font-variant-numeric: tabular-nums; color: var(--text-2); }
+  .bal-leg .v.is-over { color: var(--crit); font-weight: 700; }
+  .bal-rows { list-style: none; margin: 0; padding: 0; position: relative; }
+  .bal-row { display: grid; grid-template-columns: minmax(5.5em, 30%) 1fr 3.6em; gap: 8px; align-items: center; padding: 4px 0; font-size: 12.5px; cursor: pointer; }
+  .bal-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bal-row .trk { position: relative; height: 14px; }
+  .bal-row .bar { position: absolute; left: 0; top: 1px; height: 12px; border-radius: 0 4px 4px 0; background: var(--accent); }
+  .bal-row.is-over .bar { background: var(--crit); }
+  .bal-row .cap { position: absolute; top: -5px; bottom: -5px; width: 0; border-left: 1.5px dashed var(--muted); }
+  .bal-row .v { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .bal-row.is-over .v { color: var(--crit); }
+  .bal-row.is-on { background: var(--field); }
+  .bal-capnote { font-size: 11px; color: var(--muted); margin: 4px 0 0; }
+  .bal-capnote b { color: var(--crit); }
+  .bal-band { position: relative; display: flex; height: 22px; border-radius: 6px; overflow: hidden; gap: 2px; }
+  .bal-band span { display: block; height: 100%; }
+  .bal-band-lab { display: flex; justify-content: space-between; font-size: 12.5px; margin-top: 5px; }
+  .bal-band-lab b { font-variant-numeric: tabular-nums; }
+  .bal-band-wrap { position: relative; margin-top: 20px; }
+  .bal-band-wrap .tgt { position: absolute; top: -4px; height: 30px; border-left: 2px solid var(--text); }
+  .bal-band-wrap .tgt i { position: absolute; top: -15px; left: -14px; font-style: normal; font-size: 10px; color: var(--muted); white-space: nowrap; }
+  @media (prefers-reduced-motion: no-preference) {
+    .bal-row .bar { animation: gbarIn .55s cubic-bezier(.2,.7,.2,1) both; transform-origin: left; }
+    .bal-pie svg { animation: balPie .5s cubic-bezier(.2,.7,.2,1) both; }
+    @keyframes balPie { from { opacity: 0; transform: rotate(-30deg) scale(.9); } to { opacity: 1; transform: none; } }
+  }
   .gbar-list { list-style: none; margin: 0; padding: 0; }
   .gbar-row { display: grid; grid-template-columns: minmax(6.5em, 34%) 1fr 4.6em; align-items: center; gap: 8px;
     padding: 5px 2px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px; }
@@ -4794,6 +4840,152 @@
     }
   }
 
+  // 「偏ってない?」: 業種の割合(棒 or 円)と景気感応度(帯 or 円)。ヒートマップも選べる
+  var balView = (function () { try { return localStorage.getItem("haitoBalView") || "bar"; } catch (e) { return "bar"; } })();
+  var BAL_COLORS = ["--pie1", "--pie2", "--pie3", "--pie4", "--pie5", "--pie6", "--pie7"];
+  function renderBalance(container, agg, view) {
+    container.innerHTML = "";
+    container.classList.add("is-bars");
+    TILE_INFO = {};
+    var info = document.getElementById("tmInfo");
+    if (info) info.hidden = true;
+    var total = agg.totalDivPre;
+    if (!(total > 0)) { container.innerHTML = '<p class="empty-note" style="position:static">配当金データがありません</p>'; return; }
+    function group(keyFn) {
+      var m = {};
+      agg.rows.forEach(function (r) {
+        if (!(r.divPre > 0)) return;
+        var k = keyFn(r);
+        if (!m[k]) m[k] = { label: k, value: 0, rows: [] };
+        m[k].value += r.divPre; m[k].rows.push(r);
+      });
+      return Object.keys(m).map(function (k) { var g = m[k]; g.pct = g.value / total * 100; return g; })
+        .sort(function (a, b) { return b.value - a.value; });
+    }
+    var g = state.guides || {}, cap = num(g.maxSectorPct) || 15, target = num(g.sensitiveTarget);
+    var sectors = group(function (r) { return r.sector || "未分類"; });
+    var sens = group(function (r) { return sectorClassOf(r.sector); });
+    var over = sectors.filter(function (x) { return x.pct > cap; });
+
+    // 業種を押すと、その業種の銘柄を下に出す
+    function showSector(x) {
+      if (!info) return;
+      info.innerHTML = "";
+      var b = document.createElement("b");
+      b.textContent = x.label + " " + fmtPct(x.pct) + "(" + fmtYen(x.value) + ")";
+      info.appendChild(b);
+      x.rows.slice().sort(function (a, c) { return c.divPre - a.divPre; }).forEach(function (r) {
+        var sp = document.createElement("span");
+        sp.textContent = (isUS(r) && r.code ? String(r.code).toUpperCase() : shortStockName(r.name || r.code || "")) + " " + fmtPct(r.divPre / total * 100);
+        info.appendChild(sp);
+      });
+      info.hidden = false;
+    }
+    function head(text, note) {
+      var h = document.createElement("p");
+      h.className = "bal-h";
+      h.innerHTML = escapeHtml(text) + (note ? ' <small>' + escapeHtml(note) + '</small>' : "");
+      container.appendChild(h);
+    }
+    function sensColor(label) { return cssVar(label === "ディフェンシブ" ? "--pie3" : label === "景気敏感" ? "--pie2" : "--pie1"); }
+
+    // 円: 上位7つ+その他。区切りは2pxの隙間。凡例に名前と割合
+    function pie(items, center1, center2, colorOf, onPick, overFn) {
+      var wrap = document.createElement("div");
+      wrap.className = "bal-pie";
+      var R = 74, r0 = 46, cx = 75, cy = 75, a = -Math.PI / 2, paths = "";
+      items.forEach(function (x, i) {
+        var frac = x.value / total, a2 = a + frac * Math.PI * 2;
+        if (frac >= 0.9999) a2 = a + Math.PI * 2 - 0.0001;
+        var big = a2 - a > Math.PI ? 1 : 0;
+        function pt(rr, ang) { return (cx + rr * Math.cos(ang)).toFixed(2) + " " + (cy + rr * Math.sin(ang)).toFixed(2); }
+        paths += '<path data-i="' + i + '" fill="' + colorOf(x, i) + '" d="M' + pt(R, a) + ' A' + R + ' ' + R + ' 0 ' + big + ' 1 ' + pt(R, a2) +
+          ' L' + pt(r0, a2) + ' A' + r0 + ' ' + r0 + ' 0 ' + big + ' 0 ' + pt(r0, a) + 'Z"><title>' + escapeHtml(x.label + " " + fmtPct(x.pct)) + '</title></path>';
+        a = a2;
+      });
+      wrap.innerHTML = '<svg viewBox="0 0 150 150" role="img" aria-label="' + escapeHtml(center1) + '">' + paths +
+        '<text class="ctr1" x="75" y="69" text-anchor="middle">' + escapeHtml(center1) + '</text>' +
+        '<text class="ctr2" x="75" y="92" text-anchor="middle">' + escapeHtml(center2) + '</text></svg>';
+      var ul = document.createElement("ul");
+      ul.className = "bal-leg";
+      items.forEach(function (x, i) {
+        var li = document.createElement("li");
+        li.dataset.i = i;
+        var isOver = overFn && overFn(x);
+        li.innerHTML = '<span class="sw" style="background:' + colorOf(x, i) + '"></span><span class="nm">' + escapeHtml(x.label) + '</span>' +
+          '<span class="v' + (isOver ? " is-over" : "") + '">' + fmtPct(x.pct) + (isOver ? " ⚠" : "") + '</span>';
+        ul.appendChild(li);
+      });
+      wrap.appendChild(ul);
+      function pick(i) {
+        Array.prototype.forEach.call(wrap.querySelectorAll("path"), function (p) { p.classList.toggle("is-dim", p.dataset.i !== String(i)); });
+        Array.prototype.forEach.call(ul.children, function (li) { li.classList.toggle("is-on", li.dataset.i === String(i)); });
+        if (onPick) onPick(items[i]);
+      }
+      wrap.addEventListener("click", function (e) {
+        var t = e.target.closest("[data-i]");
+        if (t) { e.stopPropagation(); pick(Number(t.dataset.i)); }
+      });
+      container.appendChild(wrap);
+    }
+
+    if (view === "pie") {
+      var top = sectors.slice(0, sectors.length > 8 ? 7 : 8), rest = sectors.slice(top.length);
+      if (rest.length) {
+        var o = { label: "その他" + rest.length + "業種", value: 0, rows: [], other: true };
+        rest.forEach(function (x) { o.value += x.value; o.rows = o.rows.concat(x.rows); });
+        o.pct = o.value / total * 100;
+        top = top.concat([o]);
+      }
+      head("業種別", "上限" + cap + "%を超えると⚠");
+      pie(top, sectors[0].label.length > 7 ? sectors[0].label.slice(0, 6) + "…" : sectors[0].label, fmtPct(sectors[0].pct),
+        function (x, i) { return x.other ? cssVar("--muted") : cssVar(BAL_COLORS[i % BAL_COLORS.length]); }, showSector,
+        function (x) { return !x.other && x.pct > cap; });
+      head("景気感応度", target ? "景気敏感の目標" + target + "%" : "");
+      var sv = sens.filter(function (x) { return x.label === "景気敏感"; })[0];
+      pie(sens, "景気敏感", fmtPct(sv ? sv.pct : 0), function (x) { return sensColor(x.label); }, showSector);
+    } else {
+      head("業種別", "大きい順");
+      var ul = document.createElement("ul");
+      ul.className = "bal-rows";
+      var maxPct = Math.max(cap * 1.15, sectors[0].pct);
+      sectors.forEach(function (x, i) {
+        var li = document.createElement("li");
+        li.className = "bal-row" + (x.pct > cap ? " is-over" : "");
+        li.innerHTML = '<span class="nm">' + escapeHtml(x.label) + '</span><span class="trk">' +
+          '<span class="bar" style="width:' + Math.max(x.pct / maxPct * 100, 0.8) + '%;animation-delay:' + Math.min(i * 25, 400) + 'ms"></span>' +
+          '<span class="cap" style="left:' + (cap / maxPct * 100) + '%"></span></span><span class="v">' + fmtPct(x.pct) + '</span>';
+        li.addEventListener("click", function (e) {
+          e.stopPropagation();
+          Array.prototype.forEach.call(ul.children, function (n) { n.classList.toggle("is-on", n === li); });
+          showSector(x);
+        });
+        ul.appendChild(li);
+      });
+      container.appendChild(ul);
+      var cn = document.createElement("p");
+      cn.className = "bal-capnote";
+      cn.innerHTML = "点線は1業種の上限(" + cap + "%)。" + (over.length ? "<b>" + over.length + "業種が上限を超えています</b>" : "超えている業種はありません");
+      container.appendChild(cn);
+      head("景気感応度", target ? "縦線は景気敏感の目標" + target + "%" : "");
+      // 景気敏感を左に置き、目標の線と比べられるようにする
+      var order = sens.slice().sort(function (a, b) { return (a.label === "景気敏感" ? 0 : 1) - (b.label === "景気敏感" ? 0 : 1); });
+      var bw = document.createElement("div");
+      bw.className = "bal-band-wrap";
+      bw.innerHTML = '<div class="bal-band">' + order.map(function (x) {
+        return '<span style="width:' + x.pct + '%;background:' + sensColor(x.label) + '" title="' + escapeHtml(x.label + " " + fmtPct(x.pct)) + '"></span>';
+      }).join("") + '</div>' + (target ? '<span class="tgt" style="left:' + target + '%"><i>目標</i></span>' : "");
+      container.appendChild(bw);
+      var lab = document.createElement("div");
+      lab.className = "bal-band-lab";
+      lab.innerHTML = order.map(function (x) {
+        return '<span><span class="sw" style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;background:' + sensColor(x.label) + '"></span>' +
+          escapeHtml(x.label) + ' <b>' + fmtPct(x.pct) + '</b></span>';
+      }).join("");
+      container.appendChild(lab);
+    }
+  }
+
   function renderTreemap(container, agg, axisKey, colorKey) {
     container.classList.remove("is-bars");
     container.innerHTML = "";
@@ -5069,15 +5261,24 @@
     // 米国株だけを見るときは業種が1つ(米国株・ETF)にまとまるので、業種別は銘柄別で描く
     var axis = currentMarket === "us" && currentAxis === "sector" ? "stock" : currentAxis;
     // 「増配してる?」(銘柄別×増配率)は順位を見るので横棒で。ほかは配当額の面積で見るタイル
+    var balance = axis === "sector" && currentColor === "group";
+    var sw = document.getElementById("balSwitch");
+    if (sw) {
+      sw.hidden = !balance;
+      Array.prototype.forEach.call(sw.children, function (b) { b.classList.toggle("active", b.dataset.bal === balView); });
+    }
+    var chart = balance && balView !== "heat";
     var result = axis === "stock" && currentColor === "growth"
       ? (renderGrowthBars(document.getElementById("treemapEl"), agg), null)
+      : chart ? (renderBalance(document.getElementById("treemapEl"), agg, balView), null)
       : renderTreemap(document.getElementById("treemapEl"), agg, axis, currentColor);
-    var bars = axis === "stock" && currentColor === "growth";
+    var bars = axis === "stock" && currentColor === "growth" || chart;
     var scaleEl = document.getElementById("heatScale");
     renderHeatScale(scaleEl, currentColor);
     scaleEl.hidden = bars;  // 横棒は青=増配・赤=減配の2色だけなので色の目盛りは要らない
     var noteEl = document.getElementById("heatNote");
-    if (noteEl) noteEl.textContent = bars ? "前年の1株配当と比べた増減です。棒の長さは±60%までで切っています。銘柄を押すと詳しく出ます。" : (COLOR_MODES[currentColor] || COLOR_MODES.group).note;
+    if (noteEl) noteEl.textContent = chart ? "年間配当金のうち、それぞれが占める割合です。業種を押すと、その業種の銘柄が出ます。上限と目標は分散ガイドラインの設定です。" :
+      bars ? "前年の1株配当と比べた増減です。棒の長さは±60%までで切っています。銘柄を押すと詳しく出ます。" : (COLOR_MODES[currentColor] || COLOR_MODES.group).note;
     var legendEl = document.getElementById("axisLegend");
     if (result) {
       renderLegendList(legendEl, result.groups, result.colorMap, agg.totalDivPre, currentColor);
@@ -6114,7 +6315,7 @@
     { key: "growth", label: "増配してる?", axis: "stock", color: "growth",
       lead: "前年より1株配当をどれだけ増やしたかの順です。青い棒が右に長いほど増配、赤い棒は減配です。名前の下は業種です。" },
     { key: "balance", label: "偏ってない?", axis: "sector", color: "group",
-      lead: "大きいブロックほど、その業種から受け取る配当が多いということです。1つの業種が大きすぎないか見ます。" },
+      lead: "受け取る配当が、1つの業種や景気敏感株に寄りすぎていないかを見ます。" },
     { key: "yield", label: "利回りは?", axis: "stock", color: "current",
       lead: "左上ほど利回りが高い順です。金色が濃いほど、今の株価に対する利回りが高い銘柄です。株価を入れていない銘柄は灰色です。" },
     { key: "nisa", label: "NISAは?", axis: "account", color: "group",
@@ -6152,6 +6353,7 @@
       '    <div class="ctl-row"><span class="ctl-label">分け方</span><div class="axis-tabs" id="axisTabs">' + tabsHtml + '</div></div>' +
       '    <div class="ctl-row"><span class="ctl-label">色</span><div class="axis-tabs" id="colorTabs">' + colorTabsHtml + '</div></div>' +
       '  </div></details>' +
+      '  <div class="axis-tabs bal-switch" id="balSwitch" hidden><button class="axis-tab" data-bal="bar">棒</button><button class="axis-tab" data-bal="pie">円</button><button class="axis-tab" data-bal="heat">ヒートマップ</button></div>' +
       '  <div class="treemap" id="treemapEl"></div>' +
       '  <div class="tm-info" id="tmInfo" hidden></div>' +
       '  <div class="heat-scale" id="heatScale"></div>' +
@@ -6252,6 +6454,13 @@
         if (!b) return;
         var pr = HEAT_PRESETS.filter(function (p) { return p.key === b.dataset.preset; })[0];
         currentAxis = pr.axis; currentColor = pr.color;
+        renderComposition(marketAgg());
+      });
+      document.getElementById("balSwitch").addEventListener("click", function (e) {
+        var b = e.target.closest("button[data-bal]");
+        if (!b) return;
+        balView = b.dataset.bal;
+        try { localStorage.setItem("haitoBalView", balView); } catch (er) {}
         renderComposition(marketAgg());
       });
       var tmEl = document.getElementById("treemapEl");
