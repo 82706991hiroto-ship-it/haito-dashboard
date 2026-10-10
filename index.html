@@ -380,6 +380,14 @@
   .bal-band span { display: block; height: 100%; }
   .bal-band-lab { display: flex; justify-content: space-between; font-size: 12.5px; margin-top: 5px; }
   .bal-band-lab b { font-variant-numeric: tabular-nums; }
+  .acc-head { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 12px; }
+  .acc-head > div { background: var(--field); border-radius: 10px; padding: 10px 12px; }
+  .acc-head .k { display: block; font-size: 11.5px; color: var(--text-2); }
+  .acc-head b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; margin: 2px 0; }
+  .acc-head small { font-size: 11px; color: var(--muted); }
+  .acc-leg { margin-top: 10px; }
+  .acc-leg small { color: var(--muted); font-weight: 400; font-size: 11px; }
+  .acc-leg .v b { color: var(--text); margin-right: 6px; }
   .bal-band-wrap { position: relative; margin-top: 20px; }
   .bal-band-wrap .tgt { position: absolute; top: -4px; height: 30px; border-left: 2px solid var(--text); }
   .bal-band-wrap .tgt i { position: absolute; top: -15px; left: -14px; font-style: normal; font-size: 10px; color: var(--muted); white-space: nowrap; }
@@ -5016,6 +5024,146 @@
     }
   }
 
+  // 「利回りは?」: 今の株価での利回りが高い順の横棒。縦線は目標設定の想定利回り
+  var ybarAll = false;
+  function renderYieldBars(container, agg) {
+    container.innerHTML = "";
+    container.classList.add("is-bars");
+    TILE_INFO = {};
+    var info = document.getElementById("tmInfo");
+    if (info) info.hidden = true;
+    var by = {};
+    agg.rows.forEach(function (r) {
+      if (!(r.divPre > 0)) return;
+      var k = String(r.code || r.id).toUpperCase();
+      if (!by[k]) by[k] = { row: r, value: 0, nisa: false };
+      by[k].value += r.divPre;
+      if (isTaxFree(r.account)) by[k].nisa = true;
+    });
+    var items = Object.keys(by).map(function (k) { var x = by[k]; x.y = currentYieldOf(x.row); return x; });
+    if (!items.length) { container.innerHTML = '<p class="empty-note" style="position:static">配当金データがありません</p>'; return; }
+    var known = items.filter(function (x) { return x.y !== null; }).sort(function (a, b) { return b.y - a.y || b.value - a.value; });
+    var unknown = items.filter(function (x) { return x.y === null; }).sort(function (a, b) { return b.value - a.value; });
+    var target = goalYieldOf(state.goals);
+    // 平均は配当額の重みで(今の株価で全部買ったときの利回り)
+    var dsum = 0, psum = 0;
+    known.forEach(function (x) { dsum += x.value; psum += x.value / (x.y / 100); });
+    var avg = psum > 0 ? dsum / psum * 100 : null;
+    var hi = known.filter(function (x) { return x.y >= target; }).length;
+    var sum = document.createElement("p");
+    sum.className = "gbar-sum";
+    sum.innerHTML = (avg !== null ? '平均 <b>' + avg.toFixed(2) + '%</b> ・ ' : "") + '想定' + target + '%以上 <b>' + hi + '</b> ・ 未満 <b>' + (known.length - hi) + '</b>' +
+      (unknown.length ? ' ・ 株価なし ' + unknown.length : "");
+    container.appendChild(sum);
+    var max = Math.min(10, Math.max(target * 1.4, known.length ? known[0].y : 0)) || 1;
+    function label(r) { return isUS(r) && r.code ? String(r.code).toUpperCase() : shortStockName(r.name || r.code || "無名銘柄"); }
+    function rowEl(x, i) {
+      var r = x.row, li = document.createElement("li");
+      li.className = "gbar-row";
+      li.dataset.holdingId = r.id;
+      li.tabIndex = 0;
+      TILE_INFO[r.id] = { row: r, pct: x.value / agg.totalDivPre * 100, value: x.value, group: r.sector || "" };
+      var bar = x.y !== null ? '<span class="bar" style="left:0;width:' + Math.max(Math.min(x.y, max) / max * 100, 0.8) + '%;background:var(--accent);' +
+        (x.y < target ? "opacity:.4;" : "") + 'animation-delay:' + Math.min(i * 25, 400) + 'ms"></span>' : "";
+      li.innerHTML = '<span class="nm">' + escapeHtml(label(r)) + (x.nisa ? '<span class="nisa">◆</span>' : "") +
+        (r.sector ? '<span class="sec">' + escapeHtml(r.sector) + '</span>' : "") + '</span>' +
+        '<span class="trk"><span class="zero" style="left:' + (target / max * 100) + '%;border-left:1.5px dashed var(--muted);background:none;opacity:1"></span>' + bar + '</span>' +
+        '<span class="val">' + (x.y === null ? "―" : x.y.toFixed(2) + "%") + '</span>';
+      return li;
+    }
+    function list(xs, start) {
+      var ul = document.createElement("ul");
+      ul.className = "gbar-list";
+      xs.forEach(function (x, i) { ul.appendChild(rowEl(x, (start || 0) + i)); });
+      return ul;
+    }
+    var TOP = 5, many = known.length > 12;
+    if (!many || ybarAll) {
+      container.appendChild(list(known));
+    } else {
+      container.appendChild(list(known.slice(0, TOP)));
+      var more = document.createElement("button");
+      more.type = "button"; more.className = "gbar-more";
+      more.textContent = "すべて表示(あと" + (known.length - TOP * 2) + "銘柄)";
+      more.addEventListener("click", function (e) { e.stopPropagation(); ybarAll = true; renderYieldBars(container, agg); });
+      container.appendChild(more);
+      var dh = document.createElement("p"); dh.className = "gbar-head"; dh.textContent = "利回りが低い銘柄";
+      container.appendChild(dh);
+      container.appendChild(list(known.slice(-TOP), TOP));
+    }
+    if (many && ybarAll) {
+      var less = document.createElement("button");
+      less.type = "button"; less.className = "gbar-more";
+      less.textContent = "たたむ";
+      less.addEventListener("click", function (e) { e.stopPropagation(); ybarAll = false; renderYieldBars(container, agg); });
+      container.appendChild(less);
+    }
+    if (unknown.length) {
+      var det = document.createElement("details");
+      det.className = "gbar-unknown";
+      det.innerHTML = "<summary>株価が入っていない銘柄(" + unknown.length + ")</summary>";
+      det.appendChild(list(unknown));
+      container.appendChild(det);
+    }
+  }
+
+  // 「NISAは?」: 口座ごとの配当の割合を1本の帯と一覧で。NISAで払わずに済んでいる税金も出す
+  function renderAccountShare(container, agg) {
+    container.innerHTML = "";
+    container.classList.add("is-bars");
+    TILE_INFO = {};
+    var info = document.getElementById("tmInfo");
+    if (info) info.hidden = true;
+    var total = agg.totalDivPre;
+    if (!(total > 0)) { container.innerHTML = '<p class="empty-note" style="position:static">配当金データがありません</p>'; return; }
+    var m = {}, saved = 0, freeDiv = 0;
+    agg.rows.forEach(function (r) {
+      if (!(r.divPre > 0)) return;
+      var k = r.account || "特定";
+      if (!m[k]) m[k] = { label: k, value: 0, n: 0, rows: [] };
+      m[k].value += r.divPre; m[k].n++; m[k].rows.push(r);
+      if (isTaxFree(k)) { saved += r.divPost * TAX_RATE; freeDiv += r.divPre; }
+    });
+    // NISA系を左に、特定口座を右に
+    var accs = ACCOUNTS.filter(function (a) { return m[a]; }).sort(function (a, b) { return (a === "特定") - (b === "特定"); }).map(function (a) { return m[a]; });
+    var COL = { "新NISA成長": "--pie3", "新NISAつみたて": "--pie1", "旧NISA": "--pie7", "特定": "--muted" };
+    var freePct = freeDiv / total * 100;
+    var head = document.createElement("div");
+    head.className = "acc-head";
+    head.innerHTML = '<div><span class="k">NISAで受け取る配当</span><b>' + fmtPct(freePct) + '</b><small>' + fmtYen(freeDiv) + ' / 年</small></div>' +
+      '<div><span class="k">NISAで払わずに済む税金</span><b>' + fmtYen(saved) + '</b><small>年あたり(20.315%)</small></div>';
+    container.appendChild(head);
+    var band = document.createElement("div");
+    band.className = "bal-band";
+    band.innerHTML = accs.map(function (x) {
+      return '<span style="width:' + (x.value / total * 100) + '%;background:' + cssVar(COL[x.label] || "--pie5") + '" title="' + escapeHtml(x.label + " " + fmtPct(x.value / total * 100)) + '"></span>';
+    }).join("");
+    container.appendChild(band);
+    var ul = document.createElement("ul");
+    ul.className = "bal-leg acc-leg";
+    accs.forEach(function (x) {
+      var li = document.createElement("li");
+      li.innerHTML = '<span class="sw" style="background:' + cssVar(COL[x.label] || "--pie5") + '"></span><span class="nm">' + escapeHtml(x.label) +
+        ' <small>' + x.n + '銘柄</small></span><span class="v"><b>' + fmtPct(x.value / total * 100) + '</b> ' + fmtYen(x.value) + '</span>';
+      li.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (!info) return;
+        info.innerHTML = "";
+        var b = document.createElement("b");
+        b.textContent = x.label + " " + fmtPct(x.value / total * 100) + "(" + fmtYen(x.value) + ")";
+        info.appendChild(b);
+        x.rows.slice().sort(function (a, c) { return c.divPre - a.divPre; }).forEach(function (r) {
+          var sp = document.createElement("span");
+          sp.textContent = (isUS(r) && r.code ? String(r.code).toUpperCase() : shortStockName(r.name || r.code || "")) + " " + fmtYen(r.divPre);
+          info.appendChild(sp);
+        });
+        info.hidden = false;
+      });
+      ul.appendChild(li);
+    });
+    container.appendChild(ul);
+  }
+
   function renderTreemap(container, agg, axisKey, colorKey) {
     container.classList.remove("is-bars");
     container.innerHTML = "";
@@ -5298,16 +5446,22 @@
       Array.prototype.forEach.call(sw.children, function (b) { b.classList.toggle("active", b.dataset.bal === balView); });
     }
     var chart = balance && balView !== "heat";
-    var result = axis === "stock" && currentColor === "growth"
-      ? (renderGrowthBars(document.getElementById("treemapEl"), agg), null)
-      : chart ? (renderBalance(document.getElementById("treemapEl"), agg, balView), null)
-      : renderTreemap(document.getElementById("treemapEl"), agg, axis, currentColor);
-    var bars = axis === "stock" && currentColor === "growth" || chart;
+    var yieldBars = axis === "stock" && currentColor === "current";
+    var accChart = axis === "account" && currentColor === "group";
+    var tm = document.getElementById("treemapEl");
+    var result = axis === "stock" && currentColor === "growth" ? (renderGrowthBars(tm, agg), null)
+      : chart ? (renderBalance(tm, agg, balView), null)
+      : yieldBars ? (renderYieldBars(tm, agg), null)
+      : accChart ? (renderAccountShare(tm, agg), null)
+      : renderTreemap(tm, agg, axis, currentColor);
+    var bars = axis === "stock" && currentColor === "growth" || chart || yieldBars || accChart;
     var scaleEl = document.getElementById("heatScale");
     renderHeatScale(scaleEl, currentColor);
     scaleEl.hidden = bars;  // 横棒は青=増配・赤=減配の2色だけなので色の目盛りは要らない
     var noteEl = document.getElementById("heatNote");
-    if (noteEl) noteEl.textContent = chart ? "年間配当金のうち、それぞれが占める割合です。業種を押すと、その業種の銘柄が出ます。上限と目標は分散ガイドラインの設定です。" :
+    if (noteEl) noteEl.textContent = yieldBars ? "配当/株 ÷ 今の株価です。点線は目標設定の想定利回り(" + goalYieldOf(state.goals) + "%)で、届かない銘柄は薄い色です。銘柄を押すと詳しく出ます。" :
+      accChart ? "年間配当金(税引前)の口座ごとの割合です。払わずに済む税金は国内の20.315%分で、米国株の現地課税(10%)は残ります。口座を押すと銘柄が出ます。" :
+      chart ? "年間配当金のうち、それぞれが占める割合です。業種を押すと、その業種の銘柄が出ます。上限と目標は分散ガイドラインの設定です。" :
       bars ? "前年の1株配当と比べた増減です。棒の長さは±60%までで切っています。銘柄を押すと詳しく出ます。" : (COLOR_MODES[currentColor] || COLOR_MODES.group).note;
     var legendEl = document.getElementById("axisLegend");
     if (result) {
@@ -6349,9 +6503,9 @@
     { key: "balance", label: "偏ってない?", axis: "sector", color: "group",
       lead: "受け取る配当が、1つの業種や景気敏感株に寄りすぎていないかを見ます。" },
     { key: "yield", label: "利回りは?", axis: "stock", color: "current",
-      lead: "左上ほど利回りが高い順です。金色が濃いほど、今の株価に対する利回りが高い銘柄です。株価を入れていない銘柄は灰色です。" },
+      lead: "今の株価での利回りが高い順です。想定利回りに届いているかを見ます。" },
     { key: "nisa", label: "NISAは?", axis: "account", color: "group",
-      lead: "口座ごとに受け取る配当の割合です。NISAの分は税金がかかりません。" }
+      lead: "配当のうちNISAで受け取る割合と、それで払わずに済んでいる税金です。" }
   ];
   function paintHeatPresets() {
     var hit = HEAT_PRESETS.filter(function (p) { return p.axis === currentAxis && p.color === currentColor; })[0];
