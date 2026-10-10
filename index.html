@@ -347,6 +347,7 @@
   .gbar-row:last-child { border-bottom: none; }
   .gbar-row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
   .gbar-row .nm .nisa { color: var(--muted); font-weight: 400; margin-left: 3px; font-size: 11px; }
+  .gbar-row .nm .sec { display: block; color: var(--muted); font-weight: 400; font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; }
   .gbar-row .trk { position: relative; height: 14px; }
   .gbar-row .zero { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--muted); opacity: .6; }
   .gbar-row .bar { position: absolute; top: 2px; height: 10px; border-radius: 3px; }
@@ -4740,7 +4741,8 @@
         bar = '<span class="bar" style="left:' + left + '%;width:' + Math.max(w, 0.8) + '%;background:' + (g > 0 ? "var(--accent)" : "var(--crit)") +
           ';--o:' + (g > 0 ? "left" : "right") + ';animation-delay:' + Math.min(i * 25, 400) + 'ms"></span>';
       }
-      li.innerHTML = '<span class="nm">' + escapeHtml(label(r)) + (x.nisa ? '<span class="nisa">◆</span>' : "") + '</span>' +
+      li.innerHTML = '<span class="nm">' + escapeHtml(label(r)) + (x.nisa ? '<span class="nisa">◆</span>' : "") +
+        (r.sector ? '<span class="sec">' + escapeHtml(r.sector) + '</span>' : "") + '</span>' +
         '<span class="trk"><span class="zero" style="left:' + zero + '%"></span>' + bar + '</span>' +
         '<span class="val' + (g !== null && g < 0 ? " is-down" : "") + '">' + COLOR_MODES.growth.text(g) + '</span>';
       return li;
@@ -6110,7 +6112,7 @@
 
   var HEAT_PRESETS = [
     { key: "growth", label: "増配してる?", axis: "stock", color: "growth",
-      lead: "前年より1株配当をどれだけ増やしたかの順です。青い棒が右に長いほど増配、赤い棒は減配です。" },
+      lead: "前年より1株配当をどれだけ増やしたかの順です。青い棒が右に長いほど増配、赤い棒は減配です。名前の下は業種です。" },
     { key: "balance", label: "偏ってない?", axis: "sector", color: "group",
       lead: "大きいブロックほど、その業種から受け取る配当が多いということです。1つの業種が大きすぎないか見ます。" },
     { key: "yield", label: "利回りは?", axis: "stock", color: "current",
