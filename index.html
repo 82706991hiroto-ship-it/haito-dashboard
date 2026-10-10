@@ -198,6 +198,7 @@
   .stale-note button { margin-left: 4px; font: inherit; font-weight: 700; color: var(--accent); background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline; }
   .sum-growth { white-space: nowrap; font-variant-numeric: tabular-nums; }
   .sum-growth.down { color: var(--crit); }
+  .stat-jump .note { flex-basis: 100%; text-align: right; font-size: 11px; color: var(--text-2); font-weight: 400; }
   .hold-sort { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12.5px; color: var(--text-2); }
   .hold-sort select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
@@ -898,7 +899,7 @@
   .hero-substats .value { font-size: 24px; font-weight: 800; letter-spacing: -.03em; }
   .hero-actions { margin-top: 18px; justify-content: flex-start; }
   .hero-substats .stat-jump {
-    grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px;
     font: inherit; text-align: left; color: inherit; cursor: pointer; background: none; border: none;
     border-bottom: 1px solid var(--line); padding: 14px 0 12px !important; border-left: none !important;
   }
@@ -5748,10 +5749,13 @@
     ];
     // 目標までの見通し(下の「将来見通し」と同じ試算)。押すとその欄へ
     var sim = !done && goal > 0 ? simulate(agg) : null;
-    if (sim) subs.push({ label: "目標到達", value: sim.reached === null ? SIM_MAX_YEARS + "年超" : "約" + sim.reached + "年後(" + (new Date().getFullYear() + sim.reached) + "年)", jump: "simPanel" });
+    // どんな前提の試算かを見出しに添える(積立額は「将来見通し」で変えられる)
+    var mInv = num(state.sim.monthlyInvest);
+    var simNote = (mInv > 0 ? "毎月" + manYen(mInv) + "積立" : "追加投資なし") + (state.sim.reinvest ? "・配当再投資" : "");
+    if (sim) subs.push({ label: "目標到達", note: simNote, value: sim.reached === null ? SIM_MAX_YEARS + "年超" : "約" + sim.reached + "年後(" + (new Date().getFullYear() + sim.reached) + "年)", jump: "simPanel" });
     document.getElementById("heroSubstats").innerHTML = subs.map(function (s) {
       return s.jump
-        ? '<button type="button" class="stat stat-jump" data-jump="' + s.jump + '"><div class="label">' + s.label + ' ›</div><div class="value">' + s.value + '</div></button>'
+        ? '<button type="button" class="stat stat-jump" data-jump="' + s.jump + '"><div class="label">' + s.label + ' ›</div><div class="value">' + s.value + '</div>' + (s.note ? '<div class="note">' + s.note + '</div>' : "") + '</button>'
         : '<div class="stat"><div class="label">' + s.label + '</div><div class="value">' + s.value + '</div></div>';
     }).join("");
     renderMilestones(annual);
