@@ -20,11 +20,11 @@ SPLITS = os.path.join(ROOT, "data", "splits.json")
 HTML = os.path.join(ROOT, "index.html")
 
 DATE = r"(\d{4})年(\d{1,2})月(\d{1,2})日(?:\([^)]{1,3}\))?"
-# 効力発生日の書き方: 「効力発生日 2026年7月1日」「2026年7月1日付で…株式分割」「2026年7月1日を効力発生日として」
-EFFECTIVE = [
-    re.compile(r"効力発生日[^0-9]{0,6}" + DATE),
-    re.compile(DATE + r"(?:付で|付けで|をもって|を効力発生日)"),
-]
+# 効力発生日の書き方は2通りだけを拾う(取締役会の日・基準日などを取り違えないように)
+#  ・「効力発生日 2026年7月1日」
+#  ・「2026年7月1日付で(普通株式1株につき2株の割合で)株式分割」「2026年7月1日を効力発生日として…株式分割」
+LABELED = re.compile(r"効力発生日[\s::]{0,3}" + DATE)
+INLINE = re.compile(DATE + r"(?:付で|付けで|をもって|を効力発生日として|を効力発生日とし)[^。]{0,40}?(?:株式分割|株式併合|1株につき|株を1株に)")
 RATIO_SPLIT = re.compile(r"1株につき[、,]?\s*(\d+(?:\.\d+)?)株")
 RATIO_MERGE = re.compile(r"(\d+)株を1株に(?:併合|株式併合)")
 
@@ -62,8 +62,12 @@ def text_of(doc_id):
 
 
 def find_splits(text):
-    """本文から (効力発生日, 比率) を拾う。比率は 1株→N株 のN(併合は 1/N)。"""
-    found = {}
+    """本文から分割・併合を拾い {効力発生日: 比率} で返す。比率は 1株→N株 のN(併合は 1/N)。
+
+    有報・半期報告書は同じ分割を何か所にも書くので、いちばん多く出てくる日付を効力発生日とする
+    (配当の効力発生日や総会の日が近くに書かれていても取り違えないように)。
+    """
+    votes = {}
     for m in re.finditer(r"株式分割|株式併合", text):
         win = text[max(0, m.start() - 300): m.end() + 900]
         rs, rm = RATIO_SPLIT.search(win), RATIO_MERGE.search(win)
@@ -75,14 +79,21 @@ def find_splits(text):
             continue
         if ratio == 1 or ratio <= 0 or ratio > 100:
             continue
-        for pat in EFFECTIVE:
+        for pat in (LABELED, INLINE):
             for d in pat.finditer(win):
+                if pat is LABELED and "配当" in win[max(0, d.start() - 40): d.start()]:
+                    continue  # 「配当の効力発生日」
                 try:
                     day = dt.date(int(d.group(1)), int(d.group(2)), int(d.group(3))).isoformat()
                 except ValueError:
                     continue
-                found.setdefault(day, ratio)
-    return found
+                v = votes.setdefault((day, ratio), 0)
+                votes[(day, ratio)] = v + (2 if pat is INLINE else 1)
+    if not votes:
+        return {}
+    # 日付ごとに票を数え、いちばん多いもの(と、それに迫る別の分割)を残す
+    best = max(votes.values())
+    return {day: ratio for (day, ratio), v in votes.items() if v >= max(2, best * 0.5)}
 
 
 def main():
