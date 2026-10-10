@@ -339,6 +339,25 @@
     position: relative; width: 100%; height: 460px;
     background: var(--heat-bg); border-radius: 12px; overflow: hidden;
   }
+  /* 「増配してる?」は順位を見るので、面積のタイルではなく増配率順の横棒にする */
+  .treemap.is-bars { height: auto; background: none; border-radius: 0; overflow: visible; }
+  .gbar-list { list-style: none; margin: 0; padding: 0; }
+  .gbar-row { display: grid; grid-template-columns: minmax(6.5em, 34%) 1fr 4.6em; align-items: center; gap: 8px;
+    padding: 5px 2px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px; }
+  .gbar-row:last-child { border-bottom: none; }
+  .gbar-row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+  .gbar-row .nm .nisa { color: var(--muted); font-weight: 400; margin-left: 3px; font-size: 11px; }
+  .gbar-row .trk { position: relative; height: 14px; }
+  .gbar-row .zero { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--muted); opacity: .6; }
+  .gbar-row .bar { position: absolute; top: 2px; height: 10px; border-radius: 3px; }
+  .gbar-row .val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .gbar-row .val.is-down { color: var(--crit); }
+  .gbar-row.is-selected { background: var(--field); }
+  .gbar-head { font-size: 11.5px; color: var(--muted); margin: 14px 0 4px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .gbar-row .bar { animation: gbarIn .55s cubic-bezier(.2,.7,.2,1) both; transform-origin: var(--o, left); }
+    @keyframes gbarIn { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  }
   .treemap .empty-note { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #7b8697; }
   /* 業種名の帯。参照した市場ヒートマップと同じく、ブロックの頭に小さく置く */
   .tm-glabel {
@@ -4647,9 +4666,9 @@
   var TILE_INFO = {};
   function showTileInfo(id) {
     var box = document.getElementById("tmInfo"), d = TILE_INFO[id];
-    Array.prototype.forEach.call(document.querySelectorAll(".tm-tile.is-selected"), function (t) { t.classList.remove("is-selected"); });
+    Array.prototype.forEach.call(document.querySelectorAll(".tm-tile.is-selected, .gbar-row.is-selected"), function (t) { t.classList.remove("is-selected"); });
     if (!box || !d) return;
-    var tile = document.querySelector('.tm-tile[data-holding-id="' + id + '"]');
+    var tile = document.querySelector('.tm-tile[data-holding-id="' + id + '"], .gbar-row[data-holding-id="' + id + '"]');
     if (tile) tile.classList.add("is-selected");
     var r = d.row;
     box.innerHTML = "";
@@ -4672,7 +4691,70 @@
     box.hidden = false;
   }
 
+  // 増配率の順位: 銘柄ごと(同じコードは口座をまとめる)に、増配は右へ青、減配は左へ赤の棒
+  function renderGrowthBars(container, agg) {
+    container.innerHTML = "";
+    container.classList.add("is-bars");
+    TILE_INFO = {};
+    var info = document.getElementById("tmInfo");
+    if (info) info.hidden = true;
+    var by = {};
+    agg.rows.forEach(function (r) {
+      if (!(r.divPre > 0)) return;
+      var k = String(r.code || r.id).toUpperCase();
+      if (!by[k]) by[k] = { row: r, value: 0, nisa: false };
+      by[k].value += r.divPre;
+      if (isTaxFree(r.account)) by[k].nisa = true;
+    });
+    var items = Object.keys(by).map(function (k) { var x = by[k]; x.g = growthOf(x.row); return x; });
+    var known = items.filter(function (x) { return x.g !== null; }).sort(function (a, b) { return b.g - a.g || b.value - a.value; });
+    var unknown = items.filter(function (x) { return x.g === null; }).sort(function (a, b) { return b.value - a.value; });
+    if (!items.length) {
+      container.innerHTML = '<p class="empty-note" style="position:static">配当金データがありません</p>';
+      return;
+    }
+    // 目盛り: 極端な1銘柄で他が見えなくならないよう、上限は±60%で切る
+    var CAP = 60;
+    var pos = Math.min(CAP, Math.max(0, Math.max.apply(null, known.map(function (x) { return x.g; }).concat([0]))));
+    var neg = Math.min(CAP, Math.max(0, -Math.min.apply(null, known.map(function (x) { return x.g; }).concat([0]))));
+    var span = pos + neg || 1, zero = neg / span * 100;
+    function label(r) { return isUS(r) && r.code ? String(r.code).toUpperCase() : shortStockName(r.name || r.code || "無名銘柄"); }
+    function rowEl(x, i) {
+      var r = x.row, g = x.g, li = document.createElement("li");
+      li.className = "gbar-row";
+      li.dataset.holdingId = r.id;
+      li.tabIndex = 0;
+      TILE_INFO[r.id] = { row: r, pct: x.value / agg.totalDivPre * 100, value: x.value, group: r.sector || "" };
+      var bar = "";
+      if (g !== null && g !== 0) {
+        var w = Math.min(Math.abs(g), CAP) / span * 100;
+        var left = g > 0 ? zero : zero - w;
+        bar = '<span class="bar" style="left:' + left + '%;width:' + Math.max(w, 0.8) + '%;background:' + (g > 0 ? "var(--accent)" : "var(--crit)") +
+          ';--o:' + (g > 0 ? "left" : "right") + ';animation-delay:' + Math.min(i * 25, 400) + 'ms"></span>';
+      }
+      li.innerHTML = '<span class="nm">' + escapeHtml(label(r)) + (x.nisa ? '<span class="nisa">◆</span>' : "") + '</span>' +
+        '<span class="trk"><span class="zero" style="left:' + zero + '%"></span>' + bar + '</span>' +
+        '<span class="val' + (g !== null && g < 0 ? " is-down" : "") + '">' + COLOR_MODES.growth.text(g) + '</span>';
+      return li;
+    }
+    var ul = document.createElement("ul");
+    ul.className = "gbar-list";
+    known.forEach(function (x, i) { ul.appendChild(rowEl(x, i)); });
+    container.appendChild(ul);
+    if (unknown.length) {
+      var h = document.createElement("p");
+      h.className = "gbar-head";
+      h.textContent = "前年の配当が分からない銘柄(" + unknown.length + ")";
+      container.appendChild(h);
+      var ul2 = document.createElement("ul");
+      ul2.className = "gbar-list";
+      unknown.forEach(function (x, i) { ul2.appendChild(rowEl(x, i)); });
+      container.appendChild(ul2);
+    }
+  }
+
   function renderTreemap(container, agg, axisKey, colorKey) {
+    container.classList.remove("is-bars");
     container.innerHTML = "";
     TILE_INFO = {};
     var info = document.getElementById("tmInfo");
@@ -4945,10 +5027,16 @@
     paintHeatPresets();
     // 米国株だけを見るときは業種が1つ(米国株・ETF)にまとまるので、業種別は銘柄別で描く
     var axis = currentMarket === "us" && currentAxis === "sector" ? "stock" : currentAxis;
-    var result = renderTreemap(document.getElementById("treemapEl"), agg, axis, currentColor);
-    renderHeatScale(document.getElementById("heatScale"), currentColor);
+    // 「増配してる?」(銘柄別×増配率)は順位を見るので横棒で。ほかは配当額の面積で見るタイル
+    var result = axis === "stock" && currentColor === "growth"
+      ? (renderGrowthBars(document.getElementById("treemapEl"), agg), null)
+      : renderTreemap(document.getElementById("treemapEl"), agg, axis, currentColor);
+    var bars = axis === "stock" && currentColor === "growth";
+    var scaleEl = document.getElementById("heatScale");
+    renderHeatScale(scaleEl, currentColor);
+    scaleEl.hidden = bars;  // 横棒は青=増配・赤=減配の2色だけなので色の目盛りは要らない
     var noteEl = document.getElementById("heatNote");
-    if (noteEl) noteEl.textContent = (COLOR_MODES[currentColor] || COLOR_MODES.group).note;
+    if (noteEl) noteEl.textContent = bars ? "前年の1株配当と比べた増減です。棒の長さは±60%までで切っています。銘柄を押すと詳しく出ます。" : (COLOR_MODES[currentColor] || COLOR_MODES.group).note;
     var legendEl = document.getElementById("axisLegend");
     if (result) {
       renderLegendList(legendEl, result.groups, result.colorMap, agg.totalDivPre, currentColor);
@@ -5983,7 +6071,7 @@
 
   var HEAT_PRESETS = [
     { key: "growth", label: "増配してる?", axis: "stock", color: "growth",
-      lead: "左上ほど増配率が大きい順です。青いほど増配、赤は減配、灰色は据え置きか前年の配当が分からない銘柄です。" },
+      lead: "前年より1株配当をどれだけ増やしたかの順です。青い棒が右に長いほど増配、赤い棒は減配です。" },
     { key: "balance", label: "偏ってない?", axis: "sector", color: "group",
       lead: "大きいブロックほど、その業種から受け取る配当が多いということです。1つの業種が大きすぎないか見ます。" },
     { key: "yield", label: "利回りは?", axis: "stock", color: "current",
@@ -6127,12 +6215,12 @@
       });
       var tmEl = document.getElementById("treemapEl");
       tmEl.addEventListener("click", function (e) {
-        var tile = e.target.closest(".tm-tile");
+        var tile = e.target.closest(".tm-tile, .gbar-row");
         if (tile && tile.dataset.holdingId) showTileInfo(tile.dataset.holdingId);
       });
       tmEl.addEventListener("keydown", function (e) {
         if (e.key !== "Enter" && e.key !== " ") return;
-        var tile = e.target.closest(".tm-tile");
+        var tile = e.target.closest(".tm-tile, .gbar-row");
         if (!tile || !tile.dataset.holdingId) return;
         e.preventDefault();
         showTileInfo(tile.dataset.holdingId);
