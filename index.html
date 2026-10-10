@@ -196,6 +196,8 @@
   .stale-note { margin: 0 0 10px; padding: 9px 12px; border-radius: 10px; background: var(--warn-soft); font-size: 12.5px; line-height: 1.6; }
   .stale-note[hidden] { display: none; }
   .stale-note button { margin-left: 4px; font: inherit; font-weight: 700; color: var(--accent); background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline; }
+  .sum-growth { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .sum-growth.down { color: var(--crit); }
   .hold-sort { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12.5px; color: var(--text-2); }
   .hold-sort select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
@@ -2508,8 +2510,14 @@
     return '<span class="sum-name">' + (isUS(h) ? '<span class="us-badge">米</span>' : "") + escapeHtml((h.code ? h.code + " " : "") + String(h.name || "銘柄を入力").normalize("NFKC")) + '</span>' +
       '<span class="sum-yield">' + (yv !== null ? '<b' + (stale ? ' class="stale"' : "") + '>' + yv.toFixed(2) + '%</b><small' + (stale ? ' class="stale"' : "") + '>' + yl + '</small>' : '<b class="muted">―</b><small>利回り</small>') + '</span>' +
       '<span class="sum-meta">' + (num(h.shares) ? num(h.shares).toLocaleString("ja-JP") + "株 ・ " : "") +
-      "年" + fmtYen(c.divPre) + " " + t +
-      (function () { var sh = c.totalDiv !== undefined ? divShareOf(h, c, c.totalDiv) : null; return sh !== null ? "(配当の" + sh.toFixed(1) + "%)" : ""; })() +
+      "年" + fmtYen(c.divPre) +
+      // 構成比より、配当が前年よりどれだけ増えたか(増配率)を一覧で見せる
+      (function () {
+        var g = growthOf(h);
+        if (g === null) return "";
+        var cls = g > 0 ? "up" : g < 0 ? "down" : "";
+        return ' <span class="sum-growth ' + cls + '">' + t + COLOR_MODES.growth.text(g) + '</span>';
+      })() +
       // 損益は開いたときの「評価額・損益」に。一覧には配当が育っているか(連続増配)を出す
       (function () {
         var st = isUS(h) ? null : dividendStreak(String(h.code || "").trim().toUpperCase());
