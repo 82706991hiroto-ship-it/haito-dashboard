@@ -2500,7 +2500,6 @@
   // スマホでは1銘柄を1行にたたみ、押すと入力欄を開く
   var openRows = {};
   function summaryHtml(h, c) {
-    var t = c.trend === "up" ? '<em class="up">▲</em>' : c.trend === "down" ? '<em class="down">▽</em>' : "";
     var yNow = currentYieldOf(h), yBook = bookYieldOf(h);
     var yv = yNow !== null ? yNow : (yBook !== null && yBook > 0 ? yBook : null);
     var yl = yNow !== null ? (h.fdivDate ? "予想利回り" : "利回り") : "取得利回り";
@@ -2515,15 +2514,17 @@
       (function () {
         var g = growthOf(h);
         if (g === null) return "";
+        // 矢印と%だけだと株価の値上がりに見えるので、「増配」「減配」と書く
         var cls = g > 0 ? "up" : g < 0 ? "down" : "";
-        return ' <span class="sum-growth ' + cls + '">' + t + COLOR_MODES.growth.text(g) + '</span>';
+        var txt = g > 0 ? "増配 +" + Math.abs(g).toFixed(1) + "%" : g < 0 ? "減配 −" + Math.abs(g).toFixed(1) + "%" : "据え置き";
+        return ' ・ <span class="sum-growth ' + cls + '">' + txt + '</span>';
       })() +
       // 損益は開いたときの「評価額・損益」に。一覧には配当が育っているか(連続増配)を出す
       (function () {
         var st = isUS(h) ? null : dividendStreak(String(h.code || "").trim().toUpperCase());
         if (!st) return "";
         if (st.kind === "up" && st.up >= 2) return ' ・ <span class="nowrap">' + st.up + "期" + (st.up === st.years - 1 ? "〜" : "") + "連続増配</span>";
-        if (st.kind === "down") return ' ・ <span class="nowrap gain-down">直近で減配</span>';
+        if (st.kind === "down") return growthOf(h) === null ? ' ・ <span class="nowrap gain-down">直近で減配</span>' : "";
         return "";
       })() + '</span>';
   }
