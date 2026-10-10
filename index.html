@@ -187,6 +187,8 @@
   button.btn:hover { background: var(--field); }
   button.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   button.btn.primary:hover { opacity: .9; }
+  .hold-sort { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12.5px; color: var(--text-2); }
+  .hold-sort select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
 
   /* ---- ヒーロー ---- */
@@ -1124,6 +1126,17 @@
 
   <section class="panel" id="holdingsPanel" data-view="holdings">
     <h2><span class="chap">二</span>保有銘柄明細</h2>
+    <label class="hold-sort">並べ替え
+      <select id="holdSort">
+        <option value="">入力した順</option>
+        <option value="yield">利回り(今の株価)が高い順</option>
+        <option value="book">簿価利回りが高い順</option>
+        <option value="div">年間配当金が多い順</option>
+        <option value="growth">増配率が高い順</option>
+        <option value="acq">取得額が多い順</option>
+        <option value="code">コード順</option>
+      </select>
+    </label>
     <div class="table-wrap">
       <table class="data-table" id="holdingsTable">
         <thead>
@@ -1745,6 +1758,43 @@
     return '<b>' + fmtYen(v.value) + '</b><small>' + gainHtml(v) + '</small><small>取得 ' + fmtYen(c.acquisition) + '</small>';
   }
 
+  // 明細の並べ替え(表示だけ。保存の順番は変えない)。値が無い銘柄は最後に
+  var holdSort = (function () { try { return localStorage.getItem("haitoHoldSort") || ""; } catch (e) { return ""; } })();
+  var HOLD_SORT = {
+    yield: function (h) { return currentYieldOf(h); },
+    book: function (h) { return bookYieldOf(h); },
+    div: function (h) { var v = computeRow(h).divPre; return v > 0 ? v : null; },
+    growth: function (h) { return growthOf(h); },
+    acq: function (h) { var v = computeRow(h).acquisition; return v > 0 ? v : null; }
+  };
+  function sortedHoldings() {
+    var list = state.holdings.slice();
+    if (holdSort === "code") {
+      return list.sort(function (a, b) { return String(a.code || "~").localeCompare(String(b.code || "~"), "ja", { numeric: true }); });
+    }
+    var f = HOLD_SORT[holdSort];
+    if (!f) return list;
+    var key = {};
+    list.forEach(function (h, i) { var v = f(h); key[h.id] = { v: v == null || !isFinite(v) ? null : v, i: i }; });
+    return list.sort(function (a, b) {
+      var x = key[a.id], y = key[b.id];
+      if (x.v === null && y.v === null) return x.i - y.i;
+      if (x.v === null) return 1;
+      if (y.v === null) return -1;
+      return y.v - x.v || x.i - y.i;
+    });
+  }
+  (function () {
+    var sel = document.getElementById("holdSort");
+    if (!sel) return;
+    sel.value = holdSort;
+    sel.addEventListener("change", function () {
+      holdSort = sel.value;
+      try { localStorage.setItem("haitoHoldSort", holdSort); } catch (e) {}
+      renderTable();
+    });
+  })();
+
   function renderTable() {
     renderFxBar();
     renderMissingList();
@@ -1762,7 +1812,7 @@
       return;
     }
     var totalDiv = totalDivPreOf();
-    state.holdings.forEach(function (h) {
+    sortedHoldings().forEach(function (h) {
       var c = computeRow(h);
       c.totalDiv = totalDiv;
       var tr = document.createElement("tr");
