@@ -69,7 +69,7 @@ def find_splits(text):
         rs, rm = RATIO_SPLIT.search(win), RATIO_MERGE.search(win)
         if m.group(0) == "株式分割" and rs:
             ratio = float(rs.group(1))
-        elif m.group(0) == "株式併合" and rm:
+        elif m.group(0) == "株式併合" and rm and float(rm.group(1)) > 1:
             ratio = round(1 / float(rm.group(1)), 6)
         else:
             continue
@@ -89,6 +89,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=45)
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--cache", help="読んだ書類ごとの結果を残すフォルダ(やり直しのとき読み直さない)")
     a = ap.parse_args()
 
     html = open(HTML, encoding="utf-8").read()
@@ -111,10 +112,25 @@ def main():
             todo.append((code, x))
     print("有報・半期報告書", len(docs), "件のうち、最新の有報の期末より後に出た", len(todo), "件を読みます", flush=True)
 
+    def scan(doc_id):
+        path = a.cache and os.path.join(a.cache, doc_id + ".json")
+        if path and os.path.exists(path):
+            return json.load(open(path))
+        try:
+            got = find_splits(text_of(doc_id))
+        except Exception as e:  # 1件の読み違いで全体を止めない
+            print("読めず", doc_id, e, flush=True)
+            return {}
+        if path:
+            json.dump(got, open(path, "w"))
+        return got
+
+    if a.cache:
+        os.makedirs(a.cache, exist_ok=True)
     hits = {}
     with ThreadPoolExecutor(4) as ex:
-        for (code, x), text in zip(todo, ex.map(lambda t: text_of(t[1]["docID"]), todo)):
-            for day, ratio in find_splits(text).items():
+        for (code, x), got in zip(todo, ex.map(lambda t: scan(t[1]["docID"]), todo)):
+            for day, ratio in got.items():
                 if day <= state[code]:
                     continue
                 cur = splits.get(code)
