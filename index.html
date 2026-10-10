@@ -204,6 +204,18 @@
   .sim-chart { touch-action: pan-y; cursor: pointer; }
   .sim-chart .cal-col.is-sel { background: var(--field); border-radius: 4px; }
   .sim-chart .cal-col.is-sel .cal-bar { filter: brightness(.82); }
+  .fq-box { margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; line-height: 1.6; }
+  .fq-box[hidden] { display: none; }
+  .fq-box p { margin: 0 0 8px; }
+  .fq-box .fq-ok { margin: 0; color: var(--text-2); }
+  .fq-step { margin-bottom: 8px; font-size: 14px; }
+  .fq-prog { font-variant-numeric: tabular-nums; color: var(--text-2); font-size: 12px; }
+  .fq-tag { font-size: 11px; color: var(--warn); }
+  .fq-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fq-actions .btn { padding: 7px 12px; font-size: 13px; text-decoration: none; }
+  .fq-actions a.btn.primary { display: inline-flex; align-items: center; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .fq-help { margin: 8px 0 0 !important; font-size: 11.5px; color: var(--muted); }
+  .fq-msg { margin: 6px 0 0 !important; color: var(--crit); font-size: 12px; }
   .hold-sort { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12.5px; color: var(--text-2); }
   .hold-sort select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
@@ -1155,6 +1167,7 @@
       </select>
     </label>
     <p class="stale-note" id="staleNote" hidden></p>
+    <div class="fq-box" id="fqBox" hidden></div>
     <div class="table-wrap">
       <table class="data-table" id="holdingsTable">
         <thead>
@@ -1838,9 +1851,108 @@
     var b = e.target.closest("[data-open]"), box = b && document.getElementById(b.dataset.open);
     if (box) { box.open = true; box.scrollIntoView({ behavior: "smooth", block: "start" }); }
   });
+  // ---------- 予想配当の取り込み状況 ----------
+  // CSVで入るのは株価まで。配当は有報の実績なので、会社予想(Yahooの参考指標)を取り込んだか・古くなっていないかを見る。
+  // 会社予想は決算(本決算・中間決算)の発表で変わるので、決算期末から6か月ごとに45日たった日を「見直しの日」とし、
+  // それより前に取り込んだ予想は古いとみなす。決算期末はチェックシートの有報データ(fy)から、無ければ半年で古いとする。
+  function forecastStatus(h) {
+    var code = String(h.code || "").trim().toUpperCase();
+    if (isUS(h) || !/^[1-9][0-9A-Z]{3}$/.test(code) || h.excluded) return null;
+    if (!h.fdivDate) return { kind: "none" };
+    var got = new Date(isoDay(h.fdivDate) + "T00:00:00"), now = new Date(), due = null;
+    var rec = FIN[code[0]] && FIN[code[0]][code], fy = rec && rec.fy ? new Date(rec.fy + "T00:00:00") : null;
+    if (fy && !isNaN(fy)) {
+      for (var k = 0; k < 8; k++) {
+        var p = new Date(fy.getFullYear(), fy.getMonth() + 6 * k, fy.getDate() + 45);
+        if (p > now) break;
+        due = p;
+      }
+    } else {
+      due = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+    }
+    return due && got < due ? { kind: "stale" } : { kind: "ok" };
+  }
+  // 更新が要る銘柄(同じコードは1つに)。配当の多い順
+  function forecastTodo() {
+    var seen = {}, out = [];
+    state.holdings.slice().sort(function (a, b) { return computeRow(b).divPre - computeRow(a).divPre; }).forEach(function (h) {
+      var st = forecastStatus(h), code = String(h.code || "").trim().toUpperCase();
+      if (!st || st.kind === "ok" || seen[code]) return;
+      seen[code] = true;
+      out.push({ code: code, name: h.name || code, kind: st.kind });
+    });
+    return out;
+  }
+  var fq = null;  // 順番に取り込んでいる最中: { list, i, done }
+  function renderForecastBox() {
+    var box = document.getElementById("fqBox");
+    if (!box) return;
+    if (state.isSample) { box.hidden = true; return; }
+    var all = state.holdings.filter(function (h) { return forecastStatus(h); });
+    if (!all.length) { box.hidden = true; return; }
+    box.hidden = false;
+    if (fq && fq.i < fq.list.length) {
+      var it = fq.list[fq.i];
+      box.innerHTML = '<div class="fq-step"><span class="fq-prog">' + (fq.i + 1) + ' / ' + fq.list.length + '</span> <b>' + escapeHtml(it.code + " " + it.name) + '</b>' +
+        (it.kind === "stale" ? ' <span class="fq-tag">予想が古い</span>' : "") + '</div>' +
+        '<div class="fq-actions"><a class="btn primary" target="_blank" rel="noopener noreferrer" data-fq="open" href="' + yahooQuoteUrl(it.code) + '">Yahooで参考指標を見る ↗</a>' +
+        '<button type="button" class="btn" data-fq="paste">📋 貼り付け</button>' +
+        '<button type="button" class="btn ghost" data-fq="skip">飛ばす</button>' +
+        '<button type="button" class="btn ghost" data-fq="stop">やめる</button></div>' +
+        '<p class="fq-help">「参考指標」から「単元株数」までをコピーして戻ると、自動で読み込んで次の銘柄に進みます。</p>' +
+        (fq.msg ? '<p class="fq-msg">' + escapeHtml(fq.msg) + '</p>' : "");
+      return;
+    }
+    var todo = forecastTodo(), okN = all.length - state.holdings.filter(function (h) { var st = forecastStatus(h); return st && st.kind !== "ok"; }).length;
+    var doneMsg = fq ? (fq.done + "銘柄を取り込みました。") : "";
+    fq = null;
+    if (!todo.length) {
+      box.innerHTML = '<p class="fq-ok">' + doneMsg + '予想配当はすべて取り込み済みです(' + all.length + '銘柄)。次の決算のあとに、見直しが要る銘柄をここでお知らせします。</p>';
+      return;
+    }
+    var none = todo.filter(function (x) { return x.kind === "none"; }).length;
+    box.innerHTML = '<p>' + doneMsg + '予想配当: <b>' + okN + '</b> / ' + all.length + '銘柄が取り込み済み。' +
+      (none ? '未取り込み ' + none + '銘柄' : "") + (todo.length - none ? (none ? '・' : "") + '決算後で古い ' + (todo.length - none) + '銘柄' : "") +
+      '。利回りを会社予想で出すには取り込みが要ります。</p>' +
+      '<button type="button" class="btn primary" data-fq="start">配当の多い順に取り込む(' + todo.length + '銘柄)</button>';
+  }
+  function fqTake(t) {
+    if (!fq || fq.i >= fq.list.length) return false;
+    var q = t && t.length > 40 ? parseQuoteBlock(t) : null;
+    var it = fq.list[fq.i];
+    if (!q) {
+      fq.msg = t && t.length > 40 ? "読み取れませんでした。「参考指標」から「単元株数」までを選んでコピーし直してください。" : "コピーした内容が見つかりません。参考指標をコピーしてから「📋 貼り付け」を押してください。";
+      renderForecastBox();
+      return false;
+    }
+    var stamp = todayStamp();
+    state.holdings.forEach(function (h) { if (String(h.code || "").trim().toUpperCase() === it.code && !isUS(h)) applyQuoteTo(h, q, stamp); });
+    storeQuote(it.code, q);
+    save();
+    fq.done++; fq.i++; fq.msg = "";
+    showToast(it.name + ": " + (q.fdiv > 0 ? "予想配当 " + q.fdiv + "円" : "") + (q.price > 0 ? (q.fdiv > 0 ? "・" : "") + "株価 " + q.price.toLocaleString("ja-JP") + "円" : "") + " を入れました");
+    renderTable(); renderDashboard();
+    return true;
+  }
+  document.getElementById("fqBox").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-fq]");
+    if (!b) return;
+    var act = b.dataset.fq;
+    if (act === "start") { fq = { list: forecastTodo(), i: 0, done: 0 }; renderForecastBox(); return; }
+    if (!fq) return;
+    if (act === "open") { quoteWaiting = { at: Date.now(), take: fqTake }; return; }
+    e.preventDefault();
+    if (act === "skip") { fq.i++; fq.msg = ""; renderForecastBox(); }
+    else if (act === "stop") { fq.i = fq.list.length; renderForecastBox(); }
+    else if (act === "paste") {
+      if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then(fqTake, function () { fq.msg = "貼り付けが許可されませんでした。もう一度押して「ペースト」を選んでください。"; renderForecastBox(); });
+    }
+  });
+
   function renderTable() {
     renderFxBar();
     renderStaleNote();
+    renderForecastBox();
     renderMissingList();
     loadFinForHoldings();
     var tbody = document.getElementById("holdingsBody");
@@ -2295,7 +2407,7 @@
   var quoteWaiting = null;
   function onQuoteReturn() {
     var w = quoteWaiting;
-    if (!w || Date.now() - w.at > 15 * 60 * 1000 || !document.getElementById("detailDialog").open) return;
+    if (!w || Date.now() - w.at > 15 * 60 * 1000 || (w.dialog && !document.getElementById("detailDialog").open)) return;
     if (!(navigator.clipboard && navigator.clipboard.readText)) return;
     navigator.clipboard.readText().then(function (t) { if (w.take(t)) quoteWaiting = null; }, function () {});
   }
@@ -2407,7 +2519,7 @@
       if (t && t.length > 40) { e.preventDefault(); takeQuote(t); }
     };
     // 「株価・予想を見る」から戻ってきたら、コピーした参考指標を自動で読む(チェックシートと同じ)
-    document.getElementById("detailYahoo").onclick = function () { quoteWaiting = { at: Date.now(), take: takeQuote }; };
+    document.getElementById("detailYahoo").onclick = function () { quoteWaiting = { at: Date.now(), take: takeQuote, dialog: true }; };
     document.getElementById("detailPaste").onclick = function () {
       if (navigator.clipboard && navigator.clipboard.readText) {
         navigator.clipboard.readText().then(function (t) {
@@ -2508,12 +2620,13 @@
   function summaryHtml(h, c) {
     var yNow = currentYieldOf(h), yBook = bookYieldOf(h);
     var yv = yNow !== null ? yNow : (yBook !== null && yBook > 0 ? yBook : null);
-    var yl = yNow !== null ? (h.fdivDate ? "予想利回り" : "利回り") : "取得利回り";
+    var fst = forecastStatus(h);
+    var yl = yNow !== null ? (fst && fst.kind === "ok" ? "予想利回り" : fst && fst.kind === "stale" ? "予想が古い" : fst ? "実績配当で" : "利回り") : "取得利回り";
     // 株価が古いと利回りがずれるので、30日を過ぎたら薄くして株価の日付を出す
     var age = yNow !== null ? priceAgeDays(h.priceDate) : null, stale = age !== null && age > PRICE_STALE_DAYS;
     if (stale) yl = "株価" + isoDay(h.priceDate).slice(5).replace(/^0/, "").replace(/-0?/, "/") + "時点";
     return '<span class="sum-name">' + (isUS(h) ? '<span class="us-badge">米</span>' : "") + escapeHtml((h.code ? h.code + " " : "") + String(h.name || "銘柄を入力").normalize("NFKC")) + '</span>' +
-      '<span class="sum-yield">' + (yv !== null ? '<b' + (stale ? ' class="stale"' : "") + '>' + yv.toFixed(2) + '%</b><small' + (stale ? ' class="stale"' : "") + '>' + yl + '</small>' : '<b class="muted">―</b><small>利回り</small>') + '</span>' +
+      '<span class="sum-yield">' + (yv !== null ? '<b' + (stale ? ' class="stale"' : "") + '>' + yv.toFixed(2) + '%</b><small' + (stale || (fst && fst.kind === "stale") ? ' class="stale"' : "") + '>' + yl + '</small>' : '<b class="muted">―</b><small>利回り</small>') + '</span>' +
       '<span class="sum-meta">' + (num(h.shares) ? num(h.shares).toLocaleString("ja-JP") + "株 ・ " : "") +
       "年" + fmtYen(c.divPre) +
       // 構成比より、配当が前年よりどれだけ増えたか(増配率)を一覧で見せる
