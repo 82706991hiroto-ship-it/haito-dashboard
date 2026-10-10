@@ -2257,7 +2257,17 @@
     if (t) { save(); renderTable(); renderDashboard(); }
   });
 
+  var quoteWaiting = null;
+  function onQuoteReturn() {
+    var w = quoteWaiting;
+    if (!w || Date.now() - w.at > 15 * 60 * 1000 || !document.getElementById("detailDialog").open) return;
+    if (!(navigator.clipboard && navigator.clipboard.readText)) return;
+    navigator.clipboard.readText().then(function (t) { if (w.take(t)) quoteWaiting = null; }, function () {});
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) setTimeout(onQuoteReturn, 150); });
+  window.addEventListener("pageshow", function (e) { if (e.persisted) setTimeout(onQuoteReturn, 150); });
   function openDetailDialog(h) {
+    quoteWaiting = null;
     var dlg = document.getElementById("detailDialog");
     var price = document.getElementById("detailPrice");
     var perk = document.getElementById("detailPerk");
@@ -2361,6 +2371,8 @@
       var t = e.clipboardData && e.clipboardData.getData("text");
       if (t && t.length > 40) { e.preventDefault(); takeQuote(t); }
     };
+    // 「株価・予想を見る」から戻ってきたら、コピーした参考指標を自動で読む(チェックシートと同じ)
+    document.getElementById("detailYahoo").onclick = function () { quoteWaiting = { at: Date.now(), take: takeQuote }; };
     document.getElementById("detailPaste").onclick = function () {
       if (navigator.clipboard && navigator.clipboard.readText) {
         navigator.clipboard.readText().then(function (t) {
