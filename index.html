@@ -2276,7 +2276,14 @@
       '<span class="sum-meta">' + (num(h.shares) ? num(h.shares).toLocaleString("ja-JP") + "株 ・ " : "") +
       "年" + fmtYen(c.divPre) + " " + t +
       (function () { var sh = c.totalDiv !== undefined ? divShareOf(h, c, c.totalDiv) : null; return sh !== null ? "(配当の" + sh.toFixed(1) + "%)" : ""; })() +
-      (function () { var v = valuationOf(h, c); return v && v.pct !== null ? ' ・ <span class="nowrap">損益 <span class="' + (v.gain > 0 ? "gain-up" : v.gain < 0 ? "gain-down" : "") + '">' + (v.pct > 0 ? "+" : "") + v.pct.toFixed(1) + "%</span></span>" : ""; })() + '</span>';
+      // 損益は開いたときの「評価額・損益」に。一覧には配当が育っているか(連続増配)を出す
+      (function () {
+        var st = isUS(h) ? null : dividendStreak(String(h.code || "").trim().toUpperCase());
+        if (!st) return "";
+        if (st.kind === "up" && st.up >= 2) return ' ・ <span class="nowrap">' + st.up + "期" + (st.up === st.years - 1 ? "〜" : "") + "連続増配</span>";
+        if (st.kind === "down") return ' ・ <span class="nowrap gain-down">直近で減配</span>';
+        return "";
+      })() + '</span>';
   }
   function makeSummaryCell(h, c, tr) {
     var td = document.createElement("td");
