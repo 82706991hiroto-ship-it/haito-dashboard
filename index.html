@@ -221,12 +221,20 @@
   .risk-badge.lv1 { background: var(--warn-soft); color: var(--warn); }
   .detail-risk { font-size: 13px; margin: 6px 0 10px; padding: 9px 12px; border-radius: 10px; background: var(--field); }
   .detail-risk ul { margin: 4px 0 0; padding-left: 18px; }
+  .risk-line { display: block; margin-top: 3px; font-size: 12px; font-weight: 700; white-space: normal; }
+  .risk-line.lv2 { color: var(--crit); }
+  .risk-line.lv1 { color: var(--warn); }
+  .risk-why { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.55; }
+  .risk-list .risk-why li { padding: 1px 0; border: none; cursor: inherit; }
+  .risk-how { font-size: 12px; color: var(--text-2); margin-top: 6px; }
+  .risk-how summary { cursor: pointer; }
+  .risk-how ul { padding-left: 18px; margin: 4px 0 0; line-height: 1.6; }
+  .detail-risk small { color: var(--muted); }
   .risk-sum { font-size: 13px; color: var(--text-2); margin: 0 0 8px; }
   .risk-sum b.is-down { color: var(--crit); }
   .risk-list { list-style: none; margin: 0 0 8px; padding: 0; }
   .risk-list li { padding: 9px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
   .risk-head { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-  .risk-why { font-size: 12.5px; color: var(--text); margin-top: 3px; line-height: 1.5; }
   .risk-good { font-size: 11.5px; color: var(--text-2); margin-top: 2px; }
   .nb-lead { font-size: 13px; color: var(--text-2); margin: 0 0 8px; }
   .nb-list { list-style: none; margin: 0 0 8px; padding: 0; }
@@ -2003,50 +2011,81 @@
     code = String(code || "").trim().toUpperCase();
     return FIN[code[0]] && FIN[code[0]][code] || null;
   }
-  function pctTxt(x) { return Math.round(x * 100) + "%"; }
+  function pctTxt(x) { return x > 3 ? "300%超" : Math.round(x * 100) + "%"; }
+  // 点数制: 兆しごとに点を足し、方針や財務の余裕で引く。4点以上=減配リスク高、2〜3点=要注意。
+  // 一時的な赤字(特別損失など)と、利益が配当に追いつかない状態が続いているのとを分けて見る
   function dividendRisk(code, fdiv) {
     var rec = finRec(code);
     if (!rec) return null;
-    var items = [], good = [];
-    function add(lv, t) { items.push({ lv: lv, t: t }); }
-    var s = dividendsFor(code) || [], last = s[0] > 0 ? s[0] : (rec.div || [])[(rec.div || []).length - 1];
-    var eps = rec.eps || [], e = eps[eps.length - 1];
+    var items = [], good = [], score = 0;
+    function add(pt, short, t) { items.push({ pt: pt, s: short, t: t }); score += pt; }
+    function plus(pt, t) { good.push(t); score -= pt; }
+    var s = dividendsFor(code) || [];
+    var rd = rec.div || [], re = rec.eps || [], n = Math.min(rd.length, re.length);
+    var last = s[0] > 0 ? s[0] : rd[rd.length - 1];
+    var e = re[re.length - 1], e1 = re[re.length - 2], e2 = re[re.length - 3];
     var fin = FIN_SECTORS.indexOf(rec.sec) !== -1;
-    if (fdiv > 0 && last > 0 && fdiv < last * 0.97) add(2, "会社予想が減配(前期" + fmtPerShare(last) + "→予想" + fmtPerShare(fdiv) + ")");
+    // 会社予想(取り込んだとき)
+    if (fdiv > 0 && last > 0 && fdiv < last * 0.97) add(4, "減配予想", "会社予想が減配(前期" + fmtPerShare(last) + "→予想" + fmtPerShare(fdiv) + ")");
     var d = fdiv > 0 ? fdiv : last;
+    // 当期の配当性向(赤字は別に見る)
     if (e != null) {
-      // EPSは割り戻し済みの値。1株配当も同じ基準(内蔵データ)で比べる
-      if (!(e > 0)) add(2, "前期は赤字(1株利益 " + e + "円)");
-      else if (d > 0 && d / e > 1) add(2, "配当が利益を上回っている(配当性向 " + pctTxt(d / e) + ")");
-      else if (d > 0 && d / e > 0.8) add(1, "配当性向が高い(" + pctTxt(d / e) + ")");
-      if (eps.length >= 3 && eps[eps.length - 1] < eps[eps.length - 2] && eps[eps.length - 2] < eps[eps.length - 3]) add(1, "1株利益が2期続けて減少");
+      if (!(e > 0)) {
+        var wasProfit = e1 > 0 && e2 > 0;
+        add(wasProfit ? 2 : 3, "赤字", wasProfit ? "前期は赤字(1株利益 " + e + "円)。その前の2期は黒字なので一時的な損失の可能性" : "赤字が続いている(1株利益 " + e + "円)");
+      } else if (d > 0) {
+        var po = d / e;
+        if (po > 1) add(3, "配当性向" + pctTxt(po), "配当が利益を上回っている(配当性向 " + pctTxt(po) + ")");
+        else if (po > 0.8) add(2, "配当性向" + pctTxt(po), "配当性向が高い(" + pctTxt(po) + "。利益が少し減ると配当を賄えない)");
+        else if (po > 0.6) add(1, "配当性向" + pctTxt(po), "配当性向がやや高い(" + pctTxt(po) + ")");
+      }
     }
+    // 3期合計の配当性向(一時的な利益の上下をならす)
+    if (n >= 3) {
+      var sd = 0, se = 0;
+      for (var i = 1; i <= 3; i++) { sd += rd[rd.length - i]; se += re[re.length - i]; }
+      if (se <= 0) add(2, "3期で利益なし", "3期合計で利益が出ていない");
+      else if (sd / se > 1) add(2, "3期の配当性向" + pctTxt(sd / se), "3期合計で配当が利益を上回っている(配当性向 " + pctTxt(sd / se) + ")");
+      else if (sd / se > 0.8) add(1, "3期の配当性向" + pctTxt(sd / se), "3期合計でも配当性向が高い(" + pctTxt(sd / se) + ")");
+    }
+    // 利益の流れ
+    if (e > 0 && e1 > 0 && e2 > 0 && e < e1 && e1 < e2) add(1, "2期連続減益", "1株利益が2期続けて減少(" + Math.round(e2) + "→" + Math.round(e1) + "→" + Math.round(e) + "円)");
+    if (re.length >= 4 && re[re.length - 4] > 0 && e > 0 && e / re[re.length - 4] < 0.7) add(1, "3期で利益3割減", "3期前より1株利益が3割以上減った");
+    // 現金を生む力と財務(金融業は見ない)
     if (!fin) {
       var ocf = rec.ocf || [];
-      if (ocf.length && ocf[ocf.length - 1] < 0) add(1, "営業キャッシュフローがマイナス");
-      var eq = rec.eq || [];
-      if (eq.length && eq[eq.length - 1] < 0.2) add(1, "自己資本比率が低い(" + pctTxt(eq[eq.length - 1]) + ")");
+      if (ocf.length && ocf[ocf.length - 1] < 0) add(2, "営業CF赤字", "本業で現金が出ていっている(営業キャッシュフローがマイナス)");
+      else if (ocf.length >= 2 && ocf[ocf.length - 2] < 0) add(1, "前期の営業CF赤字", "前々期の営業キャッシュフローがマイナス");
+      var eq = rec.eq || [], eql = eq[eq.length - 1];
+      if (eql != null && eql < 0.2) add(1, "自己資本" + pctTxt(eql), "自己資本比率が低い(" + pctTxt(eql) + "。借入れが多い)");
+      if (eql != null && eql >= 0.6) plus(1, "自己資本比率 " + pctTxt(eql) + "(財務に余裕)");
     }
     // 減配の履歴(内蔵の1株配当・新しい順)
     var cuts = 0, recentCut = false;
-    for (var i = 0; i + 1 < Math.min(s.length, 11); i++) {
-      if (s[i] < s[i + 1] * 0.97) { cuts++; if (i < 3) recentCut = true; }
+    for (var k = 0; k + 1 < Math.min(s.length, 11); k++) {
+      if (s[k] < s[k + 1] * 0.97) { cuts++; if (k < 3) recentCut = true; }
     }
-    if (recentCut) add(1, "直近3期以内に減配あり");
-    else if (cuts) good.push("減配は過去10期で" + cuts + "回(直近3期はなし)");
-    (rec.pol || []).forEach(function (pol) { good.push(pol + "の方針"); });
-    var level = items.reduce(function (m, x) { return Math.max(m, x.lv); }, 0);
-    items.sort(function (a, b) { return b.lv - a.lv; });
-    return { level: level, items: items, good: good };
+    if (recentCut) add(2, "直近で減配", "直近3期以内に減配している");
+    else if (cuts >= 2) add(1, "減配歴" + cuts + "回", "過去10期で" + cuts + "回減配している");
+    else if (s.length >= 6 && cuts === 0) plus(1, "過去" + Math.min(s.length - 1, 10) + "期は減配なし");
+    // 方針(累進配当・DOEは減配しにくい約束)
+    var pol = rec.pol || [];
+    if (pol.indexOf("累進配当") !== -1) plus(1, "累進配当の方針(減配しないと約束)");
+    if (pol.indexOf("DOE") !== -1) plus(1, "DOEの方針(利益より安定した純資産が基準)");
+    items.sort(function (a, b) { return b.pt - a.pt; });
+    var level = score >= 4 ? 2 : score >= 2 ? 1 : 0;
+    return { level: level, score: score, items: items, good: good };
   }
   function holdingRisk(h) {
     if (isUS(h)) return null;
     var st = forecastStatus(h);
     return dividendRisk(h.code, st && st.kind === "ok" ? num(h.div) : 0);
   }
+  // 一覧に出す短い札。いちばん重い理由を添える(例: 「⚠ 減配リスク高: 赤字」)
   function riskBadge(r) {
     if (!r || !r.level) return "";
-    return ' ・ <span class="risk-badge lv' + r.level + '">' + (r.level === 2 ? "減配リスク高" : "要注意") + '</span>';
+    var why = r.items.slice(0, 2).map(function (x) { return x.s; }).join("・");
+    return '<span class="risk-line lv' + r.level + '">⚠ ' + (r.level === 2 ? "減配リスク高" : "要注意") + (why ? ": " + escapeHtml(why) : "") + '</span>';
   }
   function renderRiskPanel() {
     var body = document.getElementById("riskBody");
@@ -2069,13 +2108,18 @@
       html += '<ul class="risk-list">' + bad.map(function (x) {
         return '<li data-hid="' + x.h.id + '"><div class="risk-head"><b>' + escapeHtml((x.h.code ? x.h.code + " " : "") + shortStockName(x.h.name || "")) + '</b>' +
           '<span class="risk-badge lv' + x.r.level + '">' + (x.r.level === 2 ? "減配リスク高" : "要注意") + '</span></div>' +
-          '<div class="risk-why">' + x.r.items.map(function (it) { return escapeHtml(it.t); }).join(" / ") + '</div>' +
+          '<ul class="risk-why">' + x.r.items.map(function (it) { return "<li>" + escapeHtml(it.t) + "</li>"; }).join("") + '</ul>' +
           (x.r.good.length ? '<div class="risk-good">' + escapeHtml(x.r.good.join("・")) + '</div>' : "") + '</li>';
       }).join("") + '</ul>';
     } else {
       html += '<p class="calendar-note">目立った兆しのある銘柄はありません。</p>';
     }
-    html += '<p class="calendar-note">前期の有価証券報告書の数字で見ています(配当性向80%超・赤字・2期続けて減益・営業CFマイナス・自己資本比率20%未満・直近の減配)。予想配当を取り込んだ銘柄は、会社予想の減配も見ます。</p>';
+    html += '<details class="risk-how"><summary>判定のしかた</summary><p>有価証券報告書の数字で、兆しごとに点を付けています。4点以上は「減配リスク高」、2〜3点は「要注意」。</p><ul>' +
+      '<li>会社予想が減配 4点(予想配当を取り込んだ銘柄)</li><li>配当が利益を上回る 3点 ・ 配当性向80%超 2点 ・ 60%超 1点</li>' +
+      '<li>赤字 3点(その前の2期が黒字なら一時的として2点)</li><li>3期合計で配当が利益を上回る 2点(80%超なら1点) ・ 2期連続減益 1点 ・ 3期で利益3割減 1点</li>' +
+      '<li>営業キャッシュフローがマイナス 2点(前々期だけなら1点) ・ 自己資本比率20%未満 1点(金融業は見ない)</li>' +
+      '<li>直近3期の減配 2点 ・ 過去10期で2回以上の減配 1点</li>' +
+      '<li>差し引き: 累進配当の方針 −1 ・ DOEの方針 −1 ・ 自己資本比率60%以上 −1 ・ 10期減配なし −1</li></ul></details>';
     body.innerHTML = html;
   }
   document.getElementById("riskBody").addEventListener("click", function (e) {
@@ -2224,7 +2268,7 @@
       var c = String(h.code || "").trim().toUpperCase();
       if (seen[c]) return; seen[c] = true;
       var r = holdingRisk(h);
-      if (r && r.level === 2) hi.push(shortStockName(h.name || c));
+      if (r && r.level === 2) hi.push(shortStockName(h.name || c) + "(" + r.items.slice(0, 2).map(function (x) { return x.s; }).join("・") + ")");
     });
     if (hi.length) {
       parts.push('<li><span class="se-ico">⚠</span><div><b>減配リスクが高い ' + hi.length + '銘柄</b><div class="se-sub">' + escapeHtml(hi.join("、")) +
@@ -2737,7 +2781,7 @@
     var dr = holdingRisk(h), drEl = document.getElementById("detailRisk");
     drEl.hidden = !dr;
     if (dr) drEl.innerHTML = '<b>減配リスク: ' + (dr.level === 2 ? '<span class="risk-badge lv2">高い</span>' : dr.level === 1 ? '<span class="risk-badge lv1">要注意</span>' : "目立った兆しなし") + '</b>' +
-      (dr.items.length ? '<ul>' + dr.items.map(function (it) { return "<li>" + escapeHtml(it.t) + "</li>"; }).join("") + '</ul>' : "") +
+      (dr.items.length ? '<ul>' + dr.items.map(function (it) { return "<li>" + escapeHtml(it.t) + " <small>+" + it.pt + "</small></li>"; }).join("") + '</ul>' : "") +
       (dr.good.length ? '<p class="risk-good">' + escapeHtml(dr.good.join("・")) + '</p>' : "");
     document.getElementById("detailStreak").textContent = dstk
       ? dstk.text + " ・ 1株配当 " + dser.slice().reverse().map(function (v) { return fmtPerShare(v); }).join(" → ")
@@ -2945,7 +2989,7 @@
         var cls = g > 0 ? "up" : g < 0 ? "down" : "";
         var txt = g > 0 ? "増配 +" + Math.abs(g).toFixed(1) + "%" : g < 0 ? "減配 −" + Math.abs(g).toFixed(1) + "%" : "据え置き";
         return ' ・ <span class="sum-growth ' + cls + '">' + txt + '</span>';
-      })() + riskBadge(holdingRisk(h)) +
+      })() +
       // 損益は開いたときの「評価額・損益」に。一覧には配当が育っているか(連続増配)を出す
       (function () {
         var st = isUS(h) ? null : dividendStreak(String(h.code || "").trim().toUpperCase());
@@ -2953,7 +2997,7 @@
         if (st.kind === "up" && st.up >= 2) return ' ・ <span class="nowrap">' + st.up + "期" + (st.up === st.years - 1 ? "〜" : "") + "連続増配</span>";
         if (st.kind === "down") return growthOf(h) === null ? ' ・ <span class="nowrap gain-down">直近で減配</span>' : "";
         return "";
-      })() + '</span>';
+      })() + riskBadge(holdingRisk(h)) + '</span>';
   }
   function makeSummaryCell(h, c, tr) {
     var td = document.createElement("td");
