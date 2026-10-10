@@ -79,6 +79,9 @@ def find_splits(text):
             continue
         if ratio == 1 or ratio <= 0 or ratio > 100:
             continue
+        # 吸収分割・子会社など、当社ではない会社の株式分割の話は除く
+        if re.search(r"吸収分割|新設分割|会社分割|承継会社|子会社|完全親会社", text[max(0, m.start() - 200): m.end() + 60]):
+            continue
         for pat in (LABELED, INLINE):
             for d in pat.finditer(win):
                 if pat is LABELED and "配当" in win[max(0, d.start() - 40): d.start()]:
@@ -110,15 +113,13 @@ def main():
 
     docs = filings(a.days)
     # 最新の有報の期末より後に出た書類だけ(それより前の分割は有報の配当にもう反映されている)
-    todo, asr_day = [], {}
+    todo = []
     for x in docs:
         code = x["secCode"][:4].upper()
         fy = state.get(code)
         if code not in info or not fy:
             continue
         sub = (x.get("submitDateTime") or "")[:10]
-        if x["docTypeCode"] == "120" and (x.get("periodEnd") or "") == fy:
-            asr_day[code] = sub
         if sub > fy:
             todo.append((code, x))
     print("有報・半期報告書", len(docs), "件のうち、最新の有報の期末より後に出た", len(todo), "件を読みます", flush=True)
@@ -153,9 +154,8 @@ def main():
                     "名前": info[code][0], "効力発生日": day, "比率": int(ratio) if ratio == int(ratio) else ratio,
                     "出典": "EDINET %s %s(%s提出)の注記" % (kind, x["docID"], (x.get("submitDateTime") or "")[:10]),
                 }
-                # 効力発生が最新の有報の提出より前なら、その有報のEPS・BPSはもう分割後の株数で計算されている
-                if asr_day.get(code) and day <= asr_day[code]:
-                    hits[(code, day)]["EPS調整済"] = True
+                # 有報のEPS・BPSが分割後の株数かどうかは会社によって違うので、ここでは決めない
+                # (チェックシートの側で、1株配当÷EPSと配当性向を比べて判断する)
 
     for (code, day), e in sorted(hits.items()):
         print("%s %s %s 1株→%s株  %s" % (code, e["名前"], day, e["比率"], e["出典"]))
