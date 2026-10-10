@@ -187,6 +187,10 @@
   button.btn:hover { background: var(--field); }
   button.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   button.btn.primary:hover { opacity: .9; }
+  .quote-tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 2px; }
+  .quote-tools .btn { padding: 6px 12px; font-size: 12.5px; text-decoration: none; }
+  .quote-tools[hidden] { display: none; }
+  .quote-status:empty { display: none; }
   .hold-sort { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12.5px; color: var(--text-2); }
   .hold-sort select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
@@ -1189,6 +1193,11 @@
       <label class="field">現在株価(円)
         <input type="number" id="detailPrice" min="0" step="any" inputmode="decimal" placeholder="入れると現在利回りが出ます">
       </label>
+      <div class="quote-tools" id="detailQuote">
+        <a id="detailYahoo" target="_blank" rel="noopener noreferrer" class="btn">株価・予想を見る ↗</a>
+        <button type="button" class="btn" id="detailPaste">📋 貼り付け</button>
+      </div>
+      <p class="hint quote-status" id="detailQuoteStatus"></p>
       <p class="hint" id="detailYield"></p>
       <div class="perk-box" id="detailPerkBox">
         <div class="perk-head" id="detailPerkHead">株主優待</div>
@@ -2324,6 +2333,41 @@
     exclude.onchange = function () {
       h.excluded = exclude.checked ? true : undefined;
       save(); renderTable(); renderDashboard();
+    };
+
+    // Yahoo!ファイナンスの参考指標をコピーして貼ると、株価と会社予想の1株配当をまとめて入れる
+    var qCode = String(h.code || "").trim().toUpperCase(), qStatus = document.getElementById("detailQuoteStatus");
+    document.getElementById("detailQuote").hidden = isUS(h) || !/^[0-9][0-9A-Z]{3}$/.test(qCode);
+    document.getElementById("detailYahoo").href = yahooQuoteUrl(qCode);
+    qStatus.textContent = h.fdivDate ? "配当/株は " + h.fdivDate + " に取り込んだ会社予想です。" : "";
+    function takeQuote(t) {
+      var q = t && t.length > 40 ? parseQuoteBlock(t) : null;
+      if (!q) {
+        qStatus.textContent = t && t.length > 40 ? "株価・予想配当を読み取れませんでした。Yahoo!ファイナンスの「参考指標」から「単元株数」までを選んでコピーしてください。" : "";
+        return false;
+      }
+      applyQuoteTo(h, q, todayStamp());
+      storeQuote(qCode, q);
+      price.value = h.price == null ? "" : h.price;
+      var parts = [];
+      if (q.price > 0) parts.push("株価 " + q.price.toLocaleString("ja-JP") + "円");
+      if (q.fdiv > 0) parts.push("予想配当 " + q.fdiv + "円(配当/株に入れました)");
+      qStatus.textContent = parts.join("・") + " を取り込みました。";
+      save(); paintYield(); renderTable(); renderDashboard();
+      if (window.HaitoSync) window.HaitoSync.soon();
+      return true;
+    }
+    price.onpaste = function (e) {
+      var t = e.clipboardData && e.clipboardData.getData("text");
+      if (t && t.length > 40) { e.preventDefault(); takeQuote(t); }
+    };
+    document.getElementById("detailPaste").onclick = function () {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText().then(function (t) {
+          if (takeQuote(t)) return;
+          if (!(t && t.length > 40)) { price.focus(); qStatus.textContent = "参考指標をコピーしてから押してください。株価の欄に長押しで貼り付けても読み取ります。"; }
+        }, function () { price.focus(); qStatus.textContent = "株価の欄を長押しして貼り付けてください。"; });
+      } else { price.focus(); }
     };
 
     dlg.showModal();
@@ -6932,6 +6976,61 @@
   // 以前は業種が分からない銘柄に先頭の「水産・農林業」が入っていた。内蔵データと食い違うものを直す
   // 内蔵データに後から入った銘柄(名証だけの会社など)は、登録済みの行に配当が入っていない。
   // 配当が空欄(または「無配(0円)にする」で0にした行)の日本株で、内蔵データに配当があれば補う
+  // Yahoo!ファイナンスの「参考指標」をまとめてコピーした文字から、会社予想の1株配当と株価を読む(チェックシートと同じ読み方)。
+  // 株価は 最低購入代金 ÷ 単元株数(無ければ 1株配当 ÷ 配当利回り で近似)
+  function parseQuoteBlock(t) {
+    var s = String(t || "").normalize("NFKC").replace(/\s+/g, " ");
+    function after(re) { var m = s.match(re); return m ? parseFloat(m[1].replace(/,/g, "")) : NaN; }
+    var fdiv = after(/1株配当\s*\(会社予想\)[^0-9-]{0,40}?([0-9][0-9,]*(?:\.[0-9]+)?)/);
+    var yld = after(/配当利回り\s*\(会社予想\)[^0-9-]{0,40}?([0-9][0-9,]*(?:\.[0-9]+)?)\s*%/);
+    var feps = after(/EPS\s*\(会社予想\)[^0-9-]{0,40}?(-?[0-9][0-9,]*(?:\.[0-9]+)?)/);
+    var minBuy = after(/最低購入代金[^0-9]*?([0-9][0-9,]*)/), unit = after(/単元株数[^0-9]*?([0-9][0-9,]*)/);
+    var exact = minBuy > 0 && unit > 0;
+    var price = exact ? minBuy / unit : fdiv > 0 && yld > 0 ? fdiv / (yld / 100) : NaN;
+    if (!(fdiv > 0) && !(price > 0)) return null;
+    return { price: price > 0 ? Math.round(price * 10) / 10 : NaN, fdiv: fdiv, feps: feps };
+  }
+  function yahooQuoteUrl(code) {
+    return "https://finance.yahoo.co.jp/quote/" + encodeURIComponent(code) + ".T#:~:text=" + encodeURIComponent("参考指標") + "," + encodeURIComponent("単元株数");
+  }
+  function isoDay(d) { return String(d || "").slice(0, 10).replace(/\//g, "-"); }
+  // チェックシートと共有する株価・会社予想(irPrices)にも残す
+  function storeQuote(code, q) {
+    var all = {};
+    try { all = JSON.parse(localStorage.getItem("irPrices") || "{}") || {}; } catch (e) {}
+    var cur = all[code] || {}, today = isoDay(todayStamp());
+    if (q.price > 0) { cur.p = q.price; cur.d = today; }
+    if (q.fdiv > 0) cur.f = q.fdiv;
+    if (q.feps != null && !isNaN(q.feps)) cur.e = q.feps;
+    all[code] = cur;
+    try { localStorage.setItem("irPrices", JSON.stringify(all)); } catch (e) {}
+  }
+  // 株価と会社予想の1株配当を保有銘柄に入れる。配当/株は「今期の予想」として扱う(前年配当は内蔵の実績のまま)
+  function applyQuoteTo(h, q, stamp) {
+    if (q.price > 0) { h.price = q.price; h.priceDate = stamp; }
+    if (q.fdiv > 0) { h.div = q.fdiv; h.fdivDate = stamp; }
+    h.quoteDate = isoDay(stamp);
+  }
+  // チェックシートで新しく取り込んだ株価・予想配当を、同じコードの保有銘柄に反映する(取り込み1回につき1度だけ)
+  function takeQuotesFromCheck() {
+    var all;
+    try { all = JSON.parse(localStorage.getItem("irPrices") || "{}") || {}; } catch (e) { return; }
+    var took = [];
+    state.holdings.forEach(function (h) {
+      if (isUS(h)) return;
+      var code = String(h.code || "").trim().toUpperCase(), q = all[code];
+      if (!q || !q.d || !(q.p > 0 || q.f > 0)) return;
+      if (h.quoteDate && isoDay(q.d) <= isoDay(h.quoteDate)) return;
+      if (h.priceDate && isoDay(q.d) < isoDay(h.priceDate)) return;  // 明細で後から入れた株価の方が新しい
+      applyQuoteTo(h, { price: q.p, fdiv: q.f }, q.d.replace(/-/g, "/"));
+      took.push(h.name || code);
+    });
+    if (took.length) {
+      save();
+      showToast("チェックシートの株価・予想配当を入れました: " + took.slice(0, 3).join("・") + (took.length > 3 ? " ほか" + (took.length - 3) + "件" : ""));
+    }
+  }
+
   function fillFromBuiltin() {
     var filled = [];
     state.holdings.forEach(function (h) {
@@ -7176,6 +7275,7 @@
     setTab(document.body.dataset.tab || "home", true);
     fixUnknownSectors();
     if (!state.isSample) fillFromBuiltin();
+    if (!state.isSample) takeQuotesFromCheck();
     if (!state.isSample) applyHoldingSplits();
     bindGoalInputs();
     renderTable();
