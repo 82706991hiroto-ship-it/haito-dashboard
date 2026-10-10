@@ -216,6 +216,35 @@
   .fq-actions a.btn.primary { display: inline-flex; align-items: center; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; }
   .fq-help { margin: 8px 0 0 !important; font-size: 11.5px; color: var(--muted); }
   .fq-msg { margin: 6px 0 0 !important; color: var(--crit); font-size: 12px; }
+  .risk-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+  .risk-badge.lv2 { background: var(--crit-soft); color: var(--crit); }
+  .risk-badge.lv1 { background: var(--warn-soft); color: var(--warn); }
+  .detail-risk { font-size: 13px; margin: 6px 0 10px; padding: 9px 12px; border-radius: 10px; background: var(--field); }
+  .detail-risk ul { margin: 4px 0 0; padding-left: 18px; }
+  .risk-sum { font-size: 13px; color: var(--text-2); margin: 0 0 8px; }
+  .risk-sum b.is-down { color: var(--crit); }
+  .risk-list { list-style: none; margin: 0 0 8px; padding: 0; }
+  .risk-list li { padding: 9px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .risk-head { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .risk-why { font-size: 12.5px; color: var(--text); margin-top: 3px; line-height: 1.5; }
+  .risk-good { font-size: 11.5px; color: var(--text-2); margin-top: 2px; }
+  .nb-lead { font-size: 13px; color: var(--text-2); margin: 0 0 8px; }
+  .nb-list { list-style: none; margin: 0 0 8px; padding: 0; }
+  .nb-list li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .nb-head { display: flex; align-items: center; gap: 8px; font-size: 14.5px; }
+  .nb-rank { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 800; flex: none; }
+  .nb-kind { font-size: 11px; color: var(--text-2); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; }
+  .nb-why { font-size: 12.5px; margin: 4px 0 0 30px; line-height: 1.55; }
+  .nb-buy { font-size: 12px; color: var(--text-2); margin: 3px 0 0 30px; }
+  .nb-skip { font-size: 12px; color: var(--text-2); margin-bottom: 8px; }
+  .nb-skip summary { cursor: pointer; }
+  .season-list { list-style: none; margin: 0; padding: 0; }
+  .season-list li { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .season-list li:last-child { border-bottom: none; }
+  .se-ico { flex: none; width: 22px; text-align: center; }
+  .se-sub { font-size: 12px; color: var(--text-2); margin-top: 2px; line-height: 1.55; }
+  .se-up { color: var(--accent); } .se-down { color: var(--crit); }
+  .season-list .btn { margin-top: 6px; padding: 6px 12px; font-size: 12.5px; }
   .hold-sort { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12.5px; color: var(--text-2); }
   .hold-sort select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
@@ -1128,6 +1157,11 @@
     <div class="hero-actions"><button class="btn" id="reportBtn" type="button">月の配当レポートを画像にする</button></div>
   </section>
 
+  <section class="panel season-panel" id="seasonPanel" data-view="home" hidden>
+    <h2>今月の見直し <span class="hint">決算・予想配当・増配と減配</span></h2>
+    <div id="seasonBody"></div>
+  </section>
+
   <section class="panel" id="goalsPanel" data-view="home">
     <h2><span class="chap">一</span>目標設定 <span class="hint">分散ガイドラインもここで調整できます</span></h2>
     <div class="grid-inputs">
@@ -1216,6 +1250,7 @@
     <dialog class="months-dialog detail-dialog" id="detailDialog">
       <h3 id="detailTitle">銘柄の詳細</h3>
       <p class="hint" id="detailStreak"></p>
+      <div class="detail-risk" id="detailRisk" hidden></div>
       <p class="hint"><a id="detailIrLink" target="_blank" rel="noopener noreferrer" hidden>もっと長い配当の推移をIR BANKで見る</a></p>
       <label class="field">現在株価(円)
         <input type="number" id="detailPrice" min="0" step="any" inputmode="decimal" placeholder="入れると現在利回りが出ます">
@@ -1416,6 +1451,11 @@
     </details>
   </section>
 
+  <section class="panel" id="nextBuyPanel" data-view="extras">
+    <h2>次に買うなら <span class="hint">分散の上限・利回り・増配・減配リスクから</span></h2>
+    <div id="nextBuyBody"></div>
+  </section>
+
   <section class="panel" id="watchPanel" data-view="extras">
     <h2>買い増し候補 <span class="hint">目標利回りに近い順</span></h2>
     <div class="watch-add">
@@ -1444,6 +1484,10 @@
     <ul class="perk-list" id="perkComing"></ul>
   </section>
 
+  <section class="panel" id="riskPanel" data-view="analysis">
+    <h2>減配リスクの点検 <span class="hint">有価証券報告書の数字から自動で</span></h2>
+    <div id="riskBody"></div>
+  </section>
   <section id="dashboardSection"></section>
 
   <div class="install-card is-quiet" id="installTip" data-view="home" hidden></div>
@@ -1747,9 +1791,10 @@
   var FIN = {}, finAsked = {};
   function loadFinForHoldings() {
     var need = {};
-    state.holdings.forEach(function (h) {
+    // PER・減配リスク・次に買うなら に使うので、株価の有無に関係なく国内株は全部読む
+    state.holdings.concat(state.watch || []).forEach(function (h) {
       var c = String(h.code || "").trim().toUpperCase();
-      if (!isUS(h) && /^[1-9][0-9A-Z]{3}$/.test(c) && num(h.price) > 0 && !finAsked[c[0]]) need[c[0]] = true;
+      if (!isUS(h) && /^[1-9][0-9A-Z]{3}$/.test(c) && !finAsked[c[0]]) need[c[0]] = true;
     });
     var ds = Object.keys(need);
     if (!ds.length) return;
@@ -1757,7 +1802,7 @@
     Promise.all(ds.map(function (d) {
       return fetch("../ir-check/fin/" + d + ".json").then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) { if (j) FIN[d] = j; }, function () {});
-    })).then(function () { renderTable(); });
+    })).then(function () { renderTable(); renderDecisionPanels(); });
   }
   function perOf(h) {
     var c = String(h.code || "").trim().toUpperCase(), p = num(h.price);
@@ -1870,6 +1915,7 @@
     } else {
       due = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
     }
+    if (due && h.divCheckedAt && new Date(h.divCheckedAt + "T00:00:00") >= due) return { kind: "ok" };  // 「変更なし」で確かめた
     return due && got < due ? { kind: "stale" } : { kind: "ok" };
   }
   // 更新が要る銘柄(同じコードは1つに)。配当の多い順
@@ -1948,6 +1994,263 @@
       if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then(fqTake, function () { fq.msg = "貼り付けが許可されませんでした。もう一度押して「ペースト」を選んでください。"; renderForecastBox(); });
     }
   });
+
+  // ---------- 減配リスクの点検 ----------
+  // チェックシートの有報データ(fin)と内蔵の1株配当から、配当が減りそうな兆しを拾う。
+  // 2: 減配リスクが高い / 1: 要注意 / 0: 目立った兆しなし。金融業は自己資本比率・営業CFで判断しない
+  var FIN_SECTORS = ["銀行業", "保険業", "証券、商品先物取引業", "その他金融業"];
+  function finRec(code) {
+    code = String(code || "").trim().toUpperCase();
+    return FIN[code[0]] && FIN[code[0]][code] || null;
+  }
+  function pctTxt(x) { return Math.round(x * 100) + "%"; }
+  function dividendRisk(code, fdiv) {
+    var rec = finRec(code);
+    if (!rec) return null;
+    var items = [], good = [];
+    function add(lv, t) { items.push({ lv: lv, t: t }); }
+    var s = dividendsFor(code) || [], last = s[0] > 0 ? s[0] : (rec.div || [])[(rec.div || []).length - 1];
+    var eps = rec.eps || [], e = eps[eps.length - 1];
+    var fin = FIN_SECTORS.indexOf(rec.sec) !== -1;
+    if (fdiv > 0 && last > 0 && fdiv < last * 0.97) add(2, "会社予想が減配(前期" + fmtPerShare(last) + "→予想" + fmtPerShare(fdiv) + ")");
+    var d = fdiv > 0 ? fdiv : last;
+    if (e != null) {
+      // EPSは割り戻し済みの値。1株配当も同じ基準(内蔵データ)で比べる
+      if (!(e > 0)) add(2, "前期は赤字(1株利益 " + e + "円)");
+      else if (d > 0 && d / e > 1) add(2, "配当が利益を上回っている(配当性向 " + pctTxt(d / e) + ")");
+      else if (d > 0 && d / e > 0.8) add(1, "配当性向が高い(" + pctTxt(d / e) + ")");
+      if (eps.length >= 3 && eps[eps.length - 1] < eps[eps.length - 2] && eps[eps.length - 2] < eps[eps.length - 3]) add(1, "1株利益が2期続けて減少");
+    }
+    if (!fin) {
+      var ocf = rec.ocf || [];
+      if (ocf.length && ocf[ocf.length - 1] < 0) add(1, "営業キャッシュフローがマイナス");
+      var eq = rec.eq || [];
+      if (eq.length && eq[eq.length - 1] < 0.2) add(1, "自己資本比率が低い(" + pctTxt(eq[eq.length - 1]) + ")");
+    }
+    // 減配の履歴(内蔵の1株配当・新しい順)
+    var cuts = 0, recentCut = false;
+    for (var i = 0; i + 1 < Math.min(s.length, 11); i++) {
+      if (s[i] < s[i + 1] * 0.97) { cuts++; if (i < 3) recentCut = true; }
+    }
+    if (recentCut) add(1, "直近3期以内に減配あり");
+    else if (cuts) good.push("減配は過去10期で" + cuts + "回(直近3期はなし)");
+    (rec.pol || []).forEach(function (pol) { good.push(pol + "の方針"); });
+    var level = items.reduce(function (m, x) { return Math.max(m, x.lv); }, 0);
+    items.sort(function (a, b) { return b.lv - a.lv; });
+    return { level: level, items: items, good: good };
+  }
+  function holdingRisk(h) {
+    if (isUS(h)) return null;
+    var st = forecastStatus(h);
+    return dividendRisk(h.code, st && st.kind === "ok" ? num(h.div) : 0);
+  }
+  function riskBadge(r) {
+    if (!r || !r.level) return "";
+    return ' ・ <span class="risk-badge lv' + r.level + '">' + (r.level === 2 ? "減配リスク高" : "要注意") + '</span>';
+  }
+  function renderRiskPanel() {
+    var body = document.getElementById("riskBody");
+    if (!body) return;
+    var seen = {}, rows = [], noData = 0, jp = 0;
+    state.holdings.forEach(function (h) {
+      var code = String(h.code || "").trim().toUpperCase();
+      if (isUS(h) || !code || seen[code] || h.excluded) return;
+      seen[code] = true; jp++;
+      var r = holdingRisk(h);
+      if (!r) { noData++; return; }
+      rows.push({ h: h, r: r, div: computeRow(h).divPre });
+    });
+    if (!jp) { body.innerHTML = '<p class="empty-note" style="position:static">国内株を登録すると点検します。</p>'; return; }
+    var bad = rows.filter(function (x) { return x.r.level > 0; }).sort(function (a, b) { return b.r.level - a.r.level || b.div - a.div; });
+    var hi = bad.filter(function (x) { return x.r.level === 2; }).length;
+    var html = '<p class="risk-sum">' + rows.length + '銘柄を点検: 減配リスク高 <b class="' + (hi ? "is-down" : "") + '">' + hi + '</b> ・ 要注意 <b>' + (bad.length - hi) + '</b> ・ 目立った兆しなし <b>' + (rows.length - bad.length) + '</b>' +
+      (noData ? ' ・ データなし ' + noData : "") + '</p>';
+    if (bad.length) {
+      html += '<ul class="risk-list">' + bad.map(function (x) {
+        return '<li data-hid="' + x.h.id + '"><div class="risk-head"><b>' + escapeHtml((x.h.code ? x.h.code + " " : "") + shortStockName(x.h.name || "")) + '</b>' +
+          '<span class="risk-badge lv' + x.r.level + '">' + (x.r.level === 2 ? "減配リスク高" : "要注意") + '</span></div>' +
+          '<div class="risk-why">' + x.r.items.map(function (it) { return escapeHtml(it.t); }).join(" / ") + '</div>' +
+          (x.r.good.length ? '<div class="risk-good">' + escapeHtml(x.r.good.join("・")) + '</div>' : "") + '</li>';
+      }).join("") + '</ul>';
+    } else {
+      html += '<p class="calendar-note">目立った兆しのある銘柄はありません。</p>';
+    }
+    html += '<p class="calendar-note">前期の有価証券報告書の数字で見ています(配当性向80%超・赤字・2期続けて減益・営業CFマイナス・自己資本比率20%未満・直近の減配)。予想配当を取り込んだ銘柄は、会社予想の減配も見ます。</p>';
+    body.innerHTML = html;
+  }
+  document.getElementById("riskBody").addEventListener("click", function (e) {
+    var li = e.target.closest("li[data-hid]");
+    if (li) openDetailDialog(state.holdings.filter(function (h) { return h.id === li.dataset.hid; })[0]);
+  });
+
+  // ---------- 次に買うなら ----------
+  // 毎月の積立額で、保有銘柄の買い増しと買い増し候補から1〜3銘柄を選ぶ。
+  // 分散の上限を超えている銘柄・業種と、減配リスクが高い銘柄は外し、利回り・増配・余裕・方針で点数を付ける
+  function cagr(s, n) {
+    if (!s || s.length <= n || !(s[n] > 0) || !(s[0] > 0)) return null;
+    return Math.pow(s[0] / s[n], 1 / n) - 1;
+  }
+  function nextBuyList() {
+    var budget = num(state.sim.monthlyInvest) || 30000, g = state.guides || {}, target = goalYieldOf(state.goals);
+    var agg = aggregate(), sensNow = guideShares(agg, "", "").sensPct, sensTarget = num(g.sensitiveTarget) || 50;
+    var codes = {}, out = [], skipped = [];
+    state.holdings.forEach(function (h) { var c = String(h.code || "").trim().toUpperCase(); if (!isUS(h) && /^[1-9][0-9A-Z]{3}$/.test(c)) codes[c] = "held"; });
+    (state.watch || []).forEach(function (w) { if (w.code && !codes[w.code] && /^[1-9][0-9A-Z]{3}$/.test(w.code)) codes[w.code] = "watch"; });
+    Object.keys(codes).forEach(function (code) {
+      var held = heldOf(code), w = (state.watch || []).filter(function (x) { return x.code === code; })[0];
+      var v = watchView(w || { code: code, id: "__nb_" + code });
+      var name = held[0] && held[0].name ? shortStockName(held[0].name) : v.name;
+      if (held.some(function (h) { return h.excluded; })) return;
+      if (!(v.price > 0) || !(v.div > 0)) { skipped.push(name + "(株価か配当が未入力)"); return; }
+      var sector = sectorFor(code, held[0] ? held[0].sector : v.sector);
+      var sh = guideShares(agg, code, sector);
+      var fst = held[0] ? forecastStatus(held[0]) : null;
+      var risk = dividendRisk(code, held[0] && fst && fst.kind === "ok" ? num(held[0].div) : num(v.w.fdiv));
+      if (risk && risk.level === 2) { skipped.push(name + "(減配リスク高)"); return; }
+      if (num(g.maxStockPct) > 0 && sh.stockPct >= num(g.maxStockPct)) { skipped.push(name + "(銘柄の上限" + g.maxStockPct + "%)"); return; }
+      if (num(g.maxSectorPct) > 0 && sh.sectorPct >= num(g.maxSectorPct)) { skipped.push(name + "(" + sector + "が上限" + g.maxSectorPct + "%)"); return; }
+      var y = v.div / v.price * 100, gr = cagr(dividendsFor(code), 5);
+      var cls = sectorClassOf(sector), rec = finRec(code);
+      var score = Math.min(y, 7) / Math.max(target, 1) * 40
+        + (gr === null ? 0 : Math.max(-5, Math.min(10, gr * 100)) * 2)
+        + (num(g.maxStockPct) > 0 ? (1 - sh.stockPct / num(g.maxStockPct)) * 15 : 0)
+        + (num(g.maxSectorPct) > 0 ? (1 - sh.sectorPct / num(g.maxSectorPct)) * 15 : 0)
+        - (risk && risk.level === 1 ? 10 : 0)
+        + (rec && (rec.pol || []).length ? 5 : 0)
+        + ((sensNow > sensTarget + 5 && cls === "ディフェンシブ") || (sensNow < sensTarget - 5 && cls === "景気敏感") ? 6 : 0);
+      var why = ["利回り" + y.toFixed(2) + "%" + (fst && fst.kind === "ok" || v.divFromForecast ? "(予想)" : "(実績)")];
+      if (gr !== null) why.push("5年の増配率 年" + (gr >= 0 ? "+" : "") + (gr * 100).toFixed(1) + "%");
+      if (rec && (rec.pol || []).length) why.push(rec.pol.join("・"));
+      why.push(sector + " " + sh.sectorPct.toFixed(1) + "%(上限" + (g.maxSectorPct || "-") + "%)");
+      if (sensNow > sensTarget + 5 && cls === "ディフェンシブ") why.push("景気敏感に寄っているのを和らげる");
+      if (sensNow < sensTarget - 5 && cls === "景気敏感") why.push("ディフェンシブに寄っているのを和らげる");
+      if (risk && risk.level === 1) why.push("要注意: " + risk.items[0].t);
+      var n = Math.floor(budget / v.price);
+      out.push({ code: code, name: name, kind: codes[code], score: score, why: why, price: v.price, div: v.div, n: n,
+                 addDiv: n * v.div, unitCost: v.price * 100 });
+    });
+    out.sort(function (a, b) { return b.score - a.score; });
+    return { budget: budget, list: out, skipped: skipped };
+  }
+  function renderNextBuy() {
+    var body = document.getElementById("nextBuyBody");
+    if (!body) return;
+    var r = nextBuyList();
+    if (!r.list.length) {
+      body.innerHTML = '<p class="calendar-note">提案できる銘柄がありません。保有銘柄か買い増し候補に、株価と配当が入っている国内株が必要です。' +
+        (r.skipped.length ? '(外した銘柄: ' + escapeHtml(r.skipped.join("、")) + ')' : "") + '</p>';
+      return;
+    }
+    var top = r.list.slice(0, 3);
+    body.innerHTML = '<p class="nb-lead">毎月 <b>' + fmtYen(r.budget) + '</b> を1銘柄に入れるなら(積立額は「将来見通し」で変えられます)</p>' +
+      '<ol class="nb-list">' + top.map(function (x, i) {
+        return '<li><div class="nb-head"><span class="nb-rank">' + (i + 1) + '</span><b>' + escapeHtml(x.code + " " + x.name) + '</b>' +
+          '<span class="nb-kind">' + (x.kind === "held" ? "買い増し" : "候補") + '</span></div>' +
+          '<div class="nb-why">' + escapeHtml(x.why.join(" ・ ")) + '</div>' +
+          '<div class="nb-buy">' + (x.n >= 1 ? "単元未満で約" + x.n + "株(年 +" + fmtYen(x.addDiv) + "の配当)" : "1株 " + fmtYen(x.price) + "で予算を超えます") +
+          ' ・ 100株なら ' + fmtYen(x.unitCost) + '</div></li>';
+      }).join("") + '</ol>' +
+      (r.skipped.length ? '<details class="nb-skip"><summary>外した銘柄(' + r.skipped.length + ')</summary><p>' + escapeHtml(r.skipped.join("、")) + '</p></details>' : "") +
+      '<p class="calendar-note">利回り・5年の増配率・分散の上限までの余裕・配当方針・景気敏感の比率から点数を付けた目安です。株価と予想配当が新しいほど正確になります。売買の判断はご自身で。</p>';
+  }
+
+  // ---------- 今月の見直し(ホーム) ----------
+  function upcomingEarnings(days) {
+    var today = todayIso(), until = isoOf(new Date(Date.now() + days * 86400000)), out = [], seen = {};
+    state.holdings.forEach(function (h) {
+      var code = String(h.code || "").trim().toUpperCase();
+      if (isUS(h) || !code || seen[code] || h.excluded) return;
+      var hit = null;
+      ((state.earnings && state.earnings[h.code]) || []).forEach(function (e) {
+        if (e.d >= today && e.d <= until && (!hit || e.d < hit.date)) hit = { date: e.d, exact: true, kind: e.t };
+      });
+      if (!hit) {
+        var months = monthsOf(h).slice();
+        if (months.length === 1) months.push(((months[0] + 5) % 12) + 1);
+        var y0 = parseInt(today.slice(0, 4), 10);
+        months.forEach(function (m) {
+          [y0 - 1, y0, y0 + 1].forEach(function (y) {
+            var st = new Date(y, m, 0); st.setDate(st.getDate() + EARNINGS_SEASON_DAYS);
+            var due = new Date(y, m, 0); due.setDate(due.getDate() + EARNINGS_DUE_DAYS);
+            var a = isoOf(st), b = isoOf(due);
+            // 発表の時期(締めの30〜45日後)が、今日から days 日の間にかかるもの
+            if (b >= today && a <= until && (!hit || a < hit.date)) hit = { date: a, due: b, exact: false };
+          });
+        });
+      }
+      if (hit) { seen[code] = true; out.push({ h: h, c: hit }); }
+    });
+    return out.sort(function (a, b) { return a.c.date < b.c.date ? -1 : 1; });
+  }
+  function renderSeasonPanel() {
+    var panel = document.getElementById("seasonPanel"), body = document.getElementById("seasonBody");
+    if (!panel || !body) return;
+    if (state.isSample || !state.holdings.length) { panel.hidden = true; return; }
+    var parts = [];
+    var todo = forecastTodo();
+    if (todo.length) {
+      parts.push('<li><span class="se-ico">📋</span><div><b>予想配当の取り込み・見直し ' + todo.length + '銘柄</b><div class="se-sub">' +
+        escapeHtml(todo.slice(0, 4).map(function (x) { return x.name; }).join("、")) + (todo.length > 4 ? " ほか" : "") +
+        '</div><button type="button" class="btn" data-se="fq">保有銘柄で取り込む</button></div></li>');
+    }
+    var up = upcomingEarnings(21);
+    if (up.length) {
+      // 同じ時期の銘柄はまとめて1行に(「10/30〜11/14ごろ: 三洋貿易、三菱商事…」)
+      var groups = {}, order = [];
+      up.forEach(function (x) {
+        var k = x.c.exact ? mdOf(x.c.date) + "(予定日)" : mdOf(x.c.date) + "〜" + mdOf(x.c.due) + "ごろ";
+        if (!groups[k]) { groups[k] = []; order.push(k); }
+        groups[k].push(shortStockName(x.h.name || x.h.code));
+      });
+      parts.push('<li><span class="se-ico">📅</span><div><b>3週間以内に決算発表がありそう ' + up.length + '銘柄</b>' +
+        order.map(function (k) {
+          var ns = groups[k];
+          return '<div class="se-sub"><b>' + escapeHtml(k) + '</b> ' + escapeHtml(ns.slice(0, 5).join("、") + (ns.length > 5 ? " ほか" + (ns.length - 5) + "銘柄" : "")) + '</div>';
+        }).join("") + '<div class="se-sub">発表のあとに予想配当を取り込み直すと、増配・減配が反映されます。</div></div></li>');
+    }
+    var since = isoOf(new Date(Date.now() - 60 * 86400000));
+    var log = (Array.isArray(state.divLog) ? state.divLog : []).filter(function (e) { return e.date >= since && num(e.from) > 0 && num(e.to) > 0 && num(e.from) !== num(e.to); });
+    if (log.length) {
+      log = log.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+      parts.push('<li><span class="se-ico">📈</span><div><b>最近の配当の変化(60日)</b><div class="se-sub">' +
+        log.slice(0, 6).map(function (e) {
+          var up = num(e.to) > num(e.from);
+          return '<span class="' + (up ? "se-up" : "se-down") + '">' + escapeHtml(shortStockName(e.name || e.code)) + " " + (up ? "増配" : "減配") + " " +
+            fmtPerShare(num(e.from)) + "→" + fmtPerShare(num(e.to)) + '</span>';
+        }).join("、") + '</div></div></li>');
+    }
+    var hi = [], seen = {};
+    state.holdings.forEach(function (h) {
+      var c = String(h.code || "").trim().toUpperCase();
+      if (seen[c]) return; seen[c] = true;
+      var r = holdingRisk(h);
+      if (r && r.level === 2) hi.push(shortStockName(h.name || c));
+    });
+    if (hi.length) {
+      parts.push('<li><span class="se-ico">⚠</span><div><b>減配リスクが高い ' + hi.length + '銘柄</b><div class="se-sub">' + escapeHtml(hi.join("、")) +
+        '</div><button type="button" class="btn" data-se="risk">理由を見る</button></div></li>');
+    }
+    panel.hidden = !parts.length;
+    body.innerHTML = '<ul class="season-list">' + parts.join("") + '</ul>';
+  }
+  document.getElementById("seasonBody").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-se]");
+    if (!b) return;
+    if (b.dataset.se === "fq") {
+      setTab("holdings");
+      var box = document.getElementById("fqBox");
+      if (box) setTimeout(function () { box.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80);
+    } else if (b.dataset.se === "risk") {
+      setTab("analysis");
+      var rp = document.getElementById("riskPanel");
+      if (rp) setTimeout(function () { rp.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80);
+    }
+  });
+  function renderDecisionPanels() {
+    renderRiskPanel();
+    renderNextBuy();
+    renderSeasonPanel();
+  }
 
   function renderTable() {
     renderFxBar();
@@ -2431,6 +2734,11 @@
     var irCode = String(h.code || "").trim();
     irLink.hidden = !CODE_INFO_MAP[irCode];
     if (!irLink.hidden) irLink.href = "https://irbank.net/" + encodeURIComponent(irCode) + "/dividend";
+    var dr = holdingRisk(h), drEl = document.getElementById("detailRisk");
+    drEl.hidden = !dr;
+    if (dr) drEl.innerHTML = '<b>減配リスク: ' + (dr.level === 2 ? '<span class="risk-badge lv2">高い</span>' : dr.level === 1 ? '<span class="risk-badge lv1">要注意</span>' : "目立った兆しなし") + '</b>' +
+      (dr.items.length ? '<ul>' + dr.items.map(function (it) { return "<li>" + escapeHtml(it.t) + "</li>"; }).join("") + '</ul>' : "") +
+      (dr.good.length ? '<p class="risk-good">' + escapeHtml(dr.good.join("・")) + '</p>' : "");
     document.getElementById("detailStreak").textContent = dstk
       ? dstk.text + " ・ 1株配当 " + dser.slice().reverse().map(function (v) { return fmtPerShare(v); }).join(" → ")
       : "";
@@ -2637,7 +2945,7 @@
         var cls = g > 0 ? "up" : g < 0 ? "down" : "";
         var txt = g > 0 ? "増配 +" + Math.abs(g).toFixed(1) + "%" : g < 0 ? "減配 −" + Math.abs(g).toFixed(1) + "%" : "据え置き";
         return ' ・ <span class="sum-growth ' + cls + '">' + txt + '</span>';
-      })() +
+      })() + riskBadge(holdingRisk(h)) +
       // 損益は開いたときの「評価額・損益」に。一覧には配当が育っているか(連続増配)を出す
       (function () {
         var st = isUS(h) ? null : dividendStreak(String(h.code || "").trim().toUpperCase());
@@ -4241,6 +4549,7 @@
       var c = reviewCheckpoint(h, today);
       if (!c) return null;
       if (h.divCheckedAt && h.divCheckedAt >= c.date) return null;
+      if (h.fdivDate && isoDay(h.fdivDate) >= c.date) return null;  // 決算のあとに会社予想を取り込み済み
       // 決算より後に登録した銘柄は、登録時に確かめた値として扱う
       if (h.addedAt && h.addedAt >= c.date) return null;
       return { h: h, c: c };
@@ -6997,6 +7306,7 @@
     renderChangeSummary(magg);
     renderYields(magg);
     renderSimulation(agg);
+    renderDecisionPanels();
     renderBackupStatus();
 
     // goal vs actual
