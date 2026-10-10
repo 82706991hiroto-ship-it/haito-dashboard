@@ -354,6 +354,13 @@
   .gbar-row .val.is-down { color: var(--crit); }
   .gbar-row.is-selected { background: var(--field); }
   .gbar-head { font-size: 11.5px; color: var(--muted); margin: 14px 0 4px; }
+  .gbar-sum { font-size: 13px; color: var(--text-2); margin: 0 0 6px; }
+  .gbar-sum b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .gbar-sum b.is-down { color: var(--crit); }
+  .gbar-more { display: block; width: 100%; margin: 6px 0 0; padding: 8px; border: 1px dashed var(--line); border-radius: 8px;
+    background: none; color: var(--accent); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .gbar-unknown { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .gbar-unknown summary { cursor: pointer; }
   @media (prefers-reduced-motion: no-preference) {
     .gbar-row .bar { animation: gbarIn .55s cubic-bezier(.2,.7,.2,1) both; transform-origin: var(--o, left); }
     @keyframes gbarIn { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -4692,6 +4699,7 @@
   }
 
   // 増配率の順位: 銘柄ごと(同じコードは口座をまとめる)に、増配は右へ青、減配は左へ赤の棒
+  var gbarAll = false;
   function renderGrowthBars(container, agg) {
     container.innerHTML = "";
     container.classList.add("is-bars");
@@ -4737,19 +4745,50 @@
         '<span class="val' + (g !== null && g < 0 ? " is-down" : "") + '">' + COLOR_MODES.growth.text(g) + '</span>';
       return li;
     }
-    var ul = document.createElement("ul");
-    ul.className = "gbar-list";
-    known.forEach(function (x, i) { ul.appendChild(rowEl(x, i)); });
-    container.appendChild(ul);
+    var up = known.filter(function (x) { return x.g > 0; }), flat = known.filter(function (x) { return x.g === 0; }),
+        down = known.filter(function (x) { return x.g < 0; });
+    var sum = document.createElement("p");
+    sum.className = "gbar-sum";
+    sum.innerHTML = '増配 <b>' + up.length + '</b> ・ 据え置き <b>' + flat.length + '</b> ・ 減配 <b class="' + (down.length ? "is-down" : "") + '">' + down.length + '</b>' +
+      (unknown.length ? ' ・ 不明 ' + unknown.length : "");
+    container.appendChild(sum);
+    function list(xs, start) {
+      var ul = document.createElement("ul");
+      ul.className = "gbar-list";
+      xs.forEach(function (x, i) { ul.appendChild(rowEl(x, (start || 0) + i)); });
+      return ul;
+    }
+    // 銘柄が多いときは、増配の上位5と減配(見落としたくない)だけを出し、残りはたたむ
+    var TOP = 5, many = known.length > 10;
+    if (!many || gbarAll) {
+      container.appendChild(list(known));
+    } else {
+      container.appendChild(list(up.slice(0, TOP)));
+      var rest = known.length - Math.min(TOP, up.length) - down.length;
+      var more = document.createElement("button");
+      more.type = "button"; more.className = "gbar-more";
+      more.textContent = "すべて表示(あと" + rest + "銘柄)";
+      more.addEventListener("click", function (e) { e.stopPropagation(); gbarAll = true; renderGrowthBars(container, agg); });
+      container.appendChild(more);
+      if (down.length) {
+        var dh = document.createElement("p"); dh.className = "gbar-head"; dh.textContent = "減配した銘柄";
+        container.appendChild(dh);
+        container.appendChild(list(down, TOP));
+      }
+    }
+    if (many && gbarAll) {
+      var less = document.createElement("button");
+      less.type = "button"; less.className = "gbar-more";
+      less.textContent = "たたむ";
+      less.addEventListener("click", function (e) { e.stopPropagation(); gbarAll = false; renderGrowthBars(container, agg); });
+      container.appendChild(less);
+    }
     if (unknown.length) {
-      var h = document.createElement("p");
-      h.className = "gbar-head";
-      h.textContent = "前年の配当が分からない銘柄(" + unknown.length + ")";
-      container.appendChild(h);
-      var ul2 = document.createElement("ul");
-      ul2.className = "gbar-list";
-      unknown.forEach(function (x, i) { ul2.appendChild(rowEl(x, i)); });
-      container.appendChild(ul2);
+      var det = document.createElement("details");
+      det.className = "gbar-unknown";
+      det.innerHTML = "<summary>前年の配当が分からない銘柄(" + unknown.length + ")</summary>";
+      det.appendChild(list(unknown));
+      container.appendChild(det);
     }
   }
 
