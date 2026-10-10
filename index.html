@@ -2953,8 +2953,29 @@
     return parseBlockFormat(text);
   }
 
+  // 前回と今回の取り込みで、株数がちょうど k 倍(2〜10)・取得単価が 1/k なら k を返す
+  function splitRatioBetween(old, r) {
+    var s0 = num(old.shares), c0 = num(old.cost), s1 = num(r.shares), c1 = num(r.cost);
+    if (!(s0 > 0 && c0 > 0 && s1 > s0 && c1 > 0)) return 0;
+    var k = Math.round(s1 / s0);
+    if (k < 2 || k > 10 || Math.abs(s1 / s0 / k - 1) > 0.03 || Math.abs((c0 / c1) / k - 1) > 0.05) return 0;
+    return k;
+  }
+  // 分割に気づいたら、1株配当・前年配当を分割後の値にする。内蔵データが分割済み(SPLIT_MAP)なら配当はそちらに任せる
+  function fixDivForSplit(h, k, notes) {
+    var code = String(h.code || "").trim().toUpperCase();
+    h.splitDetected = { k: k, at: todayIso() };
+    notes.push((h.name || code) + "(1株→" + k + "株)");
+    var yearAgo = (Number(todayIso().slice(0, 4)) - 1) + todayIso().slice(4);
+    var known = (SPLIT_MAP[code] || []).some(function (sp) { return Number(sp[1]) === k && sp[0] > yearAgo; });
+    if (known) return;
+    var s = dividendsFor(code);
+    if (num(h.div) > 0 && s && s[0] > 0 && Math.abs(num(h.div) / s[0] - 1) < 0.15) h.div = round2(num(h.div) / k);
+    if (num(h.prevDiv) > 0) h.prevDiv = round2(num(h.prevDiv) / k);
+    else if (s && s[0] > 0) h.prevDiv = round2(s[0] / k);  // 内蔵の前期実績(分割前)を分割後に直して比べる
+  }
   function mergePastedResults(results) {
-    var added = 0, updated = 0;
+    var added = 0, updated = 0, splitFound = [];
     results.forEach(function (r) {
       var existing = state.holdings.find(function (h) { return h.code === r.code && h.account === r.account; });
       if (r.market === "us") {
@@ -2975,6 +2996,8 @@
         return;
       }
       if (existing) {
+        // 株数がちょうど k 倍で取得単価が 1/k なら株式分割(内蔵データにまだ無い分割でも気づけるように)
+        var kSplit = splitRatioBetween(existing, r);
         existing.name = r.name; existing.sector = r.sector;
         // 配当が分からない取り込み元(配当の列も内蔵データも無い)では、入力済みの配当を消さない
         if (r.div !== "" && r.div != null) { recordDivChange(existing, existing.div, r.div); existing.div = r.div; }
@@ -2983,6 +3006,7 @@
         if (r.price !== undefined && r.price !== "") { existing.price = r.price; existing.priceDate = r.priceDate; }
         // 前年配当を持たない取り込み元(貼り付け・CSV)では既存の入力値を消さない
         if (r.prevDiv !== undefined) existing.prevDiv = r.prevDiv;
+        if (kSplit) fixDivForSplit(existing, kSplit, splitFound);
         updated++;
       } else {
         state.holdings.push({
@@ -2995,6 +3019,7 @@
         added++;
       }
     });
+    if (splitFound.length) showToast("株式分割を見つけました: " + splitFound.join("、") + "。1株配当と前年配当を分割後の値に直しました。");
     return { added: added, updated: updated };
   }
 

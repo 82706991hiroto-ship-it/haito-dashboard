@@ -31,6 +31,12 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install requests
+      - name: 期の途中の株式分割を半期報告書・有報の注記から探す
+        if: github.event_name != 'push'
+        continue-on-error: true
+        env:
+          EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+        run: python3 tools/edinet/splits_scan.py --days "${{ inputs.days || '45' }}" --write
       - name: 有報で内蔵データを更新
         env:
           EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
@@ -50,7 +56,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git add index.html tools/edinet/state.json data/splits-applied.json
+          git add index.html tools/edinet/state.json data/splits.json data/splits-applied.json
           if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
