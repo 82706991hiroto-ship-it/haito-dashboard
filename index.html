@@ -125,6 +125,7 @@
     border: 1px solid transparent; background: var(--field); color: var(--text);
     font-variant-numeric: tabular-nums; font-family: inherit;
   }
+  .field-calc { display: block; margin-top: 4px; font-size: 11.5px; color: var(--text-2); font-weight: 400; }
   label.field input:focus, label.field select:focus { outline: none; border-color: var(--accent); background: var(--card); }
   input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px;
@@ -1097,8 +1098,9 @@
       <label class="field">銘柄数の目標
         <input type="number" id="goalStockCount" min="0" step="1">
       </label>
-      <label class="field">取得額の目標(円)
-        <input type="number" id="goalAcquisition" min="0" step="10000">
+      <label class="field">想定利回り(%)
+        <input type="number" id="goalYield" min="0.1" max="20" step="0.1">
+        <small class="field-calc" id="goalAcqCalc"></small>
       </label>
       <label class="field">景気敏感セクター目標比率(%)
         <input type="number" id="targetSensitivePct" min="0" max="100" step="1">
@@ -4376,19 +4378,40 @@
     var map = [
       ["goalMonthly", "goals", "monthly"],
       ["goalStockCount", "goals", "stockCount"],
-      ["goalAcquisition", "goals", "acquisition"],
+      ["goalYield", "goals", "yieldPct"],
       ["targetSensitivePct", "guides", "sensitiveTarget"],
       ["maxStockPct", "guides", "maxStockPct"],
       ["maxSectorPct", "guides", "maxSectorPct"]
     ];
+    goalYieldOf(state.goals);
     map.forEach(function (m) {
       var el = document.getElementById(m[0]);
       el.value = state[m[1]][m[2]];
       el.addEventListener("input", function () {
         state[m[1]][m[2]] = num(el.value);
+        state.goals.acquisition = goalAcqOf(state.goals);
+        paintGoalAcq();
         save(); renderDashboard();
       });
     });
+    paintGoalAcq();
+  }
+  function paintGoalAcq() {
+    var el = document.getElementById("goalAcqCalc");
+    if (el) el.textContent = "→ 取得額の目標 " + fmtYen(goalAcqOf(state.goals)) + "(月の目標×12÷利回り)";
+  }
+  // 取得額の目標は「月間配当金の目標×12 ÷ 想定利回り」で自動で出す。
+  // 想定利回りが未設定(以前のデータ)なら、手で入れていた取得額の目標から逆算して引き継ぐ
+  function goalYieldOf(g) {
+    if (!(num(g.yieldPct) > 0)) {
+      var m = num(g.monthly), a = num(g.acquisition);
+      g.yieldPct = m > 0 && a > 0 ? Math.round(m * 12 / a * 1000) / 10 : 4;
+    }
+    return num(g.yieldPct);
+  }
+  function goalAcqOf(g) {
+    var y = goalYieldOf(g);
+    return y > 0 ? Math.round(num(g.monthly) * 12 / (y / 100)) : 0;
   }
 
   // ---------- Sector reference table ----------
@@ -5418,6 +5441,8 @@
     state.goals.monthly = yen;
     var input = document.getElementById("goalMonthly");
     if (input) input.value = yen;
+    state.goals.acquisition = goalAcqOf(state.goals);
+    paintGoalAcq();
     save(); renderDashboard();
     showToast("新しい目標を月" + manYen(yen) + "にしました。達成した目標は節目の記録に残っています。");
   });
@@ -6508,8 +6533,8 @@
     renderBackupStatus();
 
     // goal vs actual
-    var g = state.goals;
-    var avgAcqGoal = g.stockCount > 0 ? g.acquisition / g.stockCount : 0;
+    var g = state.goals, acqGoal = goalAcqOf(g);
+    var avgAcqGoal = g.stockCount > 0 ? acqGoal / g.stockCount : 0;
     var avgAcqActual = agg.stockCount > 0 ? agg.totalAcq / agg.stockCount : 0;
     var yieldPre = agg.totalAcq > 0 ? (agg.totalDivPre / agg.totalAcq) * 100 : 0;
     var yieldPost = agg.totalAcq > 0 ? (agg.totalDivPost / agg.totalAcq) * 100 : 0;
@@ -6519,7 +6544,7 @@
       '<div class="col"><h3>目標</h3>' +
       gaRow("月間配当金", fmtYen(g.monthly)) +
       gaRow("銘柄数", g.stockCount + "") +
-      gaRow("取得額", fmtYen(g.acquisition)) +
+      gaRow("取得額(利回り" + fmtPct(goalYieldOf(g)) + ")", fmtYen(acqGoal)) +
       gaRow("平均取得額", fmtYen(avgAcqGoal)) +
       '</div>' +
       '<div class="col"><h3>実績</h3>' +
