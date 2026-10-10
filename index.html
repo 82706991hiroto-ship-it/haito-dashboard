@@ -2041,8 +2041,10 @@
         // 有報に載っている会社自身の配当性向を優先する(1株利益の定義や株式分割の扱いのずれを避ける)。
         // 予想配当を取り込んでいれば、その分だけ伸び縮みさせる
         var po = rec.payout > 0 && rec.payout < 5 ? rec.payout * (last > 0 ? d / last : 1) : d / e;
-        if (po > 1) add(3, "配当性向" + pctTxt(po), "配当が利益を上回っている(配当性向 " + pctTxt(po) + ")");
-        else if (po > 0.8) add(2, "配当性向" + pctTxt(po), "配当性向が高い(" + pctTxt(po) + "。利益が少し減ると配当を賄えない)");
+        // 「配当性向○%を目安」型の会社は、高い配当性向が方針どおり。利益が落ちると配当も下がりやすいことを添える
+        var potNote = rec.pot ? "。配当性向" + rec.pot + "%を目安に配当を決める方針なので、利益が落ちると配当も下がりやすい" : "。利益が少し減ると配当を賄えない";
+        if (po > 1) add(3, "配当性向" + pctTxt(po), "配当が利益を上回っている(配当性向 " + pctTxt(po) + potNote + ")");
+        else if (po > 0.8) add(2, "配当性向" + pctTxt(po), "配当性向が高い(" + pctTxt(po) + potNote + ")");
       }
     }
     // 3期合計の配当性向(一時的な利益の上下をならす)
@@ -2075,11 +2077,12 @@
     else if (s.length >= 6 && cuts === 0) plus(1, "過去" + Math.min(s.length - 1, 10) + "期は減配なし");
     // 方針(累進配当・DOEは減配しにくい約束)
     var pol = rec.pol || [];
+    var info = rec.pot ? "配当方針: 配当性向" + rec.pot + "%目安(利益に連動)" : "";
     if (pol.indexOf("累進配当") !== -1) plus(1, "累進配当の方針(減配しないと約束)");
     if (pol.indexOf("DOE") !== -1) plus(1, "DOEの方針(利益より安定した純資産が基準)");
     items.sort(function (a, b) { return b.pt - a.pt; });
     var level = score >= 4 ? 2 : score >= 2 ? 1 : 0;
-    return { level: level, score: score, items: items, good: good };
+    return { level: level, score: score, items: items, good: good, info: info };
   }
   function holdingRisk(h) {
     if (isUS(h)) return null;
@@ -2114,7 +2117,7 @@
         return '<li data-hid="' + x.h.id + '"><div class="risk-head"><b>' + escapeHtml((x.h.code ? x.h.code + " " : "") + shortStockName(x.h.name || "")) + '</b>' +
           '<span class="risk-badge lv' + x.r.level + '">' + (x.r.level === 2 ? "減配リスク高" : "要注意") + '</span></div>' +
           '<ul class="risk-why">' + x.r.items.map(function (it) { return "<li>" + escapeHtml(it.t) + "</li>"; }).join("") + '</ul>' +
-          (x.r.good.length ? '<div class="risk-good">' + escapeHtml(x.r.good.join("・")) + '</div>' : "") + '</li>';
+          (x.r.good.length || x.r.info ? '<div class="risk-good">' + escapeHtml([x.r.info].concat(x.r.good).filter(Boolean).join("・")) + '</div>' : "") + '</li>';
       }).join("") + '</ul>';
     } else {
       html += '<p class="calendar-note">目立った兆しのある銘柄はありません。</p>';
@@ -2787,7 +2790,7 @@
     drEl.hidden = !dr;
     if (dr) drEl.innerHTML = '<b>減配リスク: ' + (dr.level === 2 ? '<span class="risk-badge lv2">高い</span>' : dr.level === 1 ? '<span class="risk-badge lv1">要注意</span>' : "目立った兆しなし") + '</b>' +
       (dr.items.length ? '<ul>' + dr.items.map(function (it) { return "<li>" + escapeHtml(it.t) + " <small>+" + it.pt + "</small></li>"; }).join("") + '</ul>' : "") +
-      (dr.good.length ? '<p class="risk-good">' + escapeHtml(dr.good.join("・")) + '</p>' : "");
+      (dr.good.length || dr.info ? '<p class="risk-good">' + escapeHtml([dr.info].concat(dr.good).filter(Boolean).join("・")) + '</p>' : "");
     var spn = specialNote(String(h.code || "").trim().toUpperCase());
     document.getElementById("detailStreak").textContent = dstk
       ? dstk.text + " ・ 1株配当 " + dser.slice().reverse().map(function (v) { return fmtPerShare(v); }).join(" → ") + (spn ? "(" + spn + "。増配・減配は記念・特別配当を除いて判断)" : "")
