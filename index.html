@@ -191,6 +191,11 @@
   .quote-tools .btn { padding: 6px 12px; font-size: 12.5px; text-decoration: none; }
   .quote-tools[hidden] { display: none; }
   .quote-status:empty { display: none; }
+  .sum-yield b.stale { color: var(--muted); }
+  .sum-yield small.stale { color: var(--warn); }
+  .stale-note { margin: 0 0 10px; padding: 9px 12px; border-radius: 10px; background: var(--warn-soft); font-size: 12.5px; line-height: 1.6; }
+  .stale-note[hidden] { display: none; }
+  .stale-note button { margin-left: 4px; font: inherit; font-weight: 700; color: var(--accent); background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline; }
   .hold-sort { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12.5px; color: var(--text-2); }
   .hold-sort select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
@@ -1141,6 +1146,7 @@
         <option value="code">コード順</option>
       </select>
     </label>
+    <p class="stale-note" id="staleNote" hidden></p>
     <div class="table-wrap">
       <table class="data-table" id="holdingsTable">
         <thead>
@@ -1307,7 +1313,7 @@
       </div>
     </details>
 
-    <details class="paste-import">
+    <details class="paste-import" id="holdImportBox">
       <summary>証券会社の保有証券画面から貼り付けて読み込む</summary>
       <div class="paste-import-body">
         <p class="hint">
@@ -1804,8 +1810,29 @@
     });
   })();
 
+  // 株価が古い銘柄があれば、明細の上で知らせる(CSVの読み込み直しでまとめて新しくなる)
+  function renderStaleNote() {
+    var el = document.getElementById("staleNote");
+    if (!el) return;
+    var stale = state.holdings.filter(function (h) {
+      if (!(num(h.price) > 0) || !(num(h.div) > 0)) return false;
+      var a = priceAgeDays(h.priceDate);
+      return a !== null && a > PRICE_STALE_DAYS;
+    });
+    el.hidden = !stale.length || state.isSample;
+    if (el.hidden) return;
+    var oldest = stale.map(function (h) { return isoDay(h.priceDate); }).sort()[0];
+    var md = oldest.slice(5).replace(/^0/, "").replace(/-0?/, "/");
+    el.innerHTML = "株価が古い銘柄が<b>" + stale.length + "件</b>(最も古いのは" + md + ")。利回りがずれます。" +
+      '<button type="button" data-open="holdImportBox">保有証券を読み込み直す</button>か、「詳細」でYahooから貼り付けてください。';
+  }
+  document.getElementById("staleNote").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-open]"), box = b && document.getElementById(b.dataset.open);
+    if (box) { box.open = true; box.scrollIntoView({ behavior: "smooth", block: "start" }); }
+  });
   function renderTable() {
     renderFxBar();
+    renderStaleNote();
     renderMissingList();
     loadFinForHoldings();
     var tbody = document.getElementById("holdingsBody");
@@ -2474,9 +2501,12 @@
     var t = c.trend === "up" ? '<em class="up">▲</em>' : c.trend === "down" ? '<em class="down">▽</em>' : "";
     var yNow = currentYieldOf(h), yBook = bookYieldOf(h);
     var yv = yNow !== null ? yNow : (yBook !== null && yBook > 0 ? yBook : null);
-    var yl = yNow !== null ? "利回り" : "取得利回り";
+    var yl = yNow !== null ? (h.fdivDate ? "予想利回り" : "利回り") : "取得利回り";
+    // 株価が古いと利回りがずれるので、30日を過ぎたら薄くして株価の日付を出す
+    var age = yNow !== null ? priceAgeDays(h.priceDate) : null, stale = age !== null && age > PRICE_STALE_DAYS;
+    if (stale) yl = "株価" + isoDay(h.priceDate).slice(5).replace(/^0/, "").replace(/-0?/, "/") + "時点";
     return '<span class="sum-name">' + (isUS(h) ? '<span class="us-badge">米</span>' : "") + escapeHtml((h.code ? h.code + " " : "") + String(h.name || "銘柄を入力").normalize("NFKC")) + '</span>' +
-      '<span class="sum-yield">' + (yv !== null ? '<b>' + yv.toFixed(2) + '%</b><small>' + yl + '</small>' : '<b class="muted">―</b><small>利回り</small>') + '</span>' +
+      '<span class="sum-yield">' + (yv !== null ? '<b' + (stale ? ' class="stale"' : "") + '>' + yv.toFixed(2) + '%</b><small' + (stale ? ' class="stale"' : "") + '>' + yl + '</small>' : '<b class="muted">―</b><small>利回り</small>') + '</span>' +
       '<span class="sum-meta">' + (num(h.shares) ? num(h.shares).toLocaleString("ja-JP") + "株 ・ " : "") +
       "年" + fmtYen(c.divPre) + " " + t +
       (function () { var sh = c.totalDiv !== undefined ? divShareOf(h, c, c.totalDiv) : null; return sh !== null ? "(配当の" + sh.toFixed(1) + "%)" : ""; })() +
