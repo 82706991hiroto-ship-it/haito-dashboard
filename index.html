@@ -199,6 +199,11 @@
   .sum-growth { white-space: nowrap; font-variant-numeric: tabular-nums; }
   .sum-growth.down { color: var(--crit); }
   .stat-jump .note { flex-basis: 100%; text-align: right; font-size: 11px; color: var(--text-2); font-weight: 400; }
+  .sim-readout { margin: 10px 0 4px; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .sim-readout b { color: var(--text); }
+  .sim-chart { touch-action: pan-y; cursor: pointer; }
+  .sim-chart .cal-col.is-sel { background: var(--field); border-radius: 4px; }
+  .sim-chart .cal-col.is-sel .cal-bar { filter: brightness(.82); }
   .hold-sort { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12.5px; color: var(--text-2); }
   .hold-sort select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
@@ -6415,9 +6420,30 @@
       col.title = s.year + "年後 月間 " + fmtYen(s.div / 12) + " / 投資元本 " + fmtYen(s.principal);
       col.innerHTML =
         '<div class="cal-bar-slot"><div class="cal-bar" style="height:' + (max > 0 ? s.div / max * 100 : 0) + '%"></div></div>' +
-        '<div class="cal-month">' + (s.year % 5 === 0 ? s.year : "") + '</div>';
+        '<div class="cal-month">' + (s.year % 5 === 0 ? s.year : "&nbsp;") + '</div>';
       chart.appendChild(col);
     });
+    // 棒を押す(なぞる)と、その年の金額を上に出す。最初は目標到達の年(届かなければ10年後)
+    var readout = document.createElement("p");
+    readout.className = "sim-readout";
+    var cols = chart.children, sel = -1;
+    function pick(i) {
+      if (i === sel || !shown[i]) return;
+      if (cols[sel]) cols[sel].classList.remove("is-sel");
+      sel = i;
+      cols[i].classList.add("is-sel");
+      var s = shown[i];
+      readout.innerHTML = '<b>' + (s.year === 0 ? "今" : s.year + "年後(" + (new Date().getFullYear() + s.year) + "年)") + '</b>' +
+        ' 月 <b>' + fmtYen(s.div / 12) + '</b> ・ 年 ' + fmtYen(s.div) + ' ・ 投資元本 ' + fmtYen(s.principal);
+    }
+    function pickAt(e) {
+      var r = chart.getBoundingClientRect();
+      pick(Math.max(0, Math.min(shown.length - 1, Math.floor((e.clientX - r.left) / r.width * shown.length))));
+    }
+    chart.addEventListener("pointerdown", pickAt);
+    chart.addEventListener("pointermove", function (e) { if (e.pointerType === "mouse" || e.buttons) pickAt(e); });
+    pick(sim.reached !== null && sim.reached <= 20 ? sim.reached : Math.min(10, shown.length - 1));
+    el.appendChild(readout);
     el.appendChild(chart);
 
     var note2 = document.createElement("p");
