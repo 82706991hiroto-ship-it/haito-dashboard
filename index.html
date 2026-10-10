@@ -230,6 +230,8 @@
   .risk-how summary { cursor: pointer; }
   .risk-how ul { padding-left: 18px; margin: 4px 0 0; line-height: 1.6; }
   .detail-risk small { color: var(--muted); }
+  .risk-line.chk { color: var(--text-2); font-weight: 400; }
+  .risk-chk { font-size: 12px; color: var(--text-2); background: var(--field); border-radius: 8px; padding: 7px 10px; margin: 6px 0; }
   .risk-sum { font-size: 13px; color: var(--text-2); margin: 0 0 8px; }
   .risk-sum b.is-down { color: var(--crit); }
   .risk-list { list-style: none; margin: 0 0 8px; padding: 0; }
@@ -1813,6 +1815,7 @@
       var c = String(h.code || "").trim().toUpperCase();
       if (!isUS(h) && /^[1-9][0-9A-Z]{3}$/.test(c) && !finAsked[c[0]]) need[c[0]] = true;
     });
+    loadDataChecks();
     var ds = Object.keys(need);
     if (!ds.length) return;
     ds.forEach(function (d) { finAsked[d] = true; });
@@ -1820,6 +1823,18 @@
       return fetch("../ir-check/fin/" + d + ".json").then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) { if (j) FIN[d] = j; }, function () {});
     })).then(function () { renderTable(); renderDecisionPanels(); });
+  }
+  // 毎週の点検(チェックシートの checks.json)で数字の食い違いが見つかった銘柄。該当銘柄に「数字を要確認」と出す
+  var DATA_CHECKS = null;
+  function loadDataChecks() {
+    if (DATA_CHECKS) return;
+    DATA_CHECKS = {};
+    fetch("../ir-check/checks.json").then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (j && j.flags) { DATA_CHECKS = j.flags; renderTable(); renderDecisionPanels(); } }, function () {});
+  }
+  function dataCheckOf(code) {
+    var c = String(code || "").trim().toUpperCase();
+    return DATA_CHECKS && DATA_CHECKS[c] || null;
   }
   function perOf(h) {
     var c = String(h.code || "").trim().toUpperCase(), p = num(h.price);
@@ -2087,7 +2102,7 @@
     if (pol.indexOf("DOE") !== -1) plus(1, "DOEの方針(利益より安定した純資産が基準)");
     items.sort(function (a, b) { return b.pt - a.pt; });
     var level = score >= 4 ? 2 : score >= 2 ? 1 : 0;
-    return { level: level, score: score, items: items, good: good, info: info };
+    return { level: level, score: score, items: items, good: good, info: info, check: dataCheckOf(code) };
   }
   function holdingRisk(h) {
     if (isUS(h)) return null;
@@ -2096,6 +2111,7 @@
   }
   // 一覧に出す短い札。いちばん重い理由を添える(例: 「⚠ 減配リスク高: 赤字」)
   function riskBadge(r) {
+    if (r && r.check && !r.level) return '<span class="risk-line chk">ⓘ 数字を要確認(有報のデータに食い違い)</span>';
     if (!r || !r.level) return "";
     var why = r.items.slice(0, 2).map(function (x) { return x.s; }).join("・");
     return '<span class="risk-line lv' + r.level + '">⚠ ' + (r.level === 2 ? "減配リスク高" : "要注意") + (why ? ": " + escapeHtml(why) : "") + '</span>';
@@ -2113,6 +2129,7 @@
       rows.push({ h: h, r: r, div: computeRow(h).divPre });
     });
     if (!jp) { body.innerHTML = '<p class="empty-note" style="position:static">国内株を登録すると点検します。</p>'; return; }
+    var chk = rows.filter(function (x) { return x.r.check; });
     var bad = rows.filter(function (x) { return x.r.level > 0; }).sort(function (a, b) { return b.r.level - a.r.level || b.div - a.div; });
     var hi = bad.filter(function (x) { return x.r.level === 2; }).length;
     var html = '<p class="risk-sum">' + rows.length + '銘柄を点検: 減配リスク高 <b class="' + (hi ? "is-down" : "") + '">' + hi + '</b> ・ 要注意 <b>' + (bad.length - hi) + '</b> ・ 目立った兆しなし <b>' + (rows.length - bad.length) + '</b>' +
@@ -2127,6 +2144,7 @@
     } else {
       html += '<p class="calendar-note">目立った兆しのある銘柄はありません。</p>';
     }
+    if (chk.length) html += '<p class="risk-chk">ⓘ 数字を要確認: ' + chk.map(function (x) { return escapeHtml(shortStockName(x.h.name || x.h.code) + "(" + x.r.check.join(" / ") + ")"); }).join("、") + '</p>';
     html += '<details class="risk-how"><summary>判定のしかた</summary><p>有価証券報告書の数字で、兆しごとに点を付けています。4点以上は「減配リスク高」、2〜3点は「要注意」。</p><ul>' +
       '<li>会社予想が減配 4点(予想配当を取り込んだ銘柄)</li><li>配当が利益を上回る 3点 ・ 配当性向80%超 2点(60〜80%は高配当株では普通なので数えない)</li>' +
       '<li>赤字 3点(その前の2期が黒字なら一時的として2点)</li><li>3期合計で配当が利益を上回る 2点(80%超なら1点) ・ 2期連続減益 1点 ・ 3期で利益3割減 1点</li>' +
@@ -2792,10 +2810,12 @@
     irLink.hidden = !CODE_INFO_MAP[irCode];
     if (!irLink.hidden) irLink.href = "https://irbank.net/" + encodeURIComponent(irCode) + "/dividend";
     var dr = holdingRisk(h), drEl = document.getElementById("detailRisk");
+    var dchk = dataCheckOf(h.code);
     drEl.hidden = !dr;
     if (dr) drEl.innerHTML = '<b>減配リスク: ' + (dr.level === 2 ? '<span class="risk-badge lv2">高い</span>' : dr.level === 1 ? '<span class="risk-badge lv1">要注意</span>' : "目立った兆しなし") + '</b>' +
       (dr.items.length ? '<ul>' + dr.items.map(function (it) { return "<li>" + escapeHtml(it.t) + " <small>+" + it.pt + "</small></li>"; }).join("") + '</ul>' : "") +
-      (dr.good.length || dr.info ? '<p class="risk-good">' + escapeHtml([dr.info].concat(dr.good).filter(Boolean).join("・")) + '</p>' : "");
+      (dr.good.length || dr.info ? '<p class="risk-good">' + escapeHtml([dr.info].concat(dr.good).filter(Boolean).join("・")) + '</p>' : "") +
+      (dchk ? '<p class="risk-chk">ⓘ 数字を要確認: ' + escapeHtml(dchk.join(" / ")) + '。この銘柄の判定は、有報で数字を確かめてから使ってください。</p>' : "");
     var spn = specialNote(String(h.code || "").trim().toUpperCase());
     document.getElementById("detailStreak").textContent = dstk
       ? dstk.text + " ・ 1株配当 " + dser.slice().reverse().map(function (v) { return fmtPerShare(v); }).join(" → ") + (spn ? "(" + spn + "。増配・減配は記念・特別配当を除いて判断)" : "")

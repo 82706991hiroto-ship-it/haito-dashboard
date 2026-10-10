@@ -1,0 +1,29 @@
+# 画面の計算の点検。index.html を変えるたびに、公式の書類で確かめた銘柄の表示と判定を照合する。
+# 失敗すると GitHub からメールが届く(Actions の画面で理由が見られる)。
+name: 画面の計算の点検
+on:
+  push:
+    branches: [main]
+    paths: [index.html, tests/app_test.js]
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: haito-dashboard
+      - uses: actions/checkout@v4
+        with:
+          repository: 82706991hiroto-ship-it/ir-check
+          path: ir-check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install --no-save playwright@1.47.2 && npx playwright install --with-deps chromium
+      - name: 点検
+        run: |
+          python3 -m http.server 8765 >/dev/null 2>&1 &
+          sleep 2
+          node haito-dashboard/tests/app_test.js
