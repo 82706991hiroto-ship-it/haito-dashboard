@@ -18,6 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 OUT = os.path.join(ROOT, "data", "special-dividends.json")
 HTML = os.path.join(ROOT, "index.html")
 
+BREAKDOWN = re.compile(r"普通配当\s*(\d+(?:\.\d+)?)円[、,・及び及びと\s]{0,3}(?:(?:創立|設立|創業|上場)?[^、。()]{0,12}?(?:記念配当|特別配当)\s*\d+(?:\.\d+)?円[、,・\s]{0,3}){1,2}")
 AMOUNT = re.compile(r"(記念配当|特別配当)[^0-9。]{0,8}?(\d+(?:\.\d+)?)円")
 
 
@@ -72,6 +73,16 @@ def specials(raw, latest_no, fyend):
             continue
         y, mm = int(fyend[:4]) - back, int(fyend[5:7])
         out["%d-%02d" % (y, mm)] = {"額": amt, "割合": round(amt / dps, 4)}
+    # 注記ではなく本文に「年間配当金は64円(うち普通配当61円、記念配当3円)」のように書く会社(例: 中央自動車工業)。
+    # 普通配当と記念・特別配当の合計が当期の1株配当と合うものだけ、当期の分として拾う(期末配当だけの内訳と取り違えない)
+    dps = parsed["periods"][0]["dps"] if parsed["periods"] else None
+    key = "%s-%s" % (fyend[:4], fyend[5:7])
+    if dps and key not in out:
+        for m in BREAKDOWN.finditer(text):
+            normal, amt = float(m.group(1)), sum(float(x) for _, x in AMOUNT.findall(m.group(0)))
+            if 0 < amt < dps and abs(normal + amt - dps) <= 0.01:
+                out[key] = {"額": amt, "割合": round(amt / dps, 4)}
+                break
     return out
 
 
