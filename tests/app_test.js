@@ -10,6 +10,7 @@ const holdings = [
   H("8593", "三菱HCキャピタル", "その他金融業", 46), // 連結の配当性向は約41%(有報の配当性向欄91%は単体)
   H("2914", "JT", "食料品", 234),                 // 配当性向75%目安の方針。高い配当性向で要注意
   H("3176", "三洋貿易", "卸売業", 28.5, { priceDate: "2026/10/08" }), // 2026-07-01に1株→2株。分割後の値
+  H("8766", "東京海上", "保険業", 14.53),          // 連結(日本基準)の配当性向は約42%。IFRSの参考値で78%と出ていた
 ];
 const fails = [];
 function expect(cond, msg) { if (!cond) fails.push(msg); }
@@ -24,6 +25,7 @@ function expect(cond, msg) { if (!cond) fails.push(msg); }
   await p.waitForTimeout(3000);
   const risk = await p.textContent("#riskBody");
   expect(!/三菱HCキャピタル[^]*?配当性向が高い/.test(risk.split("判定のしかた")[0]), "三菱HCキャピタルが配当性向で要注意になっている(連結は約41%のはず)");
+  expect(!/東京海上[^]*?配当性向/.test(risk.split("判定のしかた")[0]), "東京海上が配当性向で要注意になっている(連結は約42%のはず)");
   expect(/JT[^]*?要注意[^]*?配当性向75%を目安/.test(risk), "JTの要注意の理由に配当性向75%目安の方針が出ていない");
   expect(!/CDS[^]*?直近で減配/.test(risk), "CDSが直近で減配になっている(記念配当を除けば増配)");
   await p.click('.tabbar .tab[data-tab="holdings"]');
