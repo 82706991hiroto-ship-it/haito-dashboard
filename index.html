@@ -1067,6 +1067,10 @@
   .show-all { margin-top: 10px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--accent); background: none; border: none; padding: 6px 0; cursor: pointer; }
 
   td.sum { display: none; }
+  tr.group-row td.group-desk { background: var(--field); font-size: 13px; padding: 8px 10px; }
+  tr.group-row td.group-desk span { color: var(--text-2); margin-left: 6px; }
+  .acct-chip { font-size: 11px; color: var(--text-2); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
+  .acct-label { font-weight: 600; color: var(--text-2); }
   td.yield-cell b { display: block; font-variant-numeric: tabular-nums; }
   .fx-bar { font-size: 13px; margin: 12px 0 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .fx-bar input { width: 90px; }
@@ -1090,6 +1094,11 @@
     #holdingsTable tr:not(.open) td:not(.sum) { display: none; }
     #holdingsTable td.sum { display: block; order: -1; padding: 0; border: none; }
     #holdingsTable td.sum::before { content: none; }
+    #holdingsTable tr.group-row td.group-desk { display: none; }
+    #holdingsTable tr.in-group.g-hidden { display: none; }
+    #holdingsTable tr.in-group { padding-left: 14px; border-top-style: dashed; }
+    #holdingsTable tr.in-group .sum-name { font-weight: 500; font-size: 13px; }
+    #holdingsTable tr.group-row.g-open td.sum button::after { transform: rotate(90deg); }
     td.sum button { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 10px; width: 100%; text-align: left; background: none; border: none;
       padding: 13px 0; font: inherit; color: var(--text); cursor: pointer; }
     td.sum button::after { content: "›"; grid-row: 1 / span 2; grid-column: 3; align-self: center; color: var(--muted); font-size: 20px; transition: transform .2s var(--ease); }
@@ -2392,7 +2401,20 @@
       return;
     }
     var totalDiv = totalDivPreOf();
+    // 同じ銘柄を口座ごと(特定・NISAなど)に持っていても、一覧では1行にまとめる。開くと口座ごとの行が出る
+    var groups = {}, order = [];
     sortedHoldings().forEach(function (h) {
+      var k = holdingGroupKey(h);
+      if (!groups[k]) { groups[k] = []; order.push(k); }
+      groups[k].push(h);
+    });
+    order.forEach(function (k) {
+      var mem = groups[k];
+      if (mem.length < 2) { buildRow(mem[0], null); return; }
+      tbody.appendChild(makeGroupRow(k, mem, totalDiv));
+      mem.forEach(function (h) { buildRow(h, k); });
+    });
+    function buildRow(h, gk) {
       var c = computeRow(h);
       c.totalDiv = totalDiv;
       var tr = document.createElement("tr");
@@ -2473,9 +2495,53 @@
       tdDel.appendChild(delBtn);
       tr.appendChild(tdDel);
 
-      tr.appendChild(makeSummaryCell(h, c, tr));
+      if (gk) {
+        tr.classList.add("in-group"); tr.dataset.group = gk;
+        if (!openGroups[gk]) tr.classList.add("g-hidden");
+      }
+      tr.appendChild(makeSummaryCell(h, c, tr, !!gk));
       tbody.appendChild(tr);
+    }
+  }
+  // まとめる単位: 証券コード(米国株はティッカー)、投資信託はファンド名。コードの無い行はまとめない
+  function holdingGroupKey(h) {
+    if (isFund(h)) return "F:" + fundNorm(h.name);
+    var c = String(h.code || "").trim().toUpperCase();
+    return c ? (isUS(h) ? "U:" : "J:") + c : "id:" + h.id;
+  }
+  var openGroups = {};
+  function makeGroupRow(gk, mem, totalDiv) {
+    var tr = document.createElement("tr");
+    tr.className = "group-row" + (openGroups[gk] ? " g-open" : "");
+    var sum = { divPre: 0, shares: 0 };
+    mem.forEach(function (h) { var c = computeRow(h); sum.divPre += c.divPre; sum.shares += num(h.shares); });
+    var accts = mem.map(function (h) { return h.account || "特定"; }).join("・");
+    var unit = isFund(mem[0]) ? "" : isUS(mem[0]) ? "株" : "株";
+    // スマホ: たたんだ1行(押すと口座ごとの行を出す)
+    var td = document.createElement("td");
+    td.className = "sum";
+    var b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("aria-expanded", openGroups[gk] ? "true" : "false");
+    b.innerHTML = summaryHtml(mem[0], { divPre: sum.divPre }, { accounts: accts });
+    b.addEventListener("click", function () {
+      var open = !openGroups[gk];
+      if (open) openGroups[gk] = true; else delete openGroups[gk];
+      tr.classList.toggle("g-open", open);
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+      Array.prototype.forEach.call(document.querySelectorAll('#holdingsBody tr.in-group'), function (r) { if (r.dataset.group === gk) r.classList.toggle("g-hidden", !open); });
     });
+    td.appendChild(b);
+    tr.appendChild(td);
+    // パソコン: 見出しの行(口座ごとの行はその下にいつも出す)
+    var tdd = document.createElement("td");
+    tdd.className = "group-desk";
+    tdd.colSpan = 13;
+    var h0 = mem[0];
+    tdd.innerHTML = '<b>' + escapeHtml((h0.code ? h0.code + " " : "") + String(h0.name || "").normalize("NFKC")) + '</b> ' +
+      '<span>' + mem.length + '口座(' + escapeHtml(accts) + ')' + (isFund(h0) ? "" : ' ・ 計' + sum.shares.toLocaleString() + unit) + ' ・ 年' + fmtYen(sum.divPre) + '</span>';
+    tr.appendChild(tdd);
+    return tr;
   }
 
   var FIELD_LABELS = {
@@ -3063,7 +3129,8 @@
 
   // スマホでは1銘柄を1行にたたみ、押すと入力欄を開く
   var openRows = {};
-  function summaryHtml(h, c) {
+  function summaryHtml(h, c, opt) {
+    opt = opt || {};
     var yNow = currentYieldOf(h), yBook = bookYieldOf(h);
     var yv = yNow !== null ? yNow : (yBook !== null && yBook > 0 ? yBook : null);
     var fst = forecastStatus(h);
@@ -3071,7 +3138,11 @@
     // 株価が古いと利回りがずれるので、30日を過ぎたら薄くして株価の日付を出す
     var age = yNow !== null ? priceAgeDays(h.priceDate) : null, stale = age !== null && age > PRICE_STALE_DAYS;
     if (stale) yl = "株価" + isoDay(h.priceDate).slice(5).replace(/^0/, "").replace(/-0?/, "/") + "時点";
-    return '<span class="sum-name">' + (isUS(h) ? '<span class="us-badge">米</span>' : isFund(h) ? '<span class="us-badge fund-badge">投</span>' : "") + escapeHtml((h.code ? h.code + " " : "") + String(h.name || "銘柄を入力").normalize("NFKC")) + '</span>' +
+    // まとめた行の中の口座ごとの行は、名前の代わりに口座と数量を出す
+    var nameHtml = opt.member
+      ? '<span class="acct-label">└ ' + escapeHtml(h.account || "特定") + '</span> ' + (h.fundTotal ? "" : isFund(h) ? escapeHtml((h.units ? Number(h.units).toLocaleString() : "") + "口") : escapeHtml(num(h.shares).toLocaleString() + "株"))
+      : (isUS(h) ? '<span class="us-badge">米</span>' : isFund(h) ? '<span class="us-badge fund-badge">投</span>' : "") + escapeHtml((h.code ? h.code + " " : "") + String(h.name || "銘柄を入力").normalize("NFKC"));
+    return '<span class="sum-name">' + nameHtml + '</span>' +
       '<span class="sum-yield">' + (yv !== null ? '<b' + (stale ? ' class="stale"' : "") + '>' + yv.toFixed(2) + '%</b><small' + (stale || (fst && fst.kind === "stale") ? ' class="stale"' : "") + '>' + yl + '</small>' : '<b class="muted">―</b><small>利回り</small>') + '</span>' +
       // 一覧は「年いくら」と「増配・減配」だけに絞る(株数・連続増配は開いたとき・詳細で)
       '<span class="sum-meta">' +
@@ -3085,15 +3156,16 @@
         var txt = g > 0 ? "増配 +" + Math.abs(g).toFixed(1) + "%" : g < 0 ? "減配 −" + Math.abs(g).toFixed(1) + "%" : "据え置き";
         return ' ・ <span class="sum-growth ' + cls + '">' + txt + '</span>';
       })() +
-      riskBadge(holdingRisk(h)) + '</span>';
+      (opt.accounts ? ' ・ <span class="acct-chip">' + escapeHtml(opt.accounts) + '</span>' : "") +
+      (opt.member ? "" : riskBadge(holdingRisk(h))) + '</span>';
   }
-  function makeSummaryCell(h, c, tr) {
+  function makeSummaryCell(h, c, tr, inGroup) {
     var td = document.createElement("td");
     td.className = "sum";
     var b = document.createElement("button");
     b.type = "button";
     b.setAttribute("aria-expanded", tr.classList.contains("open") ? "true" : "false");
-    b.innerHTML = summaryHtml(h, c);
+    b.innerHTML = summaryHtml(h, c, inGroup ? { member: true } : null);
     b.addEventListener("click", function () {
       var open = !tr.classList.contains("open");
       tr.classList.toggle("open", open);
@@ -5405,10 +5477,11 @@
       totalDivPre: totalDivPre,
       totalDivPost: totalDivPost,
       totalAcq: totalAcq,
-      stockCount: rows.length,
+      // 同じ銘柄を特定・NISAなど複数の口座で持っていても1銘柄と数える
+      stockCount: Object.keys(rows.reduce(function (m, r) { m[holdingGroupKey(r)] = 1; return m; }, {})).length,
       sectorCount: Object.keys(sectorSet).length,
       bySector: groupBy(function (r) { return r.sector || "未分類"; }),
-      byStock: groupBy(function (r) { return (r.code ? r.code + " " : "") + (r.name || "無名銘柄") + "|" + r.id; }),
+      byStock: groupBy(function (r) { return r.code || isFund(r) ? (r.code ? r.code + " " : "") + (r.name || "無名銘柄") : (r.name || "無名銘柄") + "|" + r.id; }),
       bySensitivity: groupBy(function (r) { return sectorClassOf(r.sector); }),
       byAccount: groupBy(function (r) { return r.account || "特定"; }),
       changes: changes,
@@ -5472,7 +5545,7 @@
       if (totalDivPre <= 0) return 0;
       return entries.slice(0, n).reduce(function (s, e) { return s + e.value; }, 0) / totalDivPre * 100;
     }
-    var byStock = groupBy(function (r) { return r.id; });
+    var byStock = groupBy(function (r) { return holdingGroupKey(r); });  // 口座が違っても同じ銘柄は1つとして集中度を見る
     var bySector = groupBy(function (r) { return r.sector || "未分類"; });
     // ハーフィンダール指数(構成比の二乗和)。1銘柄集中=10000、均等分散ほど小さい。
     var hhi = totalDivPre > 0
