@@ -672,13 +672,12 @@
     color: var(--text-2); margin: 0 0 12px; padding: 12px 14px; background: var(--field);
     border-radius: 12px; overflow-x: auto;
   }
-  #yahooPasteArea, #quickEntryArea, #divHistArea, #priceUpdateArea {
+  #yahooPasteArea, #divHistArea, #priceUpdateArea {
     width: 100%; font-size: 13px; padding: 12px 14px; border-radius: 12px;
     border: 1px solid transparent; background: var(--field); color: var(--text);
     font-family: inherit; resize: vertical;
   }
-  #quickEntryArea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  #yahooPasteArea:focus, #quickEntryArea:focus, #divHistArea:focus, #priceUpdateArea:focus { border-color: var(--accent); background: var(--card); }
+  #yahooPasteArea:focus:focus, #divHistArea:focus, #priceUpdateArea:focus { border-color: var(--accent); background: var(--card); }
   .paste-status { font-size: 12px; color: var(--text-2); }
 
   /* 入力が足りない項目の一覧 */
@@ -745,6 +744,14 @@
   }
   .months-cell-btn.is-empty { color: var(--muted); }
   .detail-dialog { max-width: 400px; }
+  .imp-guide { background: var(--field); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+  .imp-step { margin: 0 0 8px; font-size: 13px; }
+  .imp-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .imp-tabs .btn { padding: 6px 12px; font-size: 12.5px; }
+  .imp-tabs .btn.is-on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .imp-steps { margin: 4px 0 0; padding-left: 20px; font-size: 12.5px; line-height: 1.9; color: var(--text-2); }
+  .imp-steps li b { color: var(--text); }
+  .imp-steps code { font-size: 12px; background: var(--card); border-radius: 4px; padding: 0 4px; }
   .import-dialog { max-width: 520px; max-height: calc(100dvh - 24px); overflow-y: auto; padding-bottom: 0; }
   .import-dialog .hint { margin-bottom: 10px; }
   .import-bulk { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text-2);
@@ -859,7 +866,7 @@
 
     .goal-actual { grid-template-columns: 1fr; }
     .goal-actual .col + .col { margin-top: 18px; }
-    #yahooPasteArea, #quickEntryArea, #divHistArea, #priceUpdateArea { font-size: 16px; }
+    #yahooPasteArea, #divHistArea, #priceUpdateArea { font-size: 16px; }
     .detail-dialog .field input, .detail-dialog .field textarea { font-size: 16px; }
     .calendar-chart { height: 170px; gap: 3px; }
     .sim-chart { height: 140px; gap: 2px; }
@@ -1419,44 +1426,34 @@
       </div>
     </dialog>
 
-    <details class="paste-import">
-      <summary>かんたん一括入力(1行に1銘柄を並べて登録)</summary>
+    <details class="paste-import" id="holdImportBox" open>
+      <summary>保有銘柄を取り込む(貼り付け・CSV・1行入力)</summary>
       <div class="paste-import-body">
-        <p class="hint">
-          1行に1銘柄を、<strong>コード 株数 取得単価 年間配当/株 前年配当/株</strong> の順に並べてください。後ろの3つは省略できます。行のどこかに「NISA」と書くとNISA口座として登録します。米国株は先頭をティッカー(例: VYM)にすると、取得単価と配当をドルとして登録します。区切りは半角スペース・カンマ・タブのいずれでも構いません。銘柄名と業種は証券コードから自動補完します。
-        </p>
-        <pre class="hint-example">8306 100 1500
-9433 20 4000 145 NISA
-1928 5 3061</pre>
-        <textarea id="quickEntryArea" rows="5" placeholder="8306 100 1500"></textarea>
-        <div class="toolbar">
-          <button class="btn primary" id="quickEntryBtn">この内容で登録する</button>
-          <span class="paste-status" id="quickEntryStatus"></span>
+        <div class="imp-guide">
+          <p class="imp-step"><b>① 証券会社を選ぶと、手順が出ます</b></p>
+          <div class="imp-tabs" id="impBrokers">
+            <button type="button" class="btn is-on" data-b="rakuten">楽天証券</button>
+            <button type="button" class="btn" data-b="sbi">SBI証券</button>
+            <button type="button" class="btn" data-b="other">その他・自分の表</button>
+          </div>
+          <div class="imp-tabs" id="impKinds">
+            <button type="button" class="btn is-on" data-k="jp">日本株</button>
+            <button type="button" class="btn" data-k="us">米国株</button>
+            <button type="button" class="btn" data-k="fund">投資信託</button>
+          </div>
+          <ol class="imp-steps" id="impSteps"></ol>
         </div>
-      </div>
-    </details>
-
-    <details class="paste-import" id="holdImportBox">
-      <summary>証券会社の保有証券画面から貼り付けて読み込む</summary>
-      <div class="paste-import-body">
-        <p class="hint">
-          証券会社サイトの保有証券一覧を、見出し行を含めて選択・コピーし、下に貼り付けてください。「コード」「保有数」「取得単価」などの列名から自動で判別します(列の並び順は問いません)。業種の列が無くても、証券コードから東証33業種を自動補完します。同じコード・口座の組み合わせは上書き更新されます。Yahoo!ファイナンスのポートフォリオ(コード・市場・名称/現在値/業種/購入価格/保有数/1株配当/配当利回り/メモ/前日比の表示設定)にも対応しています。メモ・口座欄に「NISA」と入っていればNISA口座として取り込みます。SBI証券の米国株は、パソコン版サイトの「口座管理」→「口座(外貨建)」の保有一覧を、銘柄の表から参考為替レートまでまとめて選択・コピーして貼り付けてください。
-        </p>
-        <textarea id="yahooPasteArea" rows="5" placeholder="ここに証券会社の保有証券一覧からコピーした内容を貼り付け"></textarea>
+        <p class="imp-step"><b>② コピーした内容を貼り付けて、読み込む</b>(CSVファイルでも読めます)</p>
+        <textarea id="yahooPasteArea" rows="5" placeholder="ここに貼り付け(1行に1銘柄で「8306 100 1500」のように打つこともできます)"></textarea>
         <div class="toolbar">
           <button class="btn primary" id="yahooImportBtn">貼り付け内容を読み込む</button>
-          <span class="paste-status" id="yahooImportStatus"></span>
-        </div>
-        <p class="hint" style="margin-top:14px;">
-          スマホの場合は、証券会社アプリ・サイトから保有証券のCSVファイルをダウンロードし、ここから選んでも読み込めます(コピー&貼り付けが難しい場合に便利です)。楽天証券の保有商品一覧のCSVは、投資信託の行も読み込みます(口数と基準価額。年間の分配金は自動では分からないので、保有銘柄の欄に1万口あたりの金額を入れてください)。文字コードはUTF-8・Shift_JISのどちらでも自動判定します。<br>
-          自分で管理している表(スプレッドシート)からも読み込めます。「コード」「口座」「株数」「取得単価」「1株配当」「前年配当」「現在値」の列名を付けてCSVで書き出してください。コードが英字(VYM、KOなど)の行は米国株として、取得単価・配当・現在値をドルで読みます。「米ドル,155.2」の行があれば為替にも使います。
-        </p>
-        <div class="toolbar">
-          <button class="btn" id="csvImportBtn">CSVファイルを選択して読み込む</button>
+          <button class="btn" id="csvImportBtn">CSVファイルを選ぶ</button>
           <button class="btn" id="csvTemplateBtn" type="button">自分の表用のCSVひな形</button>
           <input type="file" id="csvImportFile" accept=".csv,.txt,text/csv,text/plain,application/vnd.ms-excel" style="display:none">
-          <span class="paste-status" id="csvImportStatus"></span>
         </div>
+        <p class="paste-status" id="yahooImportStatus"></p>
+        <p class="paste-status" id="csvImportStatus"></p>
+        <p class="hint" style="margin-top:10px;">読み込む前に、内容を確認する画面が出ます(口座を直したり、取り込まない行を外せます)。同じコード・口座の銘柄は上書き更新です。</p>
       </div>
     </details>
 
@@ -3916,7 +3913,10 @@
     var detail = parseRakutenFundDetail(text);
     if (detail) { applyFundDetail(detail, statusEl); return; }
     var head = String(text || "").replace(/\s+/g, " ").trim().slice(0, 40);
-    var parsed = parseHoldingsPaste(text, priceDate);
+    // 「8306 100 1500」のような1行1銘柄の入力は、見出しが無いので専用の読み方にする
+    var lines = String(text || "").split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+    var quick = lines.length > 0 && lines.every(function (l) { return l.indexOf("\t") === -1 && /^([0-9][0-9A-Za-z]{2,4}|[A-Za-z][A-Za-z0-9.\-]{0,6})[ ,、]+[0-9]/.test(l); });
+    var parsed = quick ? parseQuickEntry(text) : parseHoldingsPaste(text, priceDate);
     if (!parsed.results.length) {
       statusEl.textContent = "読み込める行が見つかりませんでした。対応形式か確認してください。" +
         (head ? "(貼り付けた内容の先頭:「" + head + "…」)" : "(貼り付けた内容が空でした)");
@@ -4161,15 +4161,51 @@
     return { results: results, skipped: skipped };
   }
 
-  document.getElementById("quickEntryBtn").addEventListener("click", function () {
-    var area = document.getElementById("quickEntryArea");
-    var ok = applyResults(
-      parseQuickEntry(area.value),
-      document.getElementById("quickEntryStatus"),
-      "登録できる行がありませんでした。行の先頭が証券コードになっているか確認してください。"
-    );
-    if (ok) area.value = "";
-  });
+  // ---------- 取り込みの手順(証券会社 × 種類) ----------
+  var IMPORT_GUIDE = {
+    rakuten: {
+      jp: ["PCの楽天証券で「保有商品一覧」を開き、<b>CSVで保存</b>します。そのファイルを下の「CSVファイルを選ぶ」で選びます。",
+           "スマホなら、保有一覧の表を見出し行ごと選んでコピーし、下に貼り付けます。",
+           "口座(特定・NISA)が表に無いときは、確認画面で選び直せます。"],
+      us: ["楽天証券の米国株はCSVが出せないことがあります。その場合は、保有一覧の表(銘柄・保有数・取得単価・現在値)をコピーして貼り付けます。",
+           "為替は、取り込み後に出る「米国株の換算」の欄に1ドルいくらかを入れてください。",
+           "配当(ドル)は、SECで確かめた主な銘柄なら自動で入ります。入らないものは、あとで保有銘柄の欄に入れます。"],
+      fund: ["スマホの投資信託の保有一覧(ファンド名・評価額・評価損益)をコピーして貼り付けます。これだけだと口数が分からないので、<b>保有分を1つにまとめて</b>入ります。",
+             "口数まで入れたいときは、各ファンドの<b>保有商品詳細</b>(保有数量・基準価額・平均取得価額が載る画面)を1本ずつコピーして貼り付けます。",
+             "分配金は、EDINETにあるファンドなら自動で入ります。入らないものは、保有銘柄の欄に入れます。"]
+    },
+    sbi: {
+      jp: ["保有証券一覧を、見出し行ごと選んでコピーし、下に貼り付けます。CSVをダウンロードして選んでも読めます。",
+           "口座の列が無いときは、確認画面で選び直せます。"],
+      us: ["PC版サイトの<b>口座管理 → 口座(外貨建)</b>を開きます。",
+           "保有一覧を、銘柄の表から「参考為替レート」まで<b>まとめて選択してコピー</b>し、貼り付けます(為替も一緒に入ります)。",
+           "「米国株式(特定預り)」「(NISA預り)」の見出しも一緒に含めると、口座が自動で分かれます。"],
+      fund: ["保有一覧の表を見出し行ごとコピーして貼り付けます。口数と基準価額が読めれば、分配金はEDINETのデータから自動で入ります。",
+             "読めなかったときは、メッセージに出る「貼り付けた内容の先頭」を教えてください。"]
+    },
+    other: {
+      jp: ["Yahoo!ファイナンスのポートフォリオ(コード・市場・名称・現在値・業種・購入価格・保有数・1株配当…)の表をコピーして貼り付けます。",
+           "1行に1銘柄で、<code>8306 100 1500</code>(コード 株数 取得単価)のように打つこともできます。<code>9433 20 4000 145 NISA</code>のように、配当(円/株)や「NISA」も付けられます。",
+           "自分の表(スプレッドシート)は、「自分の表用のCSVひな形」の列名に合わせてCSVで書き出し、「CSVファイルを選ぶ」で読みます。"],
+      us: ["コードを英字(<code>VYM 10 100 3.5</code>のように、株数・取得単価・年間配当をドルで)にすると米国株として入ります。",
+           "自分の表のCSVでも、コードが英字の行は米国株(ドル)として読みます。<code>米ドル,155.2</code>の行があれば為替にも使います。"],
+      fund: ["投資信託は、楽天証券・SBI証券の画面から取り込むのが確実です。",
+             "それ以外の証券会社は、保有銘柄の欄で「銘柄を追加」し、種類を投資信託にして入れてください。"]
+    }
+  };
+  (function () {
+    var cur = { b: "rakuten", k: "jp" };
+    try { var sv = JSON.parse(localStorage.getItem("haitoImpGuide") || "{}"); if (IMPORT_GUIDE[sv.b]) cur.b = sv.b; if (sv.k && IMPORT_GUIDE[cur.b][sv.k]) cur.k = sv.k; } catch (e) {}
+    function draw() {
+      document.querySelectorAll("#impBrokers .btn").forEach(function (b) { b.classList.toggle("is-on", b.dataset.b === cur.b); });
+      document.querySelectorAll("#impKinds .btn").forEach(function (b) { b.classList.toggle("is-on", b.dataset.k === cur.k); });
+      document.getElementById("impSteps").innerHTML = IMPORT_GUIDE[cur.b][cur.k].map(function (t) { return "<li>" + t + "</li>"; }).join("");
+      try { localStorage.setItem("haitoImpGuide", JSON.stringify(cur)); } catch (e) {}
+    }
+    document.getElementById("impBrokers").addEventListener("click", function (e) { var b = e.target.closest("[data-b]"); if (b) { cur.b = b.dataset.b; draw(); } });
+    document.getElementById("impKinds").addEventListener("click", function (e) { var b = e.target.closest("[data-k]"); if (b) { cur.k = b.dataset.k; draw(); } });
+    draw();
+  })();
 
   document.getElementById("yahooImportBtn").addEventListener("click", function () {
     var area = document.getElementById("yahooPasteArea");
@@ -8145,9 +8181,9 @@
   function openQuickEntry() {
     // 入力欄は「保有銘柄」タブにあるので、先にタブを切り替える(ホームのままだと見えず、何も起きないように見える)
     setTab("holdings");
-    var details = document.querySelectorAll(".paste-import")[0];
+    var details = document.getElementById("holdImportBox");
     if (details) details.open = true;
-    var area = document.getElementById("quickEntryArea");
+    var area = document.getElementById("yahooPasteArea");
     if (area) {
       area.scrollIntoView({ behavior: "smooth", block: "center" });
       setTimeout(function () { area.focus({ preventScroll: true }); }, 350);
