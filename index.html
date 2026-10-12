@@ -5143,7 +5143,7 @@
     account: { label: "口座別", groupKey: function (r) { return r.account || "特定"; } }
   };
   var AXIS_ORDER = ["sector", "stock", "sensitivity", "account"];
-  var currentAxis = "stock";
+  var currentAxis = "sector";
 
   function aggregate(market) {
     // 「配当の集計から除外」した銘柄は、配当だけ0として扱う(取得額には残す)
@@ -5407,7 +5407,7 @@
     }
   };
   var COLOR_ORDER = ["growth", "current", "yield", "group"];
-  var currentColor = "growth";
+  var currentColor = "group";
 
   // ---------- ヒートマップ ----------
   // 業種別/景気感応度別/口座別/銘柄別のいずれも「グループ→銘柄」の2階層で描画し、
@@ -5558,7 +5558,7 @@
   }
 
   // 「偏ってない?」: 業種の割合(棒 or 円)と景気感応度(帯 or 円)。ヒートマップも選べる
-  var balView = (function () { try { return localStorage.getItem("haitoBalView") || "bar"; } catch (e) { return "bar"; } })();
+  var balView = (function () { try { return localStorage.getItem("haitoBalView") || "pie"; } catch (e) { return "pie"; } })();
   var BAL_COLORS = ["--pie1", "--pie2", "--pie3", "--pie4", "--pie5", "--pie6", "--pie7"];
   function renderBalance(container, agg, view) {
     container.innerHTML = "";
@@ -7238,10 +7238,10 @@
   function marketAgg() { return aggregate(currentMarket); }
 
   var HEAT_PRESETS = [
-    { key: "growth", label: "増配してる?", axis: "stock", color: "growth",
-      lead: "前年より1株配当をどれだけ増やしたかの順です。青い棒が右に長いほど増配、赤い棒は減配です。名前の下は業種です。" },
     { key: "balance", label: "偏ってない?", axis: "sector", color: "group",
       lead: "受け取る配当が、1つの業種や景気敏感株に寄りすぎていないかを見ます。" },
+    { key: "growth", label: "増配してる?", axis: "stock", color: "growth",
+      lead: "前年より1株配当をどれだけ増やしたかの順です。青い棒が右に長いほど増配、赤い棒は減配です。名前の下は業種です。" },
     { key: "yield", label: "利回りは?", axis: "stock", color: "current",
       lead: "今の株価での利回りが高い順です。想定利回りに届いているかを見ます。" },
     { key: "nisa", label: "NISAは?", axis: "account", color: "group",
