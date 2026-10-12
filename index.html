@@ -845,7 +845,8 @@
     .band-count { display: none; }
     .field-check { justify-content: flex-start; }
     .treemap { height: 400px; }
-    .ctl-label { min-width: 0; }
+    .ctl-label { min-width: 0; flex-basis: 100%; }
+    .heat-controls .ctl-row + .ctl-row { margin-top: 8px; }
     .heat-scale .hs-cell { min-width: 40px; font-size: 9.5px; }
   }
   /* 初回訪問の案内 */
@@ -5364,8 +5365,8 @@
         if (g === 0) return GROWTH_FLAT;
         return (g > 0 ? GROWTH_UP : GROWTH_DOWN)[growthStep(Math.abs(g))];
       },
-      text: function (g) { return g === null ? "―" : fmtSigned(g); },
-      note: "前年の1株配当との比較で塗り分けています。前年配当が空欄の銘柄はグレーです。",
+      text: function (g) { return g === null ? "―" : g >= 50 ? "+50%超" : g <= -50 ? "−50%超" : fmtSigned(g); },
+      note: "前年の1株配当との比較で塗り分けています。前年配当が空欄の銘柄はグレーです。±50%を超える銘柄は「50%超」とまとめています(株式分割や記念配当の影響のことがあるので、押して確かめてください)。",
       scale: [
         { c: GROWTH_DOWN[3], t: "−20%↓" }, { c: GROWTH_DOWN[2], t: "−10%" },
         { c: GROWTH_DOWN[1], t: "−3%" }, { c: GROWTH_FLAT, t: "据え置き" },
@@ -6180,11 +6181,8 @@
       chart ? "年間配当金のうち、それぞれが占める割合です。業種を押すと、その業種の銘柄が出ます。上限と目標は分散ガイドラインの設定です。" :
       bars ? "前年の1株配当と比べた増減です。棒の長さは±60%までで切っています。銘柄を押すと詳しく出ます。" : (COLOR_MODES[currentColor] || COLOR_MODES.group).note;
     var legendEl = document.getElementById("axisLegend");
-    if (result) {
-      renderLegendList(legendEl, result.groups, result.colorMap, agg.totalDivPre, currentColor);
-    } else {
-      legendEl.innerHTML = "";
-    }
+    // タイル図の下に同じ割合を並べた一覧は、タイルと重なるので出さない(タイルを押すと詳しく出る)
+    legendEl.innerHTML = "";
   }
 
   // ---------- ヒーロー(月間配当金実績・目標達成ゲージ) ----------
@@ -7255,15 +7253,24 @@
     Array.prototype.forEach.call(document.querySelectorAll("#axisTabs .axis-tab"), function (b) { b.classList.toggle("active", b.dataset.axis === currentAxis); });
     Array.prototype.forEach.call(document.querySelectorAll("#colorTabs .axis-tab"), function (b) { b.classList.toggle("active", b.dataset.color === currentColor); });
     var lead = document.getElementById("heatLead");
-    if (lead) lead.textContent = hit ? hit.lead : "分け方と色を自分で選んで表示しています。";
+    if (lead) lead.textContent = hit ? hit.lead : pickSentence();
   }
 
+  // 「詳しく選ぶ」で使う言葉。まとめ方(タイルの単位)と、色で見るもの
+  var PICK_AXIS = { sector: "業種", stock: "銘柄", sensitivity: "景気感応度", account: "口座" };
+  var PICK_COLOR = { growth: "増配率", current: "今の利回り", yield: "買値の利回り", group: "色分けなし" };
+  function pickSentence() {
+    var a = PICK_AXIS[currentAxis] || "銘柄";
+    return a + "ごとに、年間配当の大きさを面積で表示し、" +
+      (currentColor === "group" ? "色は" + a + "を見分けるためだけに付けています。" : PICK_COLOR[currentColor] + "を色で表しています。") +
+      "タイルを押すと詳しく出ます。";
+  }
   function dashboardTemplate() {
     var tabsHtml = AXIS_ORDER.map(function (k, i) {
-      return '<button class="axis-tab' + (k === currentAxis ? ' active' : '') + '" data-axis="' + k + '">' + AXIS_CONFIG[k].label + '</button>';
+      return '<button class="axis-tab' + (k === currentAxis ? ' active' : '') + '" data-axis="' + k + '">' + PICK_AXIS[k] + '</button>';
     }).join('');
     var colorTabsHtml = COLOR_ORDER.map(function (k) {
-      return '<button class="axis-tab' + (k === currentColor ? ' active' : '') + '" data-color="' + k + '">' + COLOR_MODES[k].label + '</button>';
+      return '<button class="axis-tab' + (k === currentColor ? ' active' : '') + '" data-color="' + k + '">' + PICK_COLOR[k] + '</button>';
     }).join('');
     return '' +
       '<div class="axis-tabs market-filter" id="marketFilter" data-view="analysis" hidden>' +
@@ -7274,10 +7281,10 @@
         return '<button class="axis-tab' + (p.axis === currentAxis && p.color === currentColor ? ' active' : '') + '" data-preset="' + p.key + '">' + p.label + '</button>';
       }).join('') + '</div>' +
       '  <p class="heat-lead" id="heatLead"></p>' +
-      '  <details class="heat-more"><summary>詳しく選ぶ(分け方・色)</summary>' +
+      '  <details class="heat-more"><summary>詳しく選ぶ(まとめ方・色)</summary>' +
       '  <div class="heat-controls">' +
-      '    <div class="ctl-row"><span class="ctl-label">分け方</span><div class="axis-tabs" id="axisTabs">' + tabsHtml + '</div></div>' +
-      '    <div class="ctl-row"><span class="ctl-label">色</span><div class="axis-tabs" id="colorTabs">' + colorTabsHtml + '</div></div>' +
+      '    <div class="ctl-row"><span class="ctl-label">まとめ方</span><div class="axis-tabs" id="axisTabs">' + tabsHtml + '</div></div>' +
+      '    <div class="ctl-row"><span class="ctl-label">色で見るもの</span><div class="axis-tabs" id="colorTabs">' + colorTabsHtml + '</div></div>' +
       '  </div></details>' +
       '  <div class="axis-tabs bal-switch" id="balSwitch" hidden><button class="axis-tab" data-bal="bar">棒</button><button class="axis-tab" data-bal="pie">円</button><button class="axis-tab" data-bal="heat">ヒートマップ</button></div>' +
       '  <div class="treemap" id="treemapEl"></div>' +
