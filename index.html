@@ -6773,13 +6773,11 @@
     renderHeatScale(scaleEl, currentColor);
     scaleEl.hidden = bars;  // 横棒は青=増配・赤=減配の2色だけなので色の目盛りは要らない
     var noteEl = document.getElementById("heatNote");
-    if (noteEl) noteEl.textContent = yieldBars ? "配当/株 ÷ 今の株価です。点線は目標設定の想定利回り(" + goalYieldOf(state.goals) + "%)で、届かない銘柄は薄い色です。銘柄を押すと詳しく出ます。" :
-      accChart ? "年間配当金(税引前)の口座ごとの割合です。払わずに済む税金は国内の20.315%分で、米国株の現地課税(10%)は残ります。口座を押すと銘柄が出ます。" :
-      chart ? "年間配当金のうち、それぞれが占める割合です。業種を押すと、その業種の銘柄が出ます。上限と目標は分散ガイドラインの設定です。" :
-      bars ? "前年の1株配当と比べた増減です。棒の長さは±60%までで切っています。銘柄を押すと詳しく出ます。" : (COLOR_MODES[currentColor] || COLOR_MODES.group).note;
-    var legendEl = document.getElementById("axisLegend");
-    // タイル図の下に同じ割合を並べた一覧は、タイルと重なるので出さない(タイルを押すと詳しく出る)
-    legendEl.innerHTML = "";
+    // 上の説明文と重なることは書かず、補足(点線・切り方・◆・税金の注意)だけを出す
+    if (noteEl) noteEl.textContent = yieldBars ? "点線は目標設定の想定利回り(" + goalYieldOf(state.goals) + "%)で、届かない銘柄は薄い色です。◆はNISA口座。押すと詳しく出ます。" :
+      accChart ? "払わずに済む税金は国内の20.315%分で、米国株の現地課税(10%)は残ります。口座を押すと銘柄が出ます。" :
+      chart ? "業種を押すと、その業種の銘柄が出ます。上限と目標は分散ガイドラインの設定です。" :
+      bars ? "棒の長さは±60%までで切っています。◆はNISA口座。押すと詳しく出ます。" : "面積は年間配当金額、◆はNISA口座です。タイルを押すと詳しく出ます。" + ((COLOR_MODES[currentColor] || COLOR_MODES.group).note ? " " + (COLOR_MODES[currentColor] || COLOR_MODES.group).note : "");
   }
 
   // ---------- ヒーロー(月間配当金実績・目標達成ゲージ) ----------
@@ -7873,7 +7871,7 @@
       '<div class="axis-tabs market-filter" id="marketFilter" data-view="analysis" hidden>' +
       '<button class="axis-tab active" data-market="all">全体</button><button class="axis-tab" data-market="jp">日本株</button><button class="axis-tab" data-market="us">米国株</button></div>' +
       '<div class="panel" data-view="analysis">' +
-      '  <h2><span class="chap">三</span>構成 <span class="hint">面積は年間配当金額・◆はNISA口座・タイルを押すと詳しく</span></h2>' +
+      '  <h2><span class="chap">三</span>構成</h2>' +
       '  <div class="axis-tabs heat-presets" id="heatPresets">' + HEAT_PRESETS.map(function (p) {
         return '<button class="axis-tab' + (p.axis === currentAxis && p.color === currentColor ? ' active' : '') + '" data-preset="' + p.key + '">' + p.label + '</button>';
       }).join('') + '</div>' +
@@ -7888,7 +7886,6 @@
       '  <div class="tm-info" id="tmInfo" hidden></div>' +
       '  <div class="heat-scale" id="heatScale"></div>' +
       '  <p class="heat-note" id="heatNote"></p>' +
-      '  <ul class="legend" id="axisLegend"></ul>' +
       '</div>' +
       '<div class="panel" id="actualPanel" data-view="analysis" hidden>' +
       '  <h2><span class="chap">†</span>配当の答え合わせ <span class="hint">証券会社の受取履歴を読み込むと出ます</span></h2>' +
