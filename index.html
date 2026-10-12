@@ -711,6 +711,7 @@
   .missing-list li:last-child { border-bottom: none; }
   .missing-list .mname { font-weight: 700; }
   .missing-list .mlack { color: var(--text-2); flex: 1; min-width: 10em; }
+  .missing-list .macc { font-family: inherit; font-size: 12.5px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--field); color: var(--text); }
   .missing-list .mlink { color: var(--accent); text-decoration: none; white-space: nowrap; }
   .missing-list .mlink:hover { text-decoration: underline; }
   .missing-list .mjump {
@@ -744,6 +745,28 @@
   }
   .months-cell-btn.is-empty { color: var(--muted); }
   .detail-dialog { max-width: 400px; }
+  .import-dialog { max-width: 520px; max-height: calc(100dvh - 24px); overflow-y: auto; padding-bottom: 0; }
+  .import-dialog .hint { margin-bottom: 10px; }
+  .import-bulk { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text-2);
+    background: var(--field); border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; }
+  .import-list { list-style: none; margin: 0; padding: 0; }
+  .import-list li { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+  .import-list li.is-off { opacity: .45; }
+  .import-list li.needs-check { border-color: var(--warn, #c98a12); }
+  .imp-head { display: flex; align-items: center; gap: 8px; }
+  .imp-head input[type=checkbox] { width: 18px; height: 18px; flex: none; margin: 0; }
+  .imp-name { font-size: 13.5px; font-weight: 700; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .imp-name small { font-weight: 400; color: var(--muted); margin-left: 4px; }
+  .imp-kind { flex: none; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 1px 6px; background: var(--field); color: var(--text-2); }
+  .imp-state { flex: none; font-size: 11px; border-radius: 999px; padding: 1px 8px; background: var(--accent-soft); color: var(--accent); }
+  .imp-state.is-upd { background: var(--field); color: var(--text-2); }
+  .imp-body { margin: 6px 0 0 26px; font-size: 12px; color: var(--text-2); line-height: 1.8; }
+  .imp-acc { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .import-dialog select { font-family: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--field); color: var(--text); }
+  .imp-warn { color: var(--warn, #b07400); }
+  .imp-warn::before { content: "⚠ "; }
+  .imp-ok::before { content: "✓ "; color: var(--accent); }
+  .import-actions { position: sticky; bottom: 0; background: var(--card); padding: 12px 0 16px; margin: 4px 0 0; justify-content: flex-end; }
   .perk-box { background: var(--field); border-radius: 10px; padding: 11px 13px; margin-bottom: 12px; }
   .perk-head { font-size: 12.5px; font-weight: 700; }
   .perk-text { font-size: 11.5px; color: var(--text-2); line-height: 1.75; margin: 6px 0 0;
@@ -1266,8 +1289,8 @@
     </p>
 
     <div class="missing-box" id="missingBox" hidden>
-      <h3>入力が足りない項目</h3>
-      <p class="hint">空欄のままでも表示は壊れませんが、埋めると増配率や配当金カレンダーが出ます。</p>
+      <h3>確認が必要な項目</h3>
+      <p class="hint">空欄のままでも表示は壊れませんが、埋めると増配率や配当金カレンダーが出ます。口座が推定のものや、入れ間違いらしい値もここに出ます。</p>
       <ul class="missing-list" id="missingList"></ul>
     </div>
 
@@ -1276,6 +1299,20 @@
       <p class="hint" id="reviewHint"></p>
       <ul class="missing-list" id="reviewList"></ul>
     </div>
+
+    <dialog class="months-dialog import-dialog" id="importDialog">
+      <h3>取り込む前の確認</h3>
+      <p class="hint" id="importLead"></p>
+      <div class="import-bulk" id="importBulk" hidden>
+        <span>口座が分からない行をまとめて</span>
+        <select id="importBulkAcc"></select>
+      </div>
+      <ul class="import-list" id="importList"></ul>
+      <div class="toolbar import-actions">
+        <button type="button" class="btn" id="importCancelBtn">やめる</button>
+        <button type="button" class="btn primary" id="importOkBtn">取り込む</button>
+      </div>
+    </dialog>
 
     <dialog class="months-dialog detail-dialog" id="detailDialog">
       <h3 id="detailTitle">銘柄の詳細</h3>
@@ -1850,10 +1887,11 @@
     });
     if (changed) { save(); renderTable(); renderDashboard(); }
   }
-  function loadFundDivs() {
-    if (FUND_DIVS || !state.holdings.some(isFund)) { if (FUND_DIVS) applyFundDivs(); return; }
+  var fundDivsReq = null;
+  function loadFundDivs(force) {
+    if (FUND_DIVS || (!force && !state.holdings.some(isFund))) { if (FUND_DIVS) applyFundDivs(); return fundDivsReq || Promise.resolve(); }
     FUND_DIVS = [];
-    fetch("data/fund-distributions.json").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    return fundDivsReq = fetch("data/fund-distributions.json").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
       if (!j) return;
       FUND_DIVS = Object.keys(j).filter(function (k) { return j[k]["年間"] != null; }).map(function (k) {
         var e = j[k];
@@ -3084,7 +3122,7 @@
     });
     if (!h.account) h.account = "特定";
     sel.addEventListener("change", function () {
-      h.account = sel.value; save(); renderDashboard();
+      h.account = sel.value; delete h.accGuess; save(); renderDashboard();
     });
     td.appendChild(sel);
     return td;
@@ -3381,7 +3419,7 @@
       var priceDate = normalizePriceDate(lines[4]);
       var memo = lines[12];
       var account = accountFromText(memo) || "特定";
-      results.push({ code: code, name: name || nameFor(code) || code, sector: sectorFor(code, lines[5]), account: account, shares: shares, cost: cost, div: div,
+      results.push({ code: code, name: name || nameFor(code) || code, sector: sectorFor(code, lines[5]), account: account, accountGuess: !accountFromText(memo), shares: shares, cost: cost, div: div,
         price: price, priceDate: price === "" ? undefined : (priceDate || todayStamp()) });
     });
     return { results: results, skipped: skipped };
@@ -3512,7 +3550,7 @@
         results.push({
           market: "us", code: code.toUpperCase(),
           name: (colMap.name !== undefined ? cleanName(row[colMap.name]) : "") || code.toUpperCase(),
-          sector: US_SECTOR, account: accountFromText(accRaw) || sectionAccount || "特定",
+          sector: US_SECTOR, account: accountFromText(accRaw) || sectionAccount || "特定", accountGuess: !(accountFromText(accRaw) || sectionAccount),
           shares: colMap.shares !== undefined ? parsePasteNum(row[colMap.shares]) : "",
           usdCost: colMap.cost !== undefined ? parsePasteNum(row[colMap.cost]) : "",
           usdPrice: usPrice, priceDate: usPrice !== "" ? (priceDate || todayStamp()) : undefined,
@@ -3532,7 +3570,7 @@
         var fPrice = colMap.price !== undefined ? parsePasteNum(row[colMap.price]) : "";
         results.push({
           market: "fund", code: /^[0-9A-Z]{8}$/.test(code) ? code : "", name: fname.normalize("NFKC"),
-          sector: FUND_SECTOR, account: accountFromText(faRaw) || sectionAccount || "特定",
+          sector: FUND_SECTOR, account: accountFromText(faRaw) || sectionAccount || "特定", accountGuess: !(accountFromText(faRaw) || sectionAccount),
           units: units, cost: colMap.cost !== undefined ? parsePasteNum(row[colMap.cost]) : "",
           price: fPrice, priceDate: fPrice !== "" ? (priceDate || todayStamp()) : undefined
         });
@@ -3556,7 +3594,7 @@
         code: code,
         name: name || nameFor(code) || code,
         sector: sectorFor(code, sectorRaw),
-        account: account,
+        account: account, accountGuess: !(accountFromText(accountRaw) || sectionAccount),
         shares: colMap.shares !== undefined ? parsePasteNum(row[colMap.shares]) : "",
         cost: colMap.cost !== undefined ? parsePasteNum(row[colMap.cost]) : "",
         div: div,
@@ -3573,10 +3611,10 @@
   // 口座は「米国株式(特定預り)」「米国株式(NISA預り(成長投資枠))」の見出しから決める。
   function parseSbiForeign(text, priceDate) {
     var tokens = text.replace(/\r/g, "").split(/\n/).map(function (l) { return l.trim(); });
-    var results = [], account = "特定", fx = null;
+    var results = [], account = "特定", accKnown = false, fx = null;
     for (var i = 0; i < tokens.length; i++) {
       var t = tokens[i];
-      if (/米国株式\s*[(（]/.test(t)) account = accountFromText(t) || "特定";
+      if (/米国株式\s*[(（]/.test(t)) { account = accountFromText(t) || "特定"; accKnown = !!accountFromText(t); }
       var fxm = t.match(/^米ドル\s*[\/／]\s*円(?:[\s\t]+([0-9.,]+))?$|^米ドル\s*[\/／]\s*円[\s\t]+([0-9.,]+)/);
       if (fxm) {
         var fv = fxm[1] || fxm[2] || tokens[i + 1];
@@ -3607,7 +3645,7 @@
       if (before) nameParts.push(before);
       results.push({
         market: "us", code: m[1], name: nameParts.join("").replace(/\s+/g, " ").trim() || m[1],
-        sector: US_SECTOR, account: account, shares: nums[0], usdCost: nums[1],
+        sector: US_SECTOR, account: account, accountGuess: !accKnown, shares: nums[0], usdCost: nums[1],
         usdPrice: nums[2] !== undefined ? nums[2] : "", priceDate: priceDate || todayStamp(), months: [3, 6, 9, 12]
       });
     }
@@ -3769,6 +3807,11 @@
     if (num(h.prevDiv) > 0) h.prevDiv = round2(num(h.prevDiv) / k);
     else if (s && s[0] > 0) h.prevDiv = round2(s[0] / k);  // 内蔵の前期実績(分割前)を分割後に直して比べる
   }
+  // 口座が書かれていない取り込みで「特定」にした銘柄は、あとで要確認に出す。口座が書かれた取り込みで上書きされたら外す
+  function markAccGuess(h, r) {
+    if (r.accountGuess) { if (h.addedAt === todayIso() && !h.accOk) h.accGuess = true; }
+    else delete h.accGuess;
+  }
   function mergePastedResults(results) {
     var added = 0, updated = 0, splitFound = [];
     results.forEach(function (r) {
@@ -3813,6 +3856,7 @@
           f = { id: uid(), code: r.code, name: r.name, account: r.account, div: "", prevDiv: "", months: [], addedAt: todayIso() };
           state.holdings.push(f); added++;
         } else updated++;
+        markAccGuess(f, r);
         f.market = "fund"; f.sector = FUND_SECTOR; f.name = r.name; if (r.code) f.code = r.code;
         f.units = r.units; f.shares = Math.round(r.units / 10000 * 10000) / 10000;  // 万口
         if (r.cost !== "") f.cost = r.cost;
@@ -3828,6 +3872,7 @@
           h = { id: uid(), code: r.code, name: r.name, account: r.account, addedAt: todayIso(), prevDiv: "" };
           state.holdings.push(h); added++;
         } else updated++;
+        markAccGuess(h, r);
         h.market = "us"; if (r.name && (r.name !== r.code || !h.name)) h.name = r.name; h.sector = r.sector; h.shares = r.shares;
         h.usd = h.usd || { div: "", prevDiv: "" };
         h.usd.cost = r.usdCost;
@@ -3850,6 +3895,7 @@
         // 前年配当を持たない取り込み元(貼り付け・CSV)では既存の入力値を消さない
         if (r.prevDiv !== undefined) existing.prevDiv = r.prevDiv;
         if (kSplit) fixDivForSplit(existing, kSplit, splitFound);
+        markAccGuess(existing, r);
         updated++;
       } else {
         state.holdings.push({
@@ -3857,7 +3903,7 @@
           shares: r.shares, cost: r.cost, div: r.div, months: r.months,
           price: r.price === "" ? undefined : r.price, priceDate: r.price === "" ? undefined : r.priceDate,
           prevDiv: r.prevDiv !== undefined ? r.prevDiv : "",
-          addedAt: todayIso()
+          addedAt: todayIso(), accGuess: r.accountGuess ? true : undefined
         });
         added++;
       }
@@ -3870,9 +3916,160 @@
     var detail = parseRakutenFundDetail(text);
     if (detail) { applyFundDetail(detail, statusEl); return; }
     var head = String(text || "").replace(/\s+/g, " ").trim().slice(0, 40);
-    applyResults(parseHoldingsPaste(text, priceDate), statusEl, "読み込める行が見つかりませんでした。対応形式か確認してください。" +
-      (head ? "(貼り付けた内容の先頭:「" + head + "…」)" : "(貼り付けた内容が空でした)"));
+    var parsed = parseHoldingsPaste(text, priceDate);
+    if (!parsed.results.length) {
+      statusEl.textContent = "読み込める行が見つかりませんでした。対応形式か確認してください。" +
+        (head ? "(貼り付けた内容の先頭:「" + head + "…」)" : "(貼り付けた内容が空でした)");
+      return;
+    }
+    openImportConfirm(parsed, statusEl);
   }
+
+  // ---------- 取り込む前の確認 ----------
+  // 読み取った行をいったん一覧にして、口座の推定や配当が分からない行に気づけるようにする。
+  // 口座は行ごとに選び直せ、取り込まない行は外せる。
+  function importTarget(r) {
+    if (r.market === "fund") {
+      return state.holdings.find(function (h) { return isFund(h) && fundNorm(h.name) === fundNorm(r.name) && h.account === importAccount(r); }) || null;
+    }
+    return state.holdings.find(function (h) { return h.code === r.code && h.account === r.account; }) || null;
+  }
+  // 口座の書かれていない投信(スマホの一覧)は、同じ名前の投信があればその口座、無ければ特定になる
+  function importAccount(r) {
+    if (r.account) return r.account;
+    var same = state.holdings.filter(function (h) { return isFund(h) && fundNorm(h.name) === fundNorm(r.name); });
+    return (same[0] && same[0].account) || "特定";
+  }
+  function importAccGuessed(r) {
+    if (r.accChosen) return false;
+    return r.market === "fund" && r.total ? !r.account : !!r.accountGuess;
+  }
+  function importQtyText(r) {
+    if (r.market === "fund") return r.total ? "評価額 " + fmtYen(num(r.value)) : num(r.units).toLocaleString("ja-JP") + "口";
+    return num(r.shares) > 0 ? num(r.shares).toLocaleString("ja-JP") + "株" : "株数なし";
+  }
+  // 配当がどこから入るか。入らないものは「あとで入力」と出す
+  function importDivInfo(r, ex) {
+    if (r.market === "fund") {
+      if (ex && num(ex.div) > 0 && (r.total ? ex.fundTotal : !ex.fundTotal)) return { ok: true, t: "分配金は入力済みのまま" };
+      if (r.total) return { ok: false, t: "口数が載っていない画面なので、年間の分配金(合計)はあとで入力が必要です" };
+      var f = fundDivOf({ market: "fund", sector: FUND_SECTOR, name: r.name });
+      if (f && f.v > 0) return { ok: true, t: "分配金は自動で入ります(EDINET・1万口あたり年" + Math.round(f.v).toLocaleString("ja-JP") + "円)" };
+      if (f) return { ok: true, t: "直近1年は分配なし(EDINET)" };
+      return { ok: false, t: "分配金が自動で入らない投信です。あとで入力してください" };
+    }
+    if (r.market === "us") {
+      if (r.usdDiv !== "" && r.usdDiv != null) return { ok: true, t: "配当 $" + r.usdDiv + "/株" };
+      var a = usAutoDivs({ code: r.code });
+      if (a && a[0] > 0) return { ok: true, t: "配当は自動で入ります($" + a[0] + "/株)" };
+      if (ex && ex.usd && num(ex.usd.div) > 0) return { ok: true, t: "配当は入力済みのまま" };
+      return { ok: false, t: "配当(ドル・年間)が分かりません。あとで入力してください" };
+    }
+    if (r.div !== "" && r.div != null) return { ok: true, t: "配当 " + r.div + "円/株" + (num(r.div) === 0 ? "(無配)" : "") };
+    if (ex && ex.div !== "" && ex.div != null) return { ok: true, t: "配当は入力済みのまま" };
+    return { ok: false, t: "配当が分かりません。あとで入力してください" };
+  }
+
+  var importState = null;
+  function openImportConfirm(parsed, statusEl) {
+    // 口座の書かれていない行は、同じ銘柄を1つの口座だけで持っていればその口座に合わせる(特定に別の行ができないように)
+    parsed.results.forEach(function (r) {
+      var fund = r.market === "fund";
+      if (!(fund && r.total ? !r.account : r.accountGuess)) return;
+      var accs = {};
+      state.holdings.forEach(function (h) {
+        if (fund ? isFund(h) && fundNorm(h.name) === fundNorm(r.name) : !isFund(h) && h.code === r.code) accs[h.account || "特定"] = 1;
+      });
+      var k = Object.keys(accs);
+      if (k.length === 1) { r.account = k[0]; delete r.accountGuess; r.accFromHeld = true; }
+    });
+    importState = { parsed: parsed, statusEl: statusEl, rows: parsed.results.map(function (r) { return { r: r, on: true }; }) };
+    var dlg = document.getElementById("importDialog");
+    renderImportConfirm();
+    if (!dlg.open) dlg.showModal();
+    // 投信の分配金(EDINET)はまだ読んでいなければ読んでから出し直す
+    if (!FUND_DIVS && parsed.results.some(function (r) { return r.market === "fund"; }))
+      loadFundDivs(true).then(function () { if (importState && dlg.open) renderImportConfirm(); });
+  }
+  function renderImportConfirm() {
+    var st = importState, list = document.getElementById("importList");
+    list.innerHTML = "";
+    var nCheck = 0, nGuess = 0;
+    st.rows.forEach(function (row) {
+      var r = row.r, ex = importTarget(r), div = importDivInfo(r, ex), guess = importAccGuessed(r);
+      if (guess) nGuess++;
+      if (row.on && (guess || !div.ok)) nCheck++;
+      var li = document.createElement("li");
+      li.className = (row.on ? "" : "is-off") + (row.on && (guess || !div.ok) ? " needs-check" : "");
+      var kind = r.market === "fund" ? "投信" : r.market === "us" ? "米国株" : "日本株";
+      li.innerHTML = '<div class="imp-head"><input type="checkbox" aria-label="取り込む"' + (row.on ? " checked" : "") + '>' +
+        '<span class="imp-kind">' + kind + '</span>' +
+        '<span class="imp-name">' + escapeHtml(r.name || r.code) + (r.code && r.market !== "fund" ? '<small>' + escapeHtml(r.code) + '</small>' : "") + '</span>' +
+        '<span class="imp-state' + (ex ? " is-upd" : "") + '">' + (ex ? "更新" : "新規") + '</span></div>' +
+        '<div class="imp-body"><div class="imp-acc"><span>' + escapeHtml(importQtyText(r)) + '</span><span>口座</span></div>' +
+        (r.accFromHeld && !r.accChosen ? '<div class="imp-ok">口座が書かれていなかったので、今持っている口座(' + escapeHtml(r.account) + ')に合わせました</div>' : "") +
+        (guess ? '<div class="imp-warn">口座が書かれていなかったので「' + escapeHtml(importAccount(r)) + '」にしています。違っていれば選び直してください</div>' : "") +
+        '<div class="' + (div.ok ? "imp-ok" : "imp-warn") + '">' + escapeHtml(div.t) + '</div></div>';
+      var sel = document.createElement("select");
+      sel.setAttribute("aria-label", "口座");
+      ACCOUNTS.forEach(function (a) { var o = document.createElement("option"); o.value = a; o.textContent = a; sel.appendChild(o); });
+      sel.value = importAccount(r);
+      sel.addEventListener("change", function () {
+        r.account = sel.value; r.accChosen = true; delete r.accountGuess;
+        renderImportConfirm();
+      });
+      li.querySelector(".imp-acc").appendChild(sel);
+      li.querySelector("input").addEventListener("change", function (e) { row.on = e.target.checked; renderImportConfirm(); });
+      list.appendChild(li);
+    });
+    var on = st.rows.filter(function (x) { return x.on; }).length;
+    document.getElementById("importLead").textContent = st.rows.length + "件読み取りました。" +
+      (nCheck ? "⚠の" + nCheck + "件は確かめてください(口座はここで直せます。配当はあとで保有銘柄の欄に入れられます)。" : "内容に問題がなければ「取り込む」を押してください。") +
+      "取り込まない行はチェックを外します。";
+    var bulk = document.getElementById("importBulk");
+    bulk.hidden = nGuess < 2;
+    var bs = document.getElementById("importBulkAcc");
+    if (!bs.options.length) {
+      var o0 = document.createElement("option"); o0.value = ""; o0.textContent = "選ぶ…"; bs.appendChild(o0);
+      ACCOUNTS.forEach(function (a) { var o = document.createElement("option"); o.value = a; o.textContent = a + "にする"; bs.appendChild(o); });
+    }
+    bs.value = "";
+    var ok = document.getElementById("importOkBtn");
+    ok.textContent = on ? on + "件を取り込む" : "取り込む行がありません";
+    ok.disabled = !on;
+  }
+  document.getElementById("importBulkAcc").addEventListener("change", function (e) {
+    var v = e.target.value;
+    if (!v || !importState) return;
+    importState.rows.forEach(function (x) {
+      if (importAccGuessed(x.r)) { x.r.account = v; x.r.accChosen = true; delete x.r.accountGuess; }
+    });
+    renderImportConfirm();
+  });
+  document.getElementById("importOkBtn").addEventListener("click", function () {
+    var st = importState;
+    if (!st) return;
+    importState = null;
+    document.getElementById("importDialog").close();
+    var results = st.rows.filter(function (x) { return x.on; }).map(function (x) {
+      // 選び直した口座は「推定」ではない。選ばなかった投信の一覧は、今までどおり同じ名前の投信の口座に合わせる
+      if (x.r.accChosen) { delete x.r.accountGuess; x.r.accOk = true; }
+      return x.r;
+    });
+    var left = st.rows.length - results.length;
+    applyResults({ results: results, skipped: st.parsed.skipped, fx: st.parsed.fx }, st.statusEl, "");
+    if (left) st.statusEl.textContent += " " + left + "件は取り込みませんでした。";
+    showToast("取り込みました。結果は取り込み欄の下に出ています");
+  });
+  function cancelImport() {
+    if (!importState) return;
+    importState.statusEl.textContent = "取り込みをやめました(何も変わっていません)。";
+    importState = null;
+  }
+  document.getElementById("importCancelBtn").addEventListener("click", function () {
+    cancelImport(); document.getElementById("importDialog").close();
+  });
+  document.getElementById("importDialog").addEventListener("close", cancelImport);
 
   function applyResults(parsed, statusEl, emptyMessage) {
     if (parsed.results.length === 0) {
@@ -4917,12 +5114,21 @@
   // 銘柄ごとに調べ先へのリンクと、明細の行へのジャンプを添える。
   function missingFieldsOf(h) {
     var lack = [];
-    if (h.div === "" || h.div == null) lack.push("配当");
-    if (!prevDivOf(h)) lack.push("前年配当");
+    if (h.div === "" || h.div == null) lack.push(isFund(h) ? (h.fundTotal ? "年間分配金(合計)" : "分配金") : "配当");
+    if (!isFund(h) && !prevDivOf(h)) lack.push("前年配当");
     // 無配(配当0円)の銘柄は権利確定月が無くても困らない
     var zero = h.div !== "" && h.div != null && num(h.div) === 0;
-    if (monthsOf(h).length === 0 && !zero) lack.push("権利確定月");
+    if (monthsOf(h).length === 0 && !zero && !isFund(h)) lack.push("権利確定月");
     return lack;
+  }
+  // 空欄ではないが、確かめたほうがいい値(口座の推定・桁違いらしい配当)
+  function doubtsOf(h) {
+    var out = [];
+    if (h.accGuess) out.push({ k: "acc", t: "口座が書かれていない取り込みだったので「" + (h.account || "特定") + "」にしています" });
+    var y = currentYieldOf(h);
+    if (y != null && y > 12) out.push({ k: "yield", t: "利回りが" + y.toFixed(1) + "%と高すぎます。配当" + (isFund(h) ? "(1万口あたりか、年間の合計か)" : "(1株あたり・年間)") + "か株価の入れ間違いでないか確かめてください" });
+    else if (y != null && y < 0.3 && isFund(h)) out.push({ k: "yield", t: "分配金の利回りが" + y.toFixed(2) + "%と小さすぎます。" + (h.fundTotal ? "年間の合計(円)" : "1万口あたりの年間の額") + "で入っているか確かめてください" });
+    return out;
   }
 
   // ---------- 決算発表と配当予想の見直し ----------
@@ -5201,8 +5407,8 @@
     if (!box || !list) return;
 
     var rows = state.holdings
-      .map(function (h) { return { h: h, lack: missingFieldsOf(h) }; })
-      .filter(function (x) { return x.lack.length > 0; });
+      .map(function (h) { return { h: h, lack: missingFieldsOf(h), doubt: doubtsOf(h) }; })
+      .filter(function (x) { return x.lack.length > 0 || x.doubt.length > 0; });
 
     box.hidden = rows.length === 0;
     list.innerHTML = "";
@@ -5222,8 +5428,22 @@
       var lack = document.createElement("span");
       lack.className = "mlack";
       lack.textContent = blank ? "コードも銘柄名も入っていません" :
-        x.lack.join("・") + " が空欄" + (ETF_LINKS[code] && !US_DIV_MAP[code] ? "(このETFの分配金はまだ自動で入らないため手入力)" : "");
+        [x.lack.length ? x.lack.join("・") + " が空欄" + (ETF_LINKS[code] && !US_DIV_MAP[code] ? "(このETFの分配金はまだ自動で入らないため手入力)" : "") : ""]
+          .concat(x.doubt.map(function (d) { return d.t; })).filter(Boolean).join("。");
       li.appendChild(lack);
+      if (!blank && h.accGuess) {
+        // 口座はここで直せる。合っていれば「このまま」で一覧から外す
+        var sel = document.createElement("select");
+        sel.className = "macc"; sel.setAttribute("aria-label", "口座");
+        ACCOUNTS.forEach(function (a) { var o = document.createElement("option"); o.value = a; o.textContent = a; sel.appendChild(o); });
+        sel.value = h.account || "特定";
+        sel.addEventListener("change", function () {
+          h.account = sel.value; delete h.accGuess;
+          save(); renderTable(); renderDashboard();
+          showToast((h.name || h.code) + " の口座を「" + h.account + "」にしました");
+        });
+        li.appendChild(sel);
+      }
 
       function act(label, title, fn) {
         var b = document.createElement("button");
@@ -5241,6 +5461,11 @@
       }
       // 配当を出していない会社(内蔵データにも配当が無い)は、0円と入れれば以後は空欄扱いしない
       var noDivData = !isUS(h) && !isFund(h) && !dividendsFor(code);
+      if (h.accGuess) {
+        act("口座はこのまま", "口座が合っていれば、この一覧から外します", function () {
+          delete h.accGuess; save(); renderTable(); renderDashboard();
+        });
+      }
       if (noDivData && x.lack.indexOf("配当") !== -1) {
         act("無配(0円)にする", "配当を出していない銘柄なら、配当と前年配当を0円にしてこの一覧から外します", function () {
           h.div = "0"; if (h.prevDiv === "" || h.prevDiv == null) h.prevDiv = "0";
