@@ -3816,6 +3816,7 @@
         f.market = "fund"; f.sector = FUND_SECTOR; f.name = r.name; if (r.code) f.code = r.code;
         f.units = r.units; f.shares = Math.round(r.units / 10000 * 10000) / 10000;  // 万口
         if (r.cost !== "") f.cost = r.cost;
+        if (r.price !== "" && r.price !== undefined) fixTinyFundDiv(f, r.price);  // 入れ間違いらしい極端に小さい分配金は空にして自動の値に
         if (r.price !== "" && r.price !== undefined) { f.price = r.price; f.priceDate = r.priceDate; }
         return;
       }
@@ -3902,12 +3903,14 @@
     if (funds.length) {
       var fundNoDiv = funds.filter(function (r) {
         var h = state.holdings.find(function (x) { return isFund(x) && x.account === r.account && (r.code ? x.code === r.code : x.name === r.name); });
-        return !(h && num(h.div) > 0);
+        return !(h && (num(h.div) > 0 || (!h.fundTotal && fundDivOf(h))));
       }).length;
       msg += " 投資信託" + funds.length + "件を読み込みました。";
       var totals = funds.filter(function (r) { return r.total; });
       if (totals.length) msg += "口数が載っていない画面なので、保有分をまとめて1つ(評価額・取得額)で入れました。口座は「" + totals.map(function (r) { return r.account; }).join("・") + "」です(違っていたら保有銘柄の欄で直してください)。";
-      if (fundNoDiv) msg += "うち" + fundNoDiv + "件は年間の分配金が分からないので、保有銘柄の欄に" + (totals.length ? "「年間分配金(合計,円)」" : "「1万口あたりの年間分配金(円)」") + "を入れてください(運用会社のサイトや運用報告書に載っています)。";
+      if (fundNoDiv) msg += totals.length
+        ? "うち" + fundNoDiv + "件は年間の分配金が分からないので、保有銘柄の欄に「年間分配金(合計,円)」を入れてください(運用会社のサイトや運用報告書に載っています)。"
+        : "年間の分配金は、EDINETの有報にあるファンドなら自動で入ります(1万口あたり)。入らなかったときは、保有銘柄の欄に入れてください。";
     }
     if (parsed.skipped > 0) msg += " 合計の行など、" + parsed.skipped + "行は読み込んでいません。";
     statusEl.textContent = msg;
