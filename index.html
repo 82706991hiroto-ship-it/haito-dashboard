@@ -3697,22 +3697,34 @@
   // 楽天証券の「保有商品詳細」(投資信託)をコピーした文字。口座の見出し・ファンド名・基準価額・保有数量(口)・平均取得価額が載っている
   function parseRakutenFundHolding(text, priceDate) {
     var t = String(text || "").normalize("NFKC");
-    if (!/保有数量/.test(t) || !/基準価額/.test(t) || !/平均取得価額/.test(t)) return { results: [], skipped: 0 };
+    if (!/保有数量|保有口数/.test(t) || !/基準価額/.test(t)) return { results: [], skipped: 0 };
     var lines = t.replace(/\r/g, "").split("\n").map(function (l) { return l.trim(); }).filter(Boolean);
     var val = function (re, unit) {
       var i = lines.findIndex(function (l) { return re.test(l); });
       if (i < 0) return null;
-      var m = (lines[i].replace(re, "") + " " + (lines[i + 1] || "")).match(new RegExp("([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*" + unit));
+      var near = lines[i].replace(re, "") + " " + (lines[i + 1] || "");
+      var m = near.match(new RegExp("([0-9][0-9,]*(?:\\.[0-9]+)?)\\s*" + unit)) || near.match(/([0-9][0-9,]*(?:\.[0-9]+)?)/);
       return m ? parseFloat(m[1].replace(/,/g, "")) : null;
     };
-    var units = val(/保有数量/, "口"), nav = val(/基準価額/, "円"), cost = val(/平均取得価額/, "円");
+    var units = val(/保有数量|保有口数/, "口"), nav = val(/基準価額/, "円"), cost = val(/平均取得価額|平均取得単価/, "円"), value = val(/時価評価額|評価額/, "円");
     var account = null;
     lines.some(function (l) { var a = /投資枠|NISA|特定|一般|分配金コース/.test(l) && l.length < 40 ? accountFromText(l) : null; if (a) account = a; return !!a; });
     var first = lines.findIndex(function (l) { return /時価評価額|評価損益|基準価額/.test(l); });
     var name = lines.slice(0, first < 0 ? lines.length : first).filter(function (l) {
       return !/保有商品詳細|投資枠|NISA|特定口座|分配金コース|積立中|^楽天$|^eM$|^[A-Za-z]{1,3}$/.test(l) && l.length >= 2;
     }).join("");
-    if (!name || !(units > 0) || !(nav > 0)) return { results: [], skipped: 0 };
+    if (!(units > 0) || !(nav > 0)) return { results: [], skipped: 0 };
+    // ファンド名がコピーに入っていなくても、評価額(口数 × 基準価額)で持っている投信に当てる
+    if (!name) {
+      var v = value || units / 10000 * nav, best = null, funds = state.holdings.filter(isFund);
+      funds.forEach(function (h) {
+        var hv = h.fundTotal ? num(h.price) : num(h.shares) * num(h.price);
+        if (hv > 0 && Math.abs(hv / v - 1) < 0.03 && (!best || Math.abs(hv / v - 1) < best.d)) best = { h: h, d: Math.abs(hv / v - 1) };
+      });
+      var hit = best ? best.h : funds.length === 1 ? funds[0] : null;
+      if (!hit) return { results: [], skipped: 0 };
+      name = hit.name; if (!account) account = hit.account;
+    }
     return { results: [{ market: "fund", code: "", name: name, sector: FUND_SECTOR, account: account || "特定", units: units,
       cost: cost || "", price: nav, priceDate: priceDate || todayStamp(), accountGuess: !account }], skipped: 0 };
   }
@@ -3848,7 +3860,9 @@
   function applyParsedHoldings(text, statusEl, priceDate) {
     var detail = parseRakutenFundDetail(text);
     if (detail) { applyFundDetail(detail, statusEl); return; }
-    applyResults(parseHoldingsPaste(text, priceDate), statusEl, "読み込める行が見つかりませんでした。対応形式か確認してください。");
+    var head = String(text || "").replace(/\s+/g, " ").trim().slice(0, 40);
+    applyResults(parseHoldingsPaste(text, priceDate), statusEl, "読み込める行が見つかりませんでした。対応形式か確認してください。" +
+      (head ? "(貼り付けた内容の先頭:「" + head + "…」)" : "(貼り付けた内容が空でした)"));
   }
 
   function applyResults(parsed, statusEl, emptyMessage) {
