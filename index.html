@@ -1072,6 +1072,7 @@
   .fx-bar input { width: 90px; }
   .usd-tag { font-size: 11px; color: var(--muted); margin-left: 3px; }
   .etf-link { display: block; font-size: 11px; margin-top: 3px; }
+  .fund-badge { color: var(--ok, #1baf7a); border-color: currentColor; }
   .us-badge { display: inline-block; font-size: 10px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; margin-right: 4px; vertical-align: 1px; }
   .market-filter { display: flex; gap: 6px; margin: 0 0 6px; }
   .market-filter[hidden] { display: none; }
@@ -1400,7 +1401,7 @@
           <span class="paste-status" id="yahooImportStatus"></span>
         </div>
         <p class="hint" style="margin-top:14px;">
-          スマホの場合は、証券会社アプリ・サイトから保有証券のCSVファイルをダウンロードし、ここから選んでも読み込めます(コピー&貼り付けが難しい場合に便利です)。文字コードはUTF-8・Shift_JISのどちらでも自動判定します。<br>
+          スマホの場合は、証券会社アプリ・サイトから保有証券のCSVファイルをダウンロードし、ここから選んでも読み込めます(コピー&貼り付けが難しい場合に便利です)。楽天証券の保有商品一覧のCSVは、投資信託の行も読み込みます(口数と基準価額。年間の分配金は自動では分からないので、保有銘柄の欄に1万口あたりの金額を入れてください)。文字コードはUTF-8・Shift_JISのどちらでも自動判定します。<br>
           自分で管理している表(スプレッドシート)からも読み込めます。「コード」「口座」「株数」「取得単価」「1株配当」「前年配当」「現在値」の列名を付けてCSVで書き出してください。コードが英字(VYM、KOなど)の行は米国株として、取得単価・配当・現在値をドルで読みます。「米ドル,155.2」の行があれば為替にも使います。
         </p>
         <div class="toolbar">
@@ -1548,6 +1549,10 @@
   var US_SECTOR = "米国株・ETF";
   var US_FX_FALLBACK = 150;
   function isUS(h) { return !!h && h.market === "us"; }
+  // 投資信託。口数・基準価額・分配金は「1万口あたり」で表すので、株数の欄には万口(口数÷1万)を入れて
+  // 「株数 × 単価」の計算をそのまま使う。分配金は日本株と同じく20.315%課税(NISAは非課税)
+  var FUND_SECTOR = "投資信託";
+  function isFund(h) { return !!h && h.market === "fund"; }
   // 米国株は1つの「業種」にまとめると巨大な塊になるので、集計ではETFの種類・個別株に分ける(保存する業種は US_SECTOR のまま)
   var US_GROUPS = [
     ["米国高配当ETF", "ディフェンシブ", ["VYM", "HDV", "SPYD", "SCHD", "DVY", "FDVV", "SPHD", "DHS"]],
@@ -1620,7 +1625,9 @@
     // ETF・REITなど、内蔵データに業種が無いもの。区分は業種の区分表で変えられる
     "未分類": "景気敏感",
     // 米国株・米国ETF。中身が分散しているETFが多いので、区分は業種の区分表で変えられる
-    "米国株・ETF": "景気敏感"
+    "米国株・ETF": "景気敏感",
+    // 投資信託。中身は商品ごとに違うので、区分は業種の区分表で変えられる
+    "投資信託": "景気敏感"
   };
   var UNCLASSIFIED = "未分類";
   var SECTOR_NAMES = Object.keys(SECTOR_DEFAULT_CLASS);
@@ -2109,7 +2116,7 @@
     return { level: level, score: score, items: items, good: good, info: info, check: dataCheckOf(code) };
   }
   function holdingRisk(h) {
-    if (isUS(h)) return null;
+    if (isUS(h) || isFund(h)) return null;
     var st = forecastStatus(h);
     return dividendRisk(h.code, st && st.kind === "ok" ? num(h.div) : 0);
   }
@@ -2126,7 +2133,7 @@
     var seen = {}, rows = [], noData = 0, jp = 0;
     state.holdings.forEach(function (h) {
       var code = String(h.code || "").trim().toUpperCase();
-      if (isUS(h) || !code || seen[code] || h.excluded) return;
+      if (isUS(h) || isFund(h) || !code || seen[code] || h.excluded) return;
       seen[code] = true; jp++;
       var r = holdingRisk(h);
       if (!r) { noData++; return; }
@@ -2238,7 +2245,7 @@
     var today = todayIso(), until = isoOf(new Date(Date.now() + days * 86400000)), out = [], seen = {};
     state.holdings.forEach(function (h) {
       var code = String(h.code || "").trim().toUpperCase();
-      if (isUS(h) || !code || seen[code] || h.excluded) return;
+      if (isUS(h) || isFund(h) || !code || seen[code] || h.excluded) return;
       var hit = null;
       ((state.earnings && state.earnings[h.code]) || []).forEach(function (e) {
         if (e.d >= today && e.d <= until && (!hit || e.d < hit.date)) hit = { date: e.d, exact: true, kind: e.t };
@@ -2616,9 +2623,10 @@
     });
   }
 
+  var FUND_LABELS = { code: "協会コード", shares: "口数(万口)", cost: "取得単価(1万口,円)", div: "年間分配金(1万口,税引前,円)", prevDiv: "前年分配金(1万口,円)" };
   function makeInputCell(h, field, type) {
     var td = document.createElement("td");
-    td.dataset.label = FIELD_LABELS[field] || "";
+    td.dataset.label = (isFund(h) && FUND_LABELS[field]) || FIELD_LABELS[field] || "";
     var input = document.createElement("input");
     input.type = type;
     input.dataset.field = field;
@@ -3015,7 +3023,7 @@
     // 株価が古いと利回りがずれるので、30日を過ぎたら薄くして株価の日付を出す
     var age = yNow !== null ? priceAgeDays(h.priceDate) : null, stale = age !== null && age > PRICE_STALE_DAYS;
     if (stale) yl = "株価" + isoDay(h.priceDate).slice(5).replace(/^0/, "").replace(/-0?/, "/") + "時点";
-    return '<span class="sum-name">' + (isUS(h) ? '<span class="us-badge">米</span>' : "") + escapeHtml((h.code ? h.code + " " : "") + String(h.name || "銘柄を入力").normalize("NFKC")) + '</span>' +
+    return '<span class="sum-name">' + (isUS(h) ? '<span class="us-badge">米</span>' : isFund(h) ? '<span class="us-badge fund-badge">投</span>' : "") + escapeHtml((h.code ? h.code + " " : "") + String(h.name || "銘柄を入力").normalize("NFKC")) + '</span>' +
       '<span class="sum-yield">' + (yv !== null ? '<b' + (stale ? ' class="stale"' : "") + '>' + yv.toFixed(2) + '%</b><small' + (stale || (fst && fst.kind === "stale") ? ' class="stale"' : "") + '>' + yl + '</small>' : '<b class="muted">―</b><small>利回り</small>') + '</span>' +
       // 一覧は「年いくら」と「増配・減配」だけに絞る(株数・連続増配は開いたとき・詳細で)
       '<span class="sum-meta">' +
@@ -3394,6 +3402,22 @@
         });
         return;
       }
+      // 投資信託: 種別が「投資信託」か、保有数量の単位が「口」の行(楽天証券)。単価は1万口あたりの円
+      var unitCell = colMap.shares !== undefined ? (row[colMap.shares + 1] || "") : "";
+      if (/投資信託|投信/.test(kind) || /^口$/.test(unitCell.trim())) {
+        var fname = colMap.name !== undefined ? String(row[colMap.name] || "").trim() : "";
+        var units = colMap.shares !== undefined ? parsePasteNum(row[colMap.shares]) : "";
+        if (!fname || !(units > 0)) { skipped++; return; }
+        var faRaw = colMap.account !== undefined ? (row[colMap.account] || "").trim() : "";
+        var fPrice = colMap.price !== undefined ? parsePasteNum(row[colMap.price]) : "";
+        results.push({
+          market: "fund", code: /^[0-9A-Z]{8}$/.test(code) ? code : "", name: fname.normalize("NFKC"),
+          sector: FUND_SECTOR, account: accountFromText(faRaw) || sectionAccount || "特定",
+          units: units, cost: colMap.cost !== undefined ? parsePasteNum(row[colMap.cost]) : "",
+          price: fPrice, priceDate: fPrice !== "" ? (priceDate || todayStamp()) : undefined
+        });
+        return;
+      }
       if (!/^[0-9][0-9A-Za-z]{2,4}$/.test(code)) { skipped++; return; }
 
       var name = colMap.name !== undefined ? cleanName(row[colMap.name]) : "";
@@ -3502,6 +3526,18 @@
   function mergePastedResults(results) {
     var added = 0, updated = 0, splitFound = [];
     results.forEach(function (r) {
+      if (r.market === "fund") {
+        var f = state.holdings.find(function (h) { return isFund(h) && h.account === r.account && (r.code ? h.code === r.code : h.name === r.name); });
+        if (!f) {
+          f = { id: uid(), code: r.code, name: r.name, account: r.account, div: "", prevDiv: "", months: [], addedAt: todayIso() };
+          state.holdings.push(f); added++;
+        } else updated++;
+        f.market = "fund"; f.sector = FUND_SECTOR; f.name = r.name; if (r.code) f.code = r.code;
+        f.units = r.units; f.shares = Math.round(r.units / 10000 * 10000) / 10000;  // 万口
+        if (r.cost !== "") f.cost = r.cost;
+        if (r.price !== "" && r.price !== undefined) { f.price = r.price; f.priceDate = r.priceDate; }
+        return;
+      }
       var existing = state.holdings.find(function (h) { return h.code === r.code && h.account === r.account; });
       if (r.market === "us") {
         // 米国株: 株数・取得単価・株価(ドル)だけ取り込み、手で入れた配当(ドル)は残す
@@ -3565,6 +3601,7 @@
     // 口座の判定は誤ると税額・利回りがずれるので、内訳を出して気づけるようにする
     var nisa = parsed.results.filter(function (r) { return isTaxFree(r.account); }).length;
     var us = parsed.results.filter(function (r) { return r.market === "us"; }).length;
+    var funds = parsed.results.filter(function (r) { return r.market === "fund"; });
     var msg = merged.added + "件追加、" + merged.updated + "件更新しました。"
       + "(NISA " + nisa + "件 / 特定 " + (parsed.results.length - nisa) + "件"
       + (us ? " / うち米国株 " + us + "件" : "") + ")";
@@ -3577,7 +3614,15 @@
       if (usNoDiv) msg += " 米国株のうち" + usNoDiv + "件は1株配当(ドル・年間)が分からないので、保有銘柄の欄に入れてください(自動で入るのは、SECの書類で確かめた主な個別株とETFだけです)。";
       if (parsed.fx > 0) msg += "為替は1ドル=" + parsed.fx + "円にしました。";
     }
-    if (parsed.skipped > 0) msg += " 投資信託や合計の行など、" + parsed.skipped + "行は読み込んでいません。";
+    if (funds.length) {
+      var fundNoDiv = funds.filter(function (r) {
+        var h = state.holdings.find(function (x) { return isFund(x) && x.account === r.account && (r.code ? x.code === r.code : x.name === r.name); });
+        return !(h && num(h.div) > 0);
+      }).length;
+      msg += " 投資信託" + funds.length + "件を読み込みました。";
+      if (fundNoDiv) msg += "うち" + fundNoDiv + "件は年間の分配金が分からないので、保有銘柄の欄に「1万口あたりの年間分配金(円)」を入れてください(運用会社のサイトや運用報告書に載っています)。";
+    }
+    if (parsed.skipped > 0) msg += " 合計の行など、" + parsed.skipped + "行は読み込んでいません。";
     statusEl.textContent = msg;
     return true;
   }
@@ -4905,7 +4950,7 @@
         return;
       }
       // 配当を出していない会社(内蔵データにも配当が無い)は、0円と入れれば以後は空欄扱いしない
-      var noDivData = !isUS(h) && !dividendsFor(code);
+      var noDivData = !isUS(h) && !isFund(h) && !dividendsFor(code);
       if (noDivData && x.lack.indexOf("配当") !== -1) {
         act("無配(0円)にする", "配当を出していない銘柄なら、配当と前年配当を0円にしてこの一覧から外します", function () {
           h.div = "0"; if (h.prevDiv === "" || h.prevDiv == null) h.prevDiv = "0";
@@ -7674,7 +7719,7 @@
     try { all = JSON.parse(localStorage.getItem("irPrices") || "{}") || {}; } catch (e) { return; }
     var took = [];
     state.holdings.forEach(function (h) {
-      if (isUS(h)) return;
+      if (isUS(h) || isFund(h)) return;
       var code = String(h.code || "").trim().toUpperCase(), q = all[code];
       if (!q || !q.d || !(q.p > 0 || q.f > 0)) return;
       if (h.quoteDate && isoDay(q.d) <= isoDay(h.quoteDate)) return;
@@ -7691,7 +7736,7 @@
   function fillFromBuiltin() {
     var filled = [];
     state.holdings.forEach(function (h) {
-      if (isUS(h)) return;
+      if (isUS(h) || isFund(h)) return;
       var code = String(h.code || "").trim().toUpperCase(), info = CODE_INFO_MAP[code];
       if (!info) return;
       if ((!h.sector || h.sector === UNCLASSIFIED) && SECTOR_NAMES.indexOf(info[1]) !== -1) h.sector = info[1];
