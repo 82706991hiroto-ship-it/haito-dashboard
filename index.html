@@ -3661,6 +3661,12 @@
     if (!(nav > 0) || dist == null) return null;
     return { name: name, nick: nick.trim(), nav: nav, dist: dist };
   }
+  // 「まとめて1つ」の欄に1回分(1万口あたり)などを入れていると、1万口あたりに直したとき極端に小さくなる。
+  // 利回り0.2%未満なら入れ間違いとみて空にし、EDINETの自動の値に任せる
+  function fixTinyFundDiv(h, nav) {
+    var p = num(nav) || num(h.price);
+    if (num(h.div) > 0 && p > 0 && num(h.div) / p < 0.002) { h.div = ""; delete h.divSrc; delete h.divNote; }
+  }
   function fundTimesPerYear(name) {
     var n = String(name || "").normalize("NFKC");
     return /毎月|月次|毎月分配/.test(n) ? 12 : /隔月|奇数月|偶数月/.test(n) ? 6 : /四半期|年4回/.test(n) ? 4 : /年2回|半期/.test(n) ? 2 : /年1回|年1回決算/.test(n) ? 1 : 0;
@@ -3682,6 +3688,7 @@
         var man = Math.round(num(h.price) / d.nav * 10000) / 10000;  // 万口
         h.cost = num(h.cost) > 0 ? Math.round(num(h.cost) / man) : h.cost;
         if (num(h.div) > 0) h.div = Math.round(num(h.div) / man * 100) / 100;
+        fixTinyFundDiv(h, d.nav);
         if (num(h.prevDiv) > 0) h.prevDiv = Math.round(num(h.prevDiv) / man * 100) / 100;
         h.shares = man; h.units = Math.round(man * 10000); delete h.fundTotal;
         notes.push("口数を約" + h.units.toLocaleString() + "口と計算");
@@ -3798,6 +3805,7 @@
         if (f && f.fundTotal && r.units > 0) {
           var per = r.units / 10000;
           if (num(f.div) > 0) f.div = Math.round(num(f.div) / per * 100) / 100;
+          fixTinyFundDiv(f, r.price);
           if (num(f.prevDiv) > 0) f.prevDiv = Math.round(num(f.prevDiv) / per * 100) / 100;
           delete f.fundTotal;
         }
