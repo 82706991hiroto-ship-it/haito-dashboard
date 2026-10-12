@@ -2631,7 +2631,10 @@
     var input = document.createElement("input");
     input.type = type;
     input.dataset.field = field;
-    if (field === "code") input.placeholder = "例: 8306";
+    if (field === "code") input.placeholder = isFund(h) ? "空欄でかまいません" : "例: 8306";
+    // 口数の分からない投信は「まとめて1つ」なので、数は変えられないようにする
+    if (field === "shares" && isFund(h) && h.fundTotal) input.readOnly = true;
+    if (field === "div" && isFund(h)) input.placeholder = h.fundTotal ? "例: 5877(直近4回の分配金の合計)" : "例: 360(1万口あたり、直近4回の合計)";
     // 長い銘柄名は列内で見切れるので、ホバーで全体が読めるようにする
     if (field === "name") input.title = h.name || "";
     if (type === "number") { input.min = "0"; input.step = "any"; input.inputMode = "decimal"; }
@@ -2718,7 +2721,7 @@
 
   function makeMonthsCell(h) {
     var td = document.createElement("td");
-    td.dataset.label = "権利確定月";
+    td.dataset.label = isFund(h) ? "分配月" : "権利確定月";
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "months-cell-btn";
