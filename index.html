@@ -1072,6 +1072,7 @@
   .fx-bar input { width: 90px; }
   .usd-tag { font-size: 11px; color: var(--muted); margin-left: 3px; }
   .etf-link { display: block; font-size: 11px; margin-top: 3px; }
+  .fund-div-note { display: block; font-size: 11px; color: var(--text-2); line-height: 1.5; margin-top: 4px; }
   .fund-badge { color: var(--ok, #1baf7a); border-color: currentColor; }
   .us-badge { display: inline-block; font-size: 10px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; margin-right: 4px; vertical-align: 1px; }
   .market-filter { display: flex; gap: 6px; margin: 0 0 6px; }
@@ -1819,7 +1820,41 @@
   // 実績PER: 株価 ÷ 前期の1株利益。1株利益はチェックシート(同じサイトの ../ir-check/fin/)が有報から作った数字を使う。
   // 証券コードの先頭の数字ごとのファイルを、株価のある銘柄の分だけ読む
   var FIN = {}, finAsked = {};
+  // 投資信託の分配金(EDINETの有報・半期報告書の「分配の推移」から、1万口あたりの直近1年)。投信を持っているときだけ読む
+  var FUND_DIVS = null;
+  function fundNorm(t) { return String(t || "").normalize("NFKC").replace(/[\s　]/g, "").replace(/[〈<].*?[〉>]/g, ""); }
+  // 証券会社の名前は「…(四半期決算型)(楽天・SCHD)」のように愛称が付くので、EDINETの名前が頭から一致する中でいちばん長いものを使う
+  function fundDivOf(h) {
+    if (!FUND_DIVS || !isFund(h)) return null;
+    var n = fundNorm(h.name), best = null;
+    FUND_DIVS.forEach(function (f) { if (f.n && n.indexOf(f.n) === 0 && (!best || f.n.length > best.n.length)) best = f; });
+    return best;
+  }
+  function applyFundDivs() {
+    var changed = false;
+    state.holdings.forEach(function (h) {
+      if (!isFund(h) || h.fundTotal) return;
+      var f = fundDivOf(h);
+      // 手で入れた分配金(divSrc が無い値)はそのまま。自動の値か空欄のときだけ入れ直す
+      if (!f || !(f.v >= 0) || (h.div !== "" && h.div != null && h.divSrc !== "auto")) return;
+      if (String(h.div) !== String(f.v) || h.divNote !== f.note) { h.div = f.v; h.divSrc = "auto"; h.divNote = f.note; changed = true; }
+    });
+    if (changed) { save(); renderTable(); renderDashboard(); }
+  }
+  function loadFundDivs() {
+    if (FUND_DIVS || !state.holdings.some(isFund)) { if (FUND_DIVS) applyFundDivs(); return; }
+    FUND_DIVS = [];
+    fetch("data/fund-distributions.json").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (!j) return;
+      FUND_DIVS = Object.keys(j).filter(function (k) { return j[k]["年間"] != null; }).map(function (k) {
+        var e = j[k];
+        return { n: fundNorm(e["名前"]), v: e["年間"], note: "EDINET " + e["から"].slice(0, 7).replace("-", "/") + "〜" + e["まで"].slice(0, 7).replace("-", "/") + "の分配(" + String(e["出典"] || "").replace(/^EDINET /, "") + ")" };
+      });
+      applyFundDivs();
+    }, function () {});
+  }
   function loadFinForHoldings() {
+    loadFundDivs();
     var need = {};
     // PER・減配リスク・次に買うなら に使うので、株価の有無に関係なく国内株は全部読む
     state.holdings.concat(state.watch || []).forEach(function (h) {
@@ -2634,7 +2669,14 @@
     if (field === "code") input.placeholder = isFund(h) ? "空欄でかまいません" : "例: 8306";
     // 口数の分からない投信は「まとめて1つ」なので、数は変えられないようにする
     if (field === "shares" && isFund(h) && h.fundTotal) input.readOnly = true;
-    if (field === "div" && isFund(h)) input.placeholder = h.fundTotal ? "例: 5877(直近4回の分配金の合計)" : "例: 360(1万口あたり、直近4回の合計)";
+    if (field === "div" && isFund(h)) {
+      input.placeholder = h.fundTotal ? "例: 5877(直近4回の分配金の合計)" : "例: 360(1万口あたり、直近4回の合計)";
+      var fd = fundDivOf(h), note = document.createElement("small");
+      note.className = "fund-div-note";
+      if (h.divSrc === "auto" && h.divNote) note.textContent = "自動: " + h.divNote + "。新しい分配金が分かれば上書きできます";
+      else if (h.fundTotal && fd) note.textContent = "参考: EDINETでは1万口あたり年" + fd.v + "円(" + fd.note.replace(/^EDINET /, "") + ")。楽天証券のCSVで口数を取り込むと自動で入ります";
+      if (note.textContent) setTimeout(function () { td.appendChild(note); }, 0);
+    }
     // 長い銘柄名は列内で見切れるので、ホバーで全体が読めるようにする
     if (field === "name") input.title = h.name || "";
     if (type === "number") { input.min = "0"; input.step = "any"; input.inputMode = "decimal"; }
@@ -2684,6 +2726,7 @@
     }
     input.addEventListener("input", function () {
       h[field] = type === "number" ? input.value : input.value;
+      if (field === "div" && h.divSrc) { delete h.divSrc; delete h.divNote; }
       save();
       updateRowComputedCells(h.id);
       renderDashboard();
