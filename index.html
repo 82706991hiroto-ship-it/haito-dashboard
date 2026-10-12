@@ -2624,9 +2624,10 @@
   }
 
   var FUND_LABELS = { code: "協会コード", shares: "口数(万口)", cost: "取得単価(1万口,円)", div: "年間分配金(1万口,税引前,円)", prevDiv: "前年分配金(1万口,円)" };
+  var FUND_TOTAL_LABELS = { code: "協会コード", shares: "まとめて1つ", cost: "取得額(合計,円)", div: "年間分配金(合計,税引前,円)", prevDiv: "前年分配金(合計,円)" };
   function makeInputCell(h, field, type) {
     var td = document.createElement("td");
-    td.dataset.label = (isFund(h) && FUND_LABELS[field]) || FIELD_LABELS[field] || "";
+    td.dataset.label = (isFund(h) && (h.fundTotal ? FUND_TOTAL_LABELS : FUND_LABELS)[field]) || FIELD_LABELS[field] || "";
     var input = document.createElement("input");
     input.type = type;
     input.dataset.field = field;
@@ -3494,7 +3495,40 @@
     return { results: results, skipped: 0, fx: fx };
   }
 
+  // 楽天証券(スマホのサイト)の投資信託の保有一覧をコピーした文字。
+  // 「NISA成長投資枠 分配金コース：再投資型」の見出し、ファンド名、「評価額 215,632円」「評価損益(率) +31,291円(+16.97%)」が続く。
+  // 口数が載っていないので、保有分をまとめて1つ(株数1・株価=評価額・取得単価=評価額−評価損益)として持ち、
+  // 分配金は「年間の合計(円)」で入れてもらう
+  function parseRakutenFundCards(text, priceDate) {
+    var lines = String(text || "").normalize("NFKC").replace(/\r/g, "").split("\n").map(function (l) { return l.trim(); }).filter(Boolean);
+    if (!lines.some(function (l) { return /^評価額/.test(l); })) return { results: [], skipped: 0 };
+    var results = [], account = null, name = "", skip = /^(購入|積立設定|売却|積立中|楽天|eM|[A-Za-z]{1,3})$|^評価|分配金コース|^[+\-−]?[0-9,.]+\s*(円|%)?|^\(/;
+    var yen = function (t) { var m = String(t || "").match(/([+\-−]?)\s*([0-9][0-9,]*)\s*円/); return m ? (m[1] && m[1] !== "+" ? -1 : 1) * parseFloat(m[2].replace(/,/g, "")) : null; };
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i];
+      var acc = /分配金コース|投資枠|NISA|特定|一般/.test(l) && l.length < 40 ? accountFromText(l) : null;
+      if (acc) { account = acc; continue; }
+      if (/^評価額/.test(l)) {
+        var value = yen(l) != null ? yen(l) : yen(lines[i + 1]);
+        var pnl = null;
+        for (var j = i + 1; j < Math.min(lines.length, i + 5); j++) {
+          if (/^評価損益/.test(lines[j])) { pnl = yen(lines[j]) != null ? yen(lines[j]) : yen(lines[j + 1]); break; }
+        }
+        if (name && value > 0) {
+          results.push({ market: "fund", total: true, code: "", name: name, sector: FUND_SECTOR, account: account,
+            value: value, cost: pnl != null ? value - pnl : "", priceDate: priceDate || todayStamp() });
+        }
+        name = "";
+        continue;
+      }
+      if (!skip.test(l) && l.length >= 4) name = name && !/^評価/.test(lines[i - 1] || "") && name.length < 60 && !/円/.test(name) ? name + l : l;
+    }
+    return { results: results, skipped: 0 };
+  }
+
   function parseHoldingsPaste(text, priceDate) {
+    var funds = parseRakutenFundCards(text, priceDate);
+    if (funds.results.length > 0) return funds;
     var generic = parseHeaderTableFormat(text, priceDate);
     if (generic.results.length > 0) return generic;
     var sbi = parseSbiForeign(text, priceDate);
@@ -3526,8 +3560,37 @@
   function mergePastedResults(results) {
     var added = 0, updated = 0, splitFound = [];
     results.forEach(function (r) {
+      if (r.market === "fund" && r.total) {
+        // 口数の分からない取り込み(スマホの保有一覧)。口座が書かれていなければ、同じ名前の投信の口座を使う
+        var same = state.holdings.filter(function (h) { return isFund(h) && h.name === r.name; });
+        var acc = r.account || (same[0] && same[0].account) || "特定";
+        var g = same.filter(function (h) { return h.account === acc; })[0];
+        // 前に口座の書かれていない画面から入れていた投信は、口座が分かったらその口座に移す
+        if (!g && r.account) {
+          g = same.filter(function (h) { return h.accGuess; })[0];
+          if (g) { g.account = acc; delete g.accGuess; }
+        }
+        if (!g) {
+          g = { id: uid(), code: "", name: r.name, account: acc, div: "", prevDiv: "", months: [], addedAt: todayIso(), market: "fund", sector: FUND_SECTOR, fundTotal: true, shares: 1 };
+          if (!r.account && !same.length) g.accGuess = true;
+          state.holdings.push(g); added++;
+        } else updated++;
+        r.account = acc;
+        if (g.fundTotal) { g.shares = 1; g.price = r.value; if (r.cost !== "") g.cost = r.cost; }
+        else if (num(g.shares) > 0) { g.price = Math.round(r.value / num(g.shares)); }  // 口数で持っている投信は基準価額を評価額から出す
+        g.priceDate = r.priceDate;
+        return;
+      }
       if (r.market === "fund") {
         var f = state.holdings.find(function (h) { return isFund(h) && h.account === r.account && (r.code ? h.code === r.code : h.name === r.name); });
+        // スマホの保有一覧から「まとめて1つ」で入れていた投信は、口数が分かったら1万口あたりに直す
+        if (!f) f = state.holdings.find(function (h) { return isFund(h) && h.fundTotal && h.name === r.name && h.account === r.account; });
+        if (f && f.fundTotal && r.units > 0) {
+          var per = r.units / 10000;
+          if (num(f.div) > 0) f.div = Math.round(num(f.div) / per * 100) / 100;
+          if (num(f.prevDiv) > 0) f.prevDiv = Math.round(num(f.prevDiv) / per * 100) / 100;
+          delete f.fundTotal;
+        }
         if (!f) {
           f = { id: uid(), code: r.code, name: r.name, account: r.account, div: "", prevDiv: "", months: [], addedAt: todayIso() };
           state.holdings.push(f); added++;
@@ -3620,7 +3683,9 @@
         return !(h && num(h.div) > 0);
       }).length;
       msg += " 投資信託" + funds.length + "件を読み込みました。";
-      if (fundNoDiv) msg += "うち" + fundNoDiv + "件は年間の分配金が分からないので、保有銘柄の欄に「1万口あたりの年間分配金(円)」を入れてください(運用会社のサイトや運用報告書に載っています)。";
+      var totals = funds.filter(function (r) { return r.total; });
+      if (totals.length) msg += "口数が載っていない画面なので、保有分をまとめて1つ(評価額・取得額)で入れました。口座は「" + totals.map(function (r) { return r.account; }).join("・") + "」です(違っていたら保有銘柄の欄で直してください)。";
+      if (fundNoDiv) msg += "うち" + fundNoDiv + "件は年間の分配金が分からないので、保有銘柄の欄に" + (totals.length ? "「年間分配金(合計,円)」" : "「1万口あたりの年間分配金(円)」") + "を入れてください(運用会社のサイトや運用報告書に載っています)。";
     }
     if (parsed.skipped > 0) msg += " 合計の行など、" + parsed.skipped + "行は読み込んでいません。";
     statusEl.textContent = msg;
