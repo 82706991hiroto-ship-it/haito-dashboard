@@ -1836,7 +1836,7 @@
       if (!isFund(h) || h.fundTotal) return;
       var f = fundDivOf(h);
       // 手で入れた分配金(divSrc が無い値)はそのまま。自動の値か空欄のときだけ入れ直す
-      if (!f || !(f.v >= 0) || (h.div !== "" && h.div != null && h.divSrc !== "auto")) return;
+      if (!f || !(f.v >= 0) || (h.div !== "" && h.div != null && h.divSrc !== "auto")) return;  // 詳細ページ(divSrc: detail)や手入力は残す
       if (String(h.div) !== String(f.v) || h.divNote !== f.note) { h.div = f.v; h.divSrc = "auto"; h.divNote = f.note; changed = true; }
     });
     if (changed) { save(); renderTable(); renderDashboard(); }
@@ -2674,6 +2674,7 @@
       var fd = fundDivOf(h), note = document.createElement("small");
       note.className = "fund-div-note";
       if (h.divSrc === "auto" && h.divNote) note.textContent = "自動: " + h.divNote + "。新しい分配金が分かれば上書きできます";
+      else if (h.divSrc === "detail" && h.divNote) note.textContent = h.divNote + "(楽天証券のファンドの詳細ページを貼り付けて更新できます)";
       else if (h.fundTotal && fd) note.textContent = "参考: EDINETでは1万口あたり年" + fd.v + "円(" + fd.note.replace(/^EDINET /, "") + ")。楽天証券のCSVで口数を取り込むと自動で入ります";
       if (note.textContent) setTimeout(function () { td.appendChild(note); }, 0);
     }
@@ -3572,6 +3573,55 @@
     return { results: results, skipped: 0 };
   }
 
+  // 楽天証券の投資信託の詳細ページ(基本情報)をコピーした文字。「基準価額 13,207円」「直近分配金 95円 次回決算 11/25」が載っている。
+  // 持っている投信に当てて、基準価額と「直近分配金 × 年の決算回数」を入れる(運用会社の最新の分配が分かる)
+  function parseRakutenFundDetail(text) {
+    var t = String(text || "").normalize("NFKC");
+    if (!/基準価額/.test(t) || !/直近分配金/.test(t)) return null;
+    var lines = t.replace(/\r/g, "").split("\n").map(function (l) { return l.trim(); }).filter(Boolean);
+    var after = function (re) { var i = lines.findIndex(function (l) { return re.test(l); }); if (i < 0) return null;
+      var m = (lines[i] + " " + (lines[i + 1] || "")).replace(re, "").match(/([0-9][0-9,]*(?:\.[0-9]+)?)\s*円/); return m ? parseFloat(m[1].replace(/,/g, "")) : null; };
+    var nav = after(/基準価額/), dist = after(/直近分配金/);
+    var nick = (t.match(/【愛称】\s*([^\n]+)/) || [])[1] || "";
+    // ファンド名: 「基準価額」より前で、愛称・運用会社・日付・ボタンではない、いちばん長い行(2行に分かれていればつなぐ)
+    var head = lines.slice(0, Math.max(0, lines.findIndex(function (l) { return /基準価額/.test(l); })));
+    var name = head.filter(function (l) { return !/【愛称】|投信|投資顧問|アセット|更新|^NISA|対象外|^積立$|円投資|基本情報|チャート|運用実績|手数料|ランキング|^[0-9:]+$/.test(l) && l.length >= 2; }).join("");
+    if (!(nav > 0) || dist == null) return null;
+    return { name: name, nick: nick.trim(), nav: nav, dist: dist };
+  }
+  function fundTimesPerYear(name) {
+    var n = String(name || "").normalize("NFKC");
+    return /毎月|月次|毎月分配/.test(n) ? 12 : /隔月|奇数月|偶数月/.test(n) ? 6 : /四半期|年4回/.test(n) ? 4 : /年2回|半期/.test(n) ? 2 : /年1回|年1回決算/.test(n) ? 1 : 0;
+  }
+  function applyFundDetail(d, statusEl) {
+    var dn = fundNorm(d.name), nk = fundNorm(d.nick);
+    var hits = state.holdings.filter(function (h) {
+      if (!isFund(h)) return false;
+      var hn = fundNorm(h.name);
+      return (dn.length >= 6 && (hn.indexOf(dn) === 0 || dn.indexOf(hn) === 0)) || (nk.length >= 3 && hn.indexOf(nk) !== -1);
+    });
+    if (!hits.length) { statusEl.textContent = "このファンドを保有銘柄から見つけられませんでした。先に保有一覧(評価額の出ている画面)かCSVを読み込んでください。"; return false; }
+    var times = fundTimesPerYear(d.name || hits[0].name);
+    if (!times) { statusEl.textContent = "年に何回決算するファンドか名前から分からなかったので、分配金は入れていません(基準価額だけ入れました)。"; }
+    var notes = [];
+    hits.forEach(function (h) {
+      // まとめて1つで持っていた投信は、評価額 ÷ 基準価額で口数が分かるので、1万口あたりの持ち方に直す
+      if (h.fundTotal && num(h.price) > 0) {
+        var man = Math.round(num(h.price) / d.nav * 10000) / 10000;  // 万口
+        h.cost = num(h.cost) > 0 ? Math.round(num(h.cost) / man) : h.cost;
+        if (num(h.div) > 0) h.div = Math.round(num(h.div) / man * 100) / 100;
+        if (num(h.prevDiv) > 0) h.prevDiv = Math.round(num(h.prevDiv) / man * 100) / 100;
+        h.shares = man; h.units = Math.round(man * 10000); delete h.fundTotal;
+        notes.push("口数を約" + h.units.toLocaleString() + "口と計算");
+      }
+      h.price = d.nav; h.priceDate = todayStamp();
+      if (times) { h.div = Math.round(d.dist * times * 100) / 100; h.divSrc = "detail"; h.divNote = "楽天証券の直近分配金" + d.dist + "円 × 年" + times + "回"; if (h.months && !h.months.length) h.months = []; }
+    });
+    save(); renderTable(); renderDashboard();
+    statusEl.textContent = (hits[0].name || "") + "に、基準価額" + d.nav.toLocaleString() + "円" + (times ? "と、年間分配金" + Math.round(d.dist * times) + "円(1万口あたり。直近" + d.dist + "円 × 年" + times + "回)" : "") + "を入れました。" + (notes.length ? notes.join("・") + "しました。" : "");
+    return true;
+  }
+
   function parseHoldingsPaste(text, priceDate) {
     var funds = parseRakutenFundCards(text, priceDate);
     if (funds.results.length > 0) return funds;
@@ -3694,6 +3744,8 @@
   }
 
   function applyParsedHoldings(text, statusEl, priceDate) {
+    var detail = parseRakutenFundDetail(text);
+    if (detail) { applyFundDetail(detail, statusEl); return; }
     applyResults(parseHoldingsPaste(text, priceDate), statusEl, "読み込める行が見つかりませんでした。対応形式か確認してください。");
   }
 
