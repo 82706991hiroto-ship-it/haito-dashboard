@@ -928,6 +928,8 @@
   footer.foot .note-label { background: none; padding: 0; color: var(--accent); }
   .sibling { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 14px 0; margin: 18px 0 0; }
   .sibling:hover { background: none; }
+  .sibling.sibling-top { margin: 0 0 18px; border-top: none; }
+  .watch-more { display: block; width: 100%; margin-top: 10px; }
   .sibling .ico, .onboard-list .ico { border-radius: 50%; }
   .onboard { border-bottom: 1px solid var(--line); padding: 24px 0; }
   .onboard-list li, .badge, .change-summary .stat, .actual-card, .missing-box, .backup-status, .watch-cell, .watch-sim,
@@ -1494,6 +1496,12 @@
     </details>
   </section>
 
+  <a class="sibling sibling-top" href="../ir-check/" data-view="extras">
+    <span class="ico">✓</span>
+    <span class="txt"><span class="ttl">候補を買う前に：高配当株チェックシート</span><span class="sub">1銘柄を10項目で採点して、そのまま買い増し候補に入れられます</span></span>
+    <span class="arw">›</span>
+  </a>
+
   <section class="panel" id="nextBuyPanel" data-view="extras">
     <h2>次に買うなら <span class="hint">分散の上限・利回り・増配・減配リスクから</span></h2>
     <div id="nextBuyBody"></div>
@@ -1507,12 +1515,8 @@
     </div>
     <p class="paste-status" id="watchStatus"></p>
     <ul class="watch-list" id="watchList"></ul>
+    <button type="button" class="btn watch-more" id="watchMore" hidden></button>
   </section>
-  <a class="sibling" href="../ir-check/" data-view="extras">
-    <span class="ico">✓</span>
-    <span class="txt"><span class="ttl">候補を買う前に：高配当株チェックシート</span><span class="sub">1銘柄を10項目で採点して、そのまま買い増し候補に入れられます</span></span>
-    <span class="arw">›</span>
-  </a>
 
   <section class="panel" id="perkPanel" data-view="extras">
     <h2>株主優待 <span class="hint">届いた優待と有効期限</span></h2>
@@ -4433,6 +4437,12 @@
                     : label + " はすでに候補にあります。チェックの結果を更新しました。");
   }
 
+  var WATCH_SHOW = 5, watchShowAll = false;
+  document.getElementById("watchMore").addEventListener("click", function () {
+    watchShowAll = !watchShowAll;
+    renderWatchList();
+    if (!watchShowAll) document.getElementById("watchPanel").scrollIntoView({ block: "start", behavior: "smooth" });
+  });
   function renderWatchList() {
     var list = document.getElementById("watchList");
     if (!list) return;
@@ -4442,6 +4452,19 @@
       return ga - gb;
     });
     list.innerHTML = "";
+    // 候補が増えても下の株主優待まで遠くならないよう、目標利回りに近い順に5件だけ出す(追加した銘柄・試算中の銘柄は必ず出す)
+    var more = document.getElementById("watchMore");
+    var hiddenN = 0;
+    if (items.length > WATCH_SHOW && !watchShowAll) {
+      var keep = items.slice(0, WATCH_SHOW);
+      items.slice(WATCH_SHOW).forEach(function (v) { if (v.w.code === justAddedWatch || watchSimOpen[v.w.id] !== undefined) keep.push(v); });
+      hiddenN = items.length - keep.length;
+      items = keep;
+    }
+    if (more) {
+      more.hidden = !(hiddenN > 0 || (watchShowAll && items.length > WATCH_SHOW));
+      more.textContent = hiddenN > 0 ? "残り" + hiddenN + "件を表示" : WATCH_SHOW + "件だけの表示にもどす";
+    }
     if (items.length === 0) {
       var p = document.createElement("p");
       p.className = "watch-empty";
