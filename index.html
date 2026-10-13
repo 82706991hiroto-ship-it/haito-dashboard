@@ -394,12 +394,9 @@
   .axis-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* ---- 構成(ヒートマップ) ---- */
-  .heat-controls { display: grid; gap: 9px; margin: 10px 0 4px; }
   .heat-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 6px; }
   .heat-presets .axis-tab { padding: 8px 2px; font-size: 12.5px; text-align: center; white-space: nowrap; }
   .heat-lead { font-size: 13px; color: var(--text-2); line-height: 1.7; margin: 4px 0 8px; }
-  .heat-more { margin: 0 0 12px; }
-  .heat-more summary { cursor: pointer; font-size: 12px; color: var(--muted); }
   .ctl-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .ctl-label {
     font-size: 11px; font-weight: 700; color: var(--muted);
@@ -876,7 +873,6 @@
     .field-check { justify-content: flex-start; }
     .treemap { height: 400px; }
     .ctl-label { min-width: 0; flex-basis: 100%; }
-    .heat-controls .ctl-row + .ctl-row { margin-top: 8px; }
     .heat-scale .hs-cell { min-width: 40px; font-size: 9.5px; }
   }
   /* 初回訪問の案内 */
@@ -5739,7 +5735,6 @@
     sensitivity: { label: "景気感応度別", groupKey: function (r) { return sectorClassOf(r.sector); } },
     account: { label: "口座別", groupKey: function (r) { return r.account || "特定"; } }
   };
-  var AXIS_ORDER = ["sector", "stock", "sensitivity", "account"];
   var currentAxis = "sector";
 
   function aggregate(market) {
@@ -6000,11 +5995,10 @@
       value: null,
       color: null,
       text: null,
-      note: "分け方で選んだグループごとに同じ色を割り当てます。",
+      note: "業種ごとに色を分けています。",
       scale: null
     }
   };
-  var COLOR_ORDER = ["growth", "current", "yield", "group"];
   var currentColor = "group";
 
   // ---------- ヒートマップ ----------
@@ -7845,28 +7839,11 @@
     Array.prototype.forEach.call(document.querySelectorAll("#heatPresets .axis-tab"), function (b) {
       b.classList.toggle("active", !!hit && b.dataset.preset === hit.key);
     });
-    Array.prototype.forEach.call(document.querySelectorAll("#axisTabs .axis-tab"), function (b) { b.classList.toggle("active", b.dataset.axis === currentAxis); });
-    Array.prototype.forEach.call(document.querySelectorAll("#colorTabs .axis-tab"), function (b) { b.classList.toggle("active", b.dataset.color === currentColor); });
     var lead = document.getElementById("heatLead");
-    if (lead) lead.textContent = hit ? hit.lead : pickSentence();
+    if (lead) lead.textContent = hit ? hit.lead : "";
   }
 
-  // 「詳しく選ぶ」で使う言葉。まとめ方(タイルの単位)と、色で見るもの
-  var PICK_AXIS = { sector: "業種", stock: "銘柄", sensitivity: "景気感応度", account: "口座" };
-  var PICK_COLOR = { growth: "増配率", current: "今の利回り", yield: "買値の利回り", group: "色分けなし" };
-  function pickSentence() {
-    var a = PICK_AXIS[currentAxis] || "銘柄";
-    return a + "ごとに、年間配当の大きさを面積で表示し、" +
-      (currentColor === "group" ? "色は" + a + "を見分けるためだけに付けています。" : PICK_COLOR[currentColor] + "を色で表しています。") +
-      "タイルを押すと詳しく出ます。";
-  }
   function dashboardTemplate() {
-    var tabsHtml = AXIS_ORDER.map(function (k, i) {
-      return '<button class="axis-tab' + (k === currentAxis ? ' active' : '') + '" data-axis="' + k + '">' + PICK_AXIS[k] + '</button>';
-    }).join('');
-    var colorTabsHtml = COLOR_ORDER.map(function (k) {
-      return '<button class="axis-tab' + (k === currentColor ? ' active' : '') + '" data-color="' + k + '">' + PICK_COLOR[k] + '</button>';
-    }).join('');
     return '' +
       '<div class="axis-tabs market-filter" id="marketFilter" data-view="analysis" hidden>' +
       '<button class="axis-tab active" data-market="all">全体</button><button class="axis-tab" data-market="jp">日本株</button><button class="axis-tab" data-market="us">米国株</button></div>' +
@@ -7876,11 +7853,6 @@
         return '<button class="axis-tab' + (p.axis === currentAxis && p.color === currentColor ? ' active' : '') + '" data-preset="' + p.key + '">' + p.label + '</button>';
       }).join('') + '</div>' +
       '  <p class="heat-lead" id="heatLead"></p>' +
-      '  <details class="heat-more"><summary>詳しく選ぶ(まとめ方・色)</summary>' +
-      '  <div class="heat-controls">' +
-      '    <div class="ctl-row"><span class="ctl-label">まとめ方</span><div class="axis-tabs" id="axisTabs">' + tabsHtml + '</div></div>' +
-      '    <div class="ctl-row"><span class="ctl-label">色で見るもの</span><div class="axis-tabs" id="colorTabs">' + colorTabsHtml + '</div></div>' +
-      '  </div></details>' +
       '  <div class="axis-tabs bal-switch" id="balSwitch" hidden><button class="axis-tab" data-bal="bar">棒</button><button class="axis-tab" data-bal="pie">円</button><button class="axis-tab" data-bal="heat">ヒートマップ</button></div>' +
       '  <div class="treemap" id="treemapEl"></div>' +
       '  <div class="tm-info" id="tmInfo" hidden></div>' +
@@ -7963,14 +7935,6 @@
           });
         });
       }
-      bindTabs("axisTabs", function (btn) {
-        currentAxis = btn.dataset.axis;
-        renderComposition(marketAgg());
-      });
-      bindTabs("colorTabs", function (btn) {
-        currentColor = btn.dataset.color;
-        renderComposition(marketAgg());
-      });
       document.getElementById("marketFilter").addEventListener("click", function (e) {
         var b = e.target.closest("button[data-market]");
         if (!b) return;
