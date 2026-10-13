@@ -439,6 +439,7 @@
   .bal-leg .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bal-leg .v { font-variant-numeric: tabular-nums; color: var(--text-2); }
   .bal-leg .v.is-over { color: var(--crit); font-weight: 700; }
+  .bal-fundnote { font-size: 12px; color: var(--text-2); line-height: 1.7; margin: 10px 0 0; }
   .bal-band { position: relative; display: flex; height: 22px; border-radius: 6px; overflow: hidden; gap: 2px; }
   .bal-band span { display: block; height: 100%; }
   .acc-head { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 12px; }
@@ -6141,12 +6142,15 @@
     TILE_INFO = {};
     var info = document.getElementById("tmInfo");
     if (info) info.hidden = true;
-    var total = agg.totalDivPre;
-    if (!(total > 0)) { container.innerHTML = '<p class="empty-note" style="position:static">配当金データがありません</p>'; return; }
+    // 投資信託は中身が多くの業種に分かれるので、1つの業種として数えず円から外す
+    var isFundRow = function (r) { return r.market === "fund" || r.sector === FUND_SECTOR; };
+    var fundDiv = 0, total = 0;
+    agg.rows.forEach(function (r) { if (r.divPre > 0) { if (isFundRow(r)) fundDiv += r.divPre; else total += r.divPre; } });
+    if (!(total > 0)) { container.innerHTML = '<p class="empty-note" style="position:static">' + (fundDiv > 0 ? "投資信託のほかに配当のある銘柄がありません" : "配当金データがありません") + '</p>'; return; }
     function group(keyFn) {
       var m = {};
       agg.rows.forEach(function (r) {
-        if (!(r.divPre > 0)) return;
+        if (!(r.divPre > 0) || isFundRow(r)) return;
         var k = keyFn(r);
         if (!m[k]) m[k] = { label: k, value: 0, rows: [] };
         m[k].value += r.divPre; m[k].rows.push(r);
@@ -6273,6 +6277,12 @@
       head("景気感応度", target ? "景気敏感の目標" + target + "%" : "");
       var sv = sens.filter(function (x) { return x.label === "景気敏感"; })[0];
       pie(sens, "景気敏感", fmtPct(sv ? sv.pct : 0), function (x) { return sensColor(x.label); }, showSector);
+      if (fundDiv > 0) {
+        var fn = document.createElement("p");
+        fn.className = "bal-fundnote";
+        fn.textContent = "投資信託(年" + fmtYen(fundDiv) + "・配当全体の" + fmtPct(fundDiv / (total + fundDiv) * 100) + ")は、中身が多くの業種に分かれるので、この円には入れていません。";
+        container.appendChild(fn);
+      }
     }
   }
 
