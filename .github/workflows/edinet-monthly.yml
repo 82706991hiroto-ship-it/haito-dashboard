@@ -60,6 +60,8 @@ jobs:
           else
             python3 tools/edinet/monthly.py --days "${{ inputs.days || '45' }}"
           fi
+      - name: 株主優待の有無をチェックシート用に書き出す
+        run: python3 tools/perk_flags.py
       - name: 米国の個別株の配当(SEC EDGAR)を更新
         if: github.event_name != 'push'
         continue-on-error: true
@@ -68,7 +70,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git add index.html tools/edinet/state.json data/splits.json data/splits-applied.json data/special-dividends.json data/fund-distributions.json
+          git add index.html tools/edinet/state.json data/splits.json data/splits-applied.json data/special-dividends.json data/fund-distributions.json perks/flags.json
           if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
