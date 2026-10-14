@@ -2280,8 +2280,11 @@
       var sector = sectorFor(code, held[0] ? held[0].sector : v.sector);
       var sh = guideShares(agg, code, sector);
       var fst = held[0] ? forecastStatus(held[0]) : null;
-      var risk = dividendRisk(code, held[0] && fst && fst.kind === "ok" ? num(held[0].div) : num(v.w.fdiv));
+      var risk = dividendRisk(code, held[0] && fst && fst.kind === "ok" ? num(held[0].div) : v.fcast);
       if (risk && risk.level === 2) { skipped.push(name + "(減配リスク高)"); return; }
+      // 有報のデータが無い会社は減配リスクを点検できないので、会社予想が前期の実績より下がっていることだけは直接見る
+      var fcDiv = held[0] && fst && fst.kind === "ok" ? num(held[0].div) : v.fcast, lastAct = (ordinaryDivs(code) || dividendsFor(code) || [])[0];
+      if (!risk && fcDiv > 0 && lastAct > 0 && fcDiv < lastAct * 0.97) { skipped.push(name + "(会社予想が減配)"); return; }
       // 分散の上限を超えている銘柄は外さず、順位を下げて理由を添える(銘柄が少ないうちは全部が超えてしまうため)
       var overStock = num(g.maxStockPct) > 0 && sh.stockPct >= num(g.maxStockPct);
       var overSector = num(g.maxSectorPct) > 0 && sh.sectorPct >= num(g.maxSectorPct);
@@ -4369,6 +4372,16 @@
     return state.holdings.filter(function (h) { return String(h.code || "").trim().toUpperCase() === code; });
   }
 
+  // チェックシートで入れた会社予想の1株配当(Yahoo!から貼ったもの)。1年以上前のものは古いので使わない。
+  // 候補に入れたあとで予想を入れ直しても、候補側の値が古いままにならないよう、いつも最新のこちらを優先する
+  function checkForecastOf(code) {
+    var all;
+    try { all = JSON.parse(localStorage.getItem("irPrices") || "{}") || {}; } catch (e) { return 0; }
+    var q = all[String(code || "").toUpperCase()];
+    if (!q || !(q.f > 0) || !q.d) return 0;
+    var age = (Date.now() - new Date(String(q.d).slice(0, 10)).getTime()) / 86400000;
+    return age <= 365 ? num(q.f) : 0;
+  }
   function watchView(w) {
     var held = heldOf(w.code);
     var info = CODE_INFO_MAP[w.code];
@@ -4376,7 +4389,8 @@
     // 予想配当は、保有していれば自分で入れた値(決算で書き換えた値)を使う
     var heldDiv = held.map(function (h) { return num(h.div); }).filter(function (v) { return v > 0; })[0];
     // 保有の値 → チェックシートで入れた会社予想 → 内蔵の直近実績 の順
-    var div = heldDiv || num(w.fdiv) || (divs ? divs[0] : 0);
+    var fcast = checkForecastOf(w.code) || num(w.fdiv);
+    var div = heldDiv || fcast || (divs ? divs[0] : 0);
     // 株価は監視側と保有側のうち新しいほう
     var price = num(w.price), priceDate = w.priceDate || "";
     held.forEach(function (h) {
@@ -4388,7 +4402,7 @@
     var targetPrice = target > 0 && div > 0 ? div / (target / 100) : null;
     return {
       w: w, name: info ? String(info[0]).normalize("NFKC") : w.code, sector: info ? info[1] : "",
-      div: div, divFromHolding: !!heldDiv, divFromForecast: !heldDiv && num(w.fdiv) > 0, price: price, priceDate: priceDate,
+      div: div, divFromHolding: !!heldDiv, divFromForecast: !heldDiv && fcast > 0, fcast: fcast, price: price, priceDate: priceDate,
       yieldNow: price > 0 && div > 0 ? (div / price) * 100 : null,
       targetPrice: targetPrice,
       gapPct: targetPrice && price > 0 ? (targetPrice / price - 1) * 100 : null,
