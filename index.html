@@ -2278,8 +2278,13 @@
         b: balUp ? 6 : 0,
         p: rec && (rec.pol || []).length ? 5 : 0
       };
-      var score = parts.y + parts.g + parts.r + parts.b + parts.p - (risk && risk.level === 1 ? 10 : 0);
+      // チェックシートで採点済みなら順位に反映する(❌があれば要注意と同じ扱い、重要項目がすべて基準内なら少し加点)
+      var chk = latestCheck(code), chkBad = chk && chk.counts && chk.counts.bad > 0, chkGood = chk && chk.counts && !chkBad && chk.starTotal > 0 && chk.starPassing === chk.starTotal;
+      parts.c = chkGood ? 5 : 0;
+      var score = parts.y + parts.g + parts.r + parts.b + parts.p + parts.c - (risk && risk.level === 1 ? 10 : 0) - (chkBad ? 10 : 0);
       var tags = [];
+      if (chkBad) tags.push({ t: "チェックシートで❌" + chk.counts.bad + "項目", c: "warn" });
+      if (chkGood) tags.push({ t: "チェックシートの重要項目は基準内", c: "" });
       var yHigh = y > target + 2;
       if (yHigh) tags.push({ t: "利回り" + (target + 2) + "%超: 株価の下落や一時的な配当で高く見えていないか確認", c: "warn" });
       if (rec && (rec.pol || []).length) tags.push({ t: rec.pol.join("・"), c: "" });
@@ -2292,7 +2297,7 @@
                  addDiv: n * v.div, unitCost: v.price * 100, y: y, yHigh: yHigh, target: target, yFore: fst && fst.kind === "ok" || v.divFromForecast, gr: gr,
                  sector: sector, sectorPct: sh.sectorPct,
                  // 要注意は1つ下げ、上限に達しているものはさらに下げる。1位に出るのは目立った問題のない銘柄から
-                 tier: (overStock || overSector) ? 2 : (risk && risk.level === 1 ? 1 : 0) });
+                 tier: (overStock || overSector) ? 2 : ((risk && risk.level === 1) || chkBad ? 1 : 0) });
     });
     out.sort(function (a, b) { return a.tier - b.tier || b.score - a.score; });
     return { budget: budget, list: out, skipped: skipped, maxSector: g.maxSectorPct };
@@ -2309,19 +2314,21 @@
   function nextBuyDecider(list) {
     if (list.length < 2) return "";
     var top = list[0], rest = list.slice(1), best = null;
-    ["y", "g", "r", "b", "p"].forEach(function (k) {
+    ["y", "g", "r", "b", "p", "c"].forEach(function (k) {
       var avg = rest.reduce(function (s, x) { return s + x.parts[k]; }, 0) / rest.length;
       var d = top.parts[k] - avg;
       if (k === "y" && top.yHigh) return;  // 高すぎる利回りは決め手にしない
+      if (k === "r" && top.tier === 2) return;  // 上限に達しているのに「余裕がある」とは言わない
       if (d > 0.5 && (!best || d > best.d)) best = { k: k, d: d };
     });
     if (!best) return "";
     return {
-      y: "利回りが目標の" + top.target + "%以上(" + top.y.toFixed(2) + "%)",
+      y: (top.y >= top.target ? "利回りが目標の" + top.target + "%以上(" : "利回りがほかの候補より高い(") + top.y.toFixed(2) + "%)",
       g: "5年の増配率が高い(年" + (top.gr >= 0 ? "+" : "") + (top.gr * 100).toFixed(1) + "%)",
       r: "分散の上限まで余裕がある(" + top.sector + " " + top.sectorPct.toFixed(1) + "%)",
       b: "景気敏感の偏りを和らげる",
-      p: "累進配当・DOEの方針がある"
+      p: "累進配当・DOEの方針がある",
+      c: "チェックシートの重要項目がすべて基準内"
     }[best.k];
   }
   function renderNextBuy() {
@@ -2348,7 +2355,7 @@
           ' ・ 100株なら ' + fmtYen(x.unitCost) + '</div>' +
           '<div class="nb-extra"></div></li>';
       }).join("") + '</ol>' + skipHtml +
-      '<p class="calendar-note">利回り(目標〜目標+2%が満点、それより高いと減点)・5年の増配率・分散の上限までの余裕・配当方針・景気敏感の比率から点数を付けた目安です。要注意の銘柄と、分散の上限に達している銘柄は順位を下げています。株価と予想配当が新しいほど正確になります。売買の判断はご自身で。</p>';
+      '<p class="calendar-note">利回り(目標〜目標+2%が満点、それより高いと減点)・5年の増配率・分散の上限までの余裕・配当方針・景気敏感の比率・チェックシートの採点(採点済みの銘柄だけ)から点数を付けた目安です。要注意・チェックシートで❌の銘柄と、分散の上限に達している銘柄は順位を下げています。株価と予想配当が新しいほど正確になります。売買の判断はご自身で。</p>';
     // 各銘柄に、チェックシートの採点と「買ったら?」の試算を付ける
     Array.prototype.forEach.call(body.querySelectorAll(".nb-list li"), function (li, i) {
       var x = top[i], box = li.querySelector(".nb-extra");
