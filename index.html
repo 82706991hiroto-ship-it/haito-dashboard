@@ -1595,6 +1595,9 @@
 <script>
 (function () {
   "use strict";
+  // ダイアログは保有銘柄の欄の中に書いてあるが、その欄はほかのタブでは非表示になり、中のダイアログも見えなくなる
+  // (候補タブの「届いた」、分析タブの銘柄の詳細など)。どのタブからでも開けるよう、ページの直下に移す
+  Array.prototype.forEach.call(document.querySelectorAll("dialog"), function (d) { document.body.appendChild(d); });
 
   var STORAGE_KEY = "haitoDashboardV1";
   var TAX_RATE = 0.20315;
