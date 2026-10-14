@@ -945,6 +945,8 @@
   .sibling { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 14px 0; margin: 18px 0 0; }
   .sibling:hover { background: none; }
   .sibling.sibling-top { margin: 0 0 18px; border-top: none; }
+  .watch-sort { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); margin: 0 0 10px; }
+  .watch-sort select { font-family: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--field); color: var(--text); }
   .watch-more { display: block; width: 100%; margin-top: 10px; }
   .sibling .ico, .onboard-list .ico { border-radius: 50%; }
   .onboard { border-bottom: 1px solid var(--line); padding: 24px 0; }
@@ -1524,7 +1526,16 @@
   </section>
 
   <section class="panel" id="watchPanel" data-view="extras">
-    <h2>買い増し候補 <span class="hint">目標利回りに近い順</span></h2>
+    <h2>買い増し候補 <span class="hint" id="watchSortHint">目標利回りに近い順</span></h2>
+    <label class="watch-sort">並べ替え
+      <select id="watchSort" aria-label="買い増し候補の並べ替え">
+        <option value="gap">目標利回りに近い順</option>
+        <option value="yield">今の利回りが高い順</option>
+        <option value="growth">増配率(5年)が高い順</option>
+        <option value="new">追加が新しい順</option>
+        <option value="code">コード順</option>
+      </select>
+    </label>
     <div class="watch-add">
       <input type="text" id="watchAddInput" placeholder="コードか銘柄名で追加(例: 8306、KDDI)" autocomplete="off">
       <button class="btn primary" id="watchAddBtn" type="button">☆ 追加</button>
@@ -4541,6 +4552,16 @@
   }
 
   var WATCH_SHOW = 5, watchShowAll = false;
+  var watchSortMode = (function () { try { var v = localStorage.getItem("haitoWatchSort"); return ["gap", "yield", "growth", "new", "code"].indexOf(v) === -1 ? "gap" : v; } catch (e) { return "gap"; } })();
+  (function () {
+    var sel = document.getElementById("watchSort");
+    sel.value = watchSortMode;
+    sel.addEventListener("change", function () {
+      watchSortMode = sel.value;
+      try { localStorage.setItem("haitoWatchSort", watchSortMode); } catch (e) {}
+      renderWatchList();
+    });
+  })();
   document.getElementById("watchMore").addEventListener("click", function () {
     watchShowAll = !watchShowAll;
     renderWatchList();
@@ -4550,10 +4571,19 @@
     var list = document.getElementById("watchList");
     if (!list) return;
     var items = (Array.isArray(state.watch) ? state.watch : []).map(watchView);
+    // 値が無いものは、どの並べ方でも最後にする
+    var sortKey = { gap: function (x) { return x.gapPct === null ? null : -x.gapPct; },
+      yield: function (x) { return x.yieldNow === null ? null : -x.yieldNow; },
+      growth: function (x) { var g = cagr(ordinaryDivs(x.w.code), 5); return g === null ? null : -g; },
+      new: function (x) { return x.w.addedAt ? -new Date(x.w.addedAt).getTime() : null; },
+      code: function (x) { return String(x.w.code); } }[watchSortMode] || null;
     items.sort(function (a, b) {
-      var ga = a.gapPct === null ? Infinity : -a.gapPct, gb = b.gapPct === null ? Infinity : -b.gapPct;
-      return ga - gb;
+      var ka = sortKey(a), kb = sortKey(b);
+      if (ka === null || kb === null) return (ka === null) - (kb === null);
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
     });
+    var hintEl = document.getElementById("watchSortHint");
+    if (hintEl) hintEl.textContent = { gap: "目標利回りに近い順", yield: "今の利回りが高い順", growth: "増配率(5年)が高い順", new: "追加が新しい順", code: "コード順" }[watchSortMode];
     list.innerHTML = "";
     // 候補が増えても下の株主優待まで遠くならないよう、目標利回りに近い順に5件だけ出す(追加した銘柄・試算中の銘柄は必ず出す)
     var more = document.getElementById("watchMore");
