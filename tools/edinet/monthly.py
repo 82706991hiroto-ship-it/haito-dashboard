@@ -8,12 +8,14 @@
 - 1株配当: 新しい期の配当を先頭に足す。有報の前期・前々期の値が今の系列と合うときだけ足し、
   分割で倍率がずれていれば今の系列を割り戻してからつなぐ。合わなければ有報の5期分に置き換える。
 - 配当性向: 当期の値に置き換える。
+- 株主優待: 「株式事務の概要」の「株主に対する特典」から、PERK_INFO(有無と年間の目安)と perks/*.json(特典の文)を書き換える。
+  金額の段階は文から確かに読めないので、前の段階の金額が新しい文にも全部出ているときだけ残し、そうでなければ「あり」(金額なし)にする。
 - 新しく上場した会社: EDINETコードリストの社名・業種と、決算月(中間配当があればその月も)で足す。
 - どの有報まで取り込んだかは tools/edinet/state.json(証券コード → 期末日)に残す。
 
 出典: EDINET(公共データ利用規約 PDL1.0)。
 """
-import argparse, csv, datetime as dt, io, json, os, re, sys, zipfile
+import argparse, csv, datetime as dt, io, json, os, re, sys, unicodedata, zipfile
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -25,12 +27,71 @@ MANUAL = os.path.join(ROOT, "data", "manual-dividends.json")
 SPLITS = os.path.join(ROOT, "data", "splits.json")
 SPLITS_APPLIED = os.path.join(ROOT, "data", "splits-applied.json")
 SPECIAL = os.path.join(ROOT, "data", "special-dividends.json")
+PERKS_DIR = os.path.join(ROOT, "perks")
 MAX_PERIODS = 35  # 自動は最大14期。手で足した過去の分も含めて残す上限
 CODELIST = "https://disclosure2dl.edinet-fsa.go.jp/searchdocument/codelist/Edinetcode.zip"
 
 
 def close(a, b):
     return abs(a - b) <= max(0.02 * abs(b), 0.011)
+
+
+NO_PERK = re.compile(r"^(該当(事項)?(は|が)?(ありません|ございません|なし|無し)|なし|無し|ありません|特になし|実施していません)")
+def perk_text(block):
+    """「株式事務の概要」から「株主に対する特典」の文を返す。項目が無ければ None、無しなら ""。"""
+    t = unicodedata.normalize("NFKC", block or "")
+    i = t.find("株主に対する特典")
+    if i < 0:
+        return None
+    t = re.sub(r"\s+", " ", t[i + len("株主に対する特典"):]).strip()
+    # 末尾の定款の注記(単元未満株主の権利)は優待と関係ないので外す
+    t = re.split(r"\(注\s*\d?\)\s*(?:\d\.\s*)?(?:当社|当会社|当行|当金庫)?(?:の)?(?:定款の定めにより|株主は、?その有する単元未満株式)", t)[0].strip()
+    if not t or NO_PERK.match(t) or re.fullmatch(r"[-―ー—－\s]*", t):
+        return ""
+    return t
+
+
+def update_perk(info, texts, code, text):
+    """PERK_INFO と特典の文を新しい有報の内容にする。戻り値は変化の種類(ログ用)。"""
+    old = info.get(code)
+    if text == "":
+        info[code] = 0
+        texts.pop(code, None)
+        return "なしに" if old else None
+    yen_in_text = set(int(x.replace(",", "")) for x in re.findall(r"([0-9][0-9,]*)円", text))
+    # 前の段階の金額が新しい文にもすべてあれば、段階はそのまま。読めないときは金額を出さない「あり」にする
+    new = old if isinstance(old, list) and all(t[1] in yen_in_text for t in old) else 1
+    info[code] = new
+    # 空白の入り方だけの違いは変更とみなさない(表の区切りの扱いで変わるため)
+    changed = re.sub(r"\s", "", texts.get(code) or "") != re.sub(r"\s", "", text)
+    if changed or code not in texts:
+        texts[code] = text
+    if not old:
+        return "ありに"
+    if isinstance(old, list) and new == 1:
+        return "内容が変わり金額を外した"
+    return "文を更新" if changed else None
+
+
+def load_perks(html):
+    m = re.search(r"var PERK_INFO = (\{.*?\});", html)
+    texts = {}
+    for f in os.listdir(PERKS_DIR):
+        if re.match(r"^[0-9]\.json$", f):
+            texts.update(json.load(open(os.path.join(PERKS_DIR, f), encoding="utf-8")))
+    return json.loads(m.group(1)), texts
+
+
+def write_perks(html, info, texts):
+    heads = {}
+    for code, t in texts.items():
+        heads.setdefault(code[0], {})[code] = t
+    for h, d in heads.items():
+        with open(os.path.join(PERKS_DIR, h + ".json"), "w", encoding="utf-8") as f:
+            json.dump(dict(sorted(d.items())), f, ensure_ascii=False, separators=(",", ":"))
+    m = re.search(r"var PERK_INFO = (\{.*?\});", html)
+    body = json.dumps(dict(sorted(info.items())), ensure_ascii=False, separators=(",", ":"))
+    return html[:m.start(1)] + body + html[m.end(1):]
 
 
 def recent_filings(days):
@@ -60,6 +121,8 @@ def parse(text):
     base = fh.parse_csv(text)
     extra = {}
     for r in csv.reader(io.StringIO(text), delimiter="\t"):
+        if len(r) >= 9 and r[0] == "jpcrp_cor:OverviewOfOperationalProceduresForSharesTextBlock" and "perk" not in base:
+            base["perk"] = perk_text(r[8])
         if len(r) >= 9 and r[0] in ("jpcrp_cor:PayoutRatioSummaryOfBusinessResults",
                                     "jpcrp_cor:InterimDividendPaidPerShareSummaryOfBusinessResults"):
             extra[(r[0].split(":")[1], r[2])] = r[8]
@@ -374,11 +437,16 @@ def main():
         todo = [(c, x) for c, x in todo if c in info]
 
     log = {}
+    perk_info, perk_texts = load_perks(html)
     with ThreadPoolExecutor(4) as ex:
         for (code, x), parsed in zip(todo, ex.map(lambda t: download(t[1]["docID"]), todo)):
             if not parsed or not parsed.get("fyend"):
                 log.setdefault("解析できず", []).append(code)
                 continue
+            if parsed.get("perk") is not None:
+                how_p = update_perk(perk_info, perk_texts, code, parsed["perk"])
+                if how_p:
+                    log.setdefault("優待: " + how_p, []).append(code)
             new = new_series(parsed)
             v = info.get(code)
             if v is None:
@@ -414,6 +482,8 @@ def main():
         return
     body = json.dumps(info, ensure_ascii=False, separators=(",", ":"))
     html = html[:m.start(1)] + body + html[m.end(1):]
+    if not a.manual_only:
+        html = write_perks(html, perk_info, perk_texts)
     html = write_split_map(html)
     html = write_special_map(html, info, state)
     open(a.html, "w", encoding="utf-8").write(html)
