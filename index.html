@@ -455,6 +455,8 @@
   .bal-leg .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bal-leg .v { font-variant-numeric: tabular-nums; color: var(--text-2); }
   .bal-leg .v.is-over { color: var(--crit); font-weight: 700; }
+  .bal-ref { font-size: 12px; margin: -2px 0 6px; }
+  .bal-ref a { color: var(--accent); }
   .bal-fundnote { font-size: 12px; color: var(--text-2); line-height: 1.7; margin: 10px 0 0; }
   .bal-band { position: relative; display: flex; height: 22px; border-radius: 6px; overflow: hidden; gap: 2px; }
   .bal-band span { display: block; height: 100%; }
@@ -2312,14 +2314,14 @@
       var yHigh = y > target + 2;
       if (yHigh) tags.push({ t: "利回り" + (target + 2) + "%超: 株価の下落や一時的な配当で高く見えていないか確認", c: "warn" });
       if (rec && (rec.pol || []).length) tags.push({ t: rec.pol.join("・"), c: "" });
-      if (balUp) tags.push({ t: "日本株の景気敏感" + sensNow.toFixed(0) + "%(目標" + sensTarget + "%)の偏りを和らげる", c: "" });
+      if (balUp) tags.push({ t: cls + "(" + sector + ")なので、日本株の景気敏感" + sensNow.toFixed(0) + "%(目標" + sensTarget + "%)の偏りを和らげる", c: "" });
       if (overStock) tags.push({ t: "銘柄の上限" + g.maxStockPct + "%に達しています", c: "ng" });
       if (overSector) tags.push({ t: sector + "が上限" + g.maxSectorPct + "%に達しています", c: "ng" });
       if (risk && risk.level === 1) tags.push({ t: "要注意: " + risk.items[0].t, c: "warn" });
       var n = Math.floor(budget / v.price);
       out.push({ code: code, name: name, kind: codes[code], score: score, parts: parts, tags: tags, price: v.price, div: v.div, n: n,
                  addDiv: n * v.div, unitCost: v.price * 100, y: y, yHigh: yHigh, target: target, yFore: fst && fst.kind === "ok" || v.divFromForecast, gr: gr,
-                 sector: sector, sectorPct: sh.sectorPct,
+                 sector: sector, sectorPct: sh.sectorPct, cls: cls,
                  // 要注意は1つ下げ、上限に達しているものはさらに下げる。1位に出るのは目立った問題のない銘柄から
                  tier: (overStock || overSector) ? 2 : ((risk && risk.level === 1) || chkBad ? 1 : 0) });
     });
@@ -2380,7 +2382,7 @@
           '<div class="nb-stats">' +
             '<span><small>利回り' + (x.yFore ? "(予想)" : "(実績)") + '</small><b>' + x.y.toFixed(2) + '%</b></span>' +
             '<span><small>増配率(5年)</small><b>' + (x.gr === null ? "—" : (x.gr >= 0 ? "+" : "") + (x.gr * 100).toFixed(1) + "%") + '</b></span>' +
-            '<span><small>' + escapeHtml(x.sector) + '</small><b>' + x.sectorPct.toFixed(1) + '%<i>上限' + (r.maxSector || "-") + '%</i></b></span></div>' +
+            '<span><small>' + escapeHtml(x.sector) + '・' + escapeHtml(x.cls) + '</small><b>' + x.sectorPct.toFixed(1) + '%<i>上限' + (r.maxSector || "-") + '%</i></b></span></div>' +
           (x.tags.length ? '<div class="nb-tags">' + x.tags.map(function (t) { return '<span class="nb-tag ' + t.c + '">' + escapeHtml(t.t) + '</span>'; }).join("") + '</div>' : "") +
           (i === 0 && decider ? '<div class="nb-decide">1位の決め手: ' + escapeHtml(decider) + '</div>' : "") +
           '<div class="nb-buy">' + (x.n >= 1 ? "単元未満で約" + x.n + "株(年 +" + fmtYen(x.addDiv) + "の配当)" : "1株 " + fmtYen(x.price) + "で予算を超えます") +
@@ -6456,6 +6458,15 @@
         function (x, i) { return x.other ? cssVar("--muted") : cssVar(BAL_COLORS[i % BAL_COLORS.length]); }, showSector,
         function (x) { return !x.other && x.pct > cap; });
       head("景気感応度", target ? "景気敏感の目標" + target + "%" : "");
+      var sref = document.createElement("p");
+      sref.className = "bal-ref";
+      sref.innerHTML = '<a href="#sectorRefPanel">どの業種が景気敏感・ディフェンシブか(業種一覧)</a>';
+      sref.querySelector("a").addEventListener("click", function (e) {
+        e.preventDefault();
+        var pnl = document.getElementById("sectorRefPanel");
+        pnl.open = true; pnl.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      container.appendChild(sref);
       var sv = sens.filter(function (x) { return x.label === "景気敏感"; })[0];
       pie(sens, "景気敏感", fmtPct(sv ? sv.pct : 0), function (x) { return sensColor(x.label); }, showSector);
       if (fundDiv > 0) {
