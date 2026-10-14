@@ -263,7 +263,8 @@
   .nb-tag.warn { background: var(--warn-soft); color: var(--warn); }
   .nb-tag.ng { background: var(--crit-soft, var(--warn-soft)); color: var(--crit); }
   .nb-decide { font-size: 12.5px; font-weight: 700; margin: 7px 0 0 30px; }
-  .nb-extra { margin: 8px 0 0 30px; }
+  .nb-extra { margin: 6px 0 0 30px; }
+  .nb-extra .watch-check { font-size: 11px; margin-top: 0; padding: 4px 0; }
   .nb-buy { font-size: 12px; color: var(--text-2); margin: 3px 0 0 30px; }
   .nb-skip { font-size: 12px; color: var(--text-2); margin-bottom: 8px; }
   .nb-skip summary { cursor: pointer; }
@@ -2270,10 +2271,15 @@
     if (!s || s.length <= n || !(s[n] > 0) || !(s[0] > 0)) return null;
     return Math.pow(s[0] / s[n], 1 / n) - 1;
   }
+  // 会社予想の配当が、直近の実績より下がっているか(有報の点検とは別に、予想配当を直接見る)
+  function forecastCut(code, fcDiv) {
+    var last = (ordinaryDivs(code) || dividendsFor(code) || [])[0];
+    return fcDiv > 0 && last > 0 && fcDiv < last * 0.97;
+  }
   function nextBuyList() {
     var budget = num(state.sim.monthlyInvest) || 30000, g = state.guides || {}, target = goalYieldOf(state.goals);
     // 景気敏感の比率は日本株だけで見る(米国株・投資信託は業種の分け方が違い、投信は中身が多くの業種に分かれるため)
-    var agg = aggregate(), sensNow = guideShares(aggregate("jp"), "", "").sensPct, sensTarget = num(g.sensitiveTarget) || 50;
+    var agg = aggregate("jp"), sensNow = guideShares(agg, "", "").sensPct, sensTarget = num(g.sensitiveTarget) || 50;
     var codes = {}, out = [], skipped = [];
     state.holdings.forEach(function (h) { var c = String(h.code || "").trim().toUpperCase(); if (!isUS(h) && !isFund(h) && /^[1-9][0-9A-Z]{3}$/.test(c)) codes[c] = "held"; });
     (state.watch || []).forEach(function (w) { if (w.code && !codes[w.code] && /^[1-9][0-9A-Z]{3}$/.test(w.code)) codes[w.code] = "watch"; });
@@ -2289,8 +2295,8 @@
       var risk = dividendRisk(code, held[0] && fst && fst.kind === "ok" ? num(held[0].div) : v.fcast);
       if (risk && risk.level === 2) { skipped.push(name + "(減配リスク高)"); return; }
       // 有報のデータが無い会社は減配リスクを点検できないので、会社予想が前期の実績より下がっていることだけは直接見る
-      var fcDiv = held[0] && fst && fst.kind === "ok" ? num(held[0].div) : v.fcast, lastAct = (ordinaryDivs(code) || dividendsFor(code) || [])[0];
-      if (!risk && fcDiv > 0 && lastAct > 0 && fcDiv < lastAct * 0.97) { skipped.push(name + "(会社予想が減配)"); return; }
+      var fcDiv = held[0] && fst && fst.kind === "ok" ? num(held[0].div) : v.fcast;
+      if (!risk && forecastCut(code, fcDiv)) { skipped.push(name + "(会社予想が減配)"); return; }
       // 分散の上限を超えている銘柄は外さず、順位を下げて理由を添える(銘柄が少ないうちは全部が超えてしまうため)
       var overStock = num(g.maxStockPct) > 0 && sh.stockPct >= num(g.maxStockPct);
       var overSector = num(g.maxSectorPct) > 0 && sh.sectorPct >= num(g.maxSectorPct);
@@ -2299,7 +2305,7 @@
       var balUp = (sensNow > sensTarget + 5 && cls === "ディフェンシブ") || (sensNow < sensTarget - 5 && cls === "景気敏感");
       var parts = {
         y: yieldPoints(y, target),
-        g: gr === null ? 0 : Math.max(-5, Math.min(10, gr * 100)) * 2,
+        g: gr === null ? 0 : Math.max(-5, Math.min(10, gr * 100)) * 2 * (y < target - 1 && gr > 0 ? 0.5 : 1),  // 利回りが目標を1%以上下回るときは、増配率の点を半分にする
         r: (num(g.maxStockPct) > 0 ? (1 - sh.stockPct / num(g.maxStockPct)) * 15 : 0) + (num(g.maxSectorPct) > 0 ? (1 - sh.sectorPct / num(g.maxSectorPct)) * 15 : 0),
         b: balUp ? 6 : 0,
         p: rec && (rec.pol || []).length ? 5 : 0
@@ -2318,6 +2324,9 @@
       if (overStock) tags.push({ t: "銘柄の上限" + g.maxStockPct + "%に達しています", c: "ng" });
       if (overSector) tags.push({ t: sector + "が上限" + g.maxSectorPct + "%に達しています", c: "ng" });
       if (risk && risk.level === 1) tags.push({ t: "要注意: " + risk.items[0].t, c: "warn" });
+      // 札は大事なもの(上限・警告)を先に、最大2つまで
+      var rankOf = { ng: 0, warn: 1 };
+      tags = tags.map(function (t, i) { return { t: t, i: i }; }).sort(function (a, b) { return (rankOf[a.t.c] === undefined ? 2 : rankOf[a.t.c]) - (rankOf[b.t.c] === undefined ? 2 : rankOf[b.t.c]) || a.i - b.i; }).slice(0, 2).map(function (x) { return x.t; });
       var n = Math.floor(budget / v.price);
       out.push({ code: code, name: name, kind: codes[code], score: score, parts: parts, tags: tags, price: v.price, div: v.div, n: n,
                  addDiv: n * v.div, unitCost: v.price * 100, y: y, yHigh: yHigh, target: target, yFore: fst && fst.kind === "ok" || v.divFromForecast, gr: gr,
@@ -2385,11 +2394,11 @@
             '<span><small>' + escapeHtml(x.sector) + '・' + escapeHtml(x.cls) + '</small><b>' + x.sectorPct.toFixed(1) + '%<i>上限' + (r.maxSector || "-") + '%</i></b></span></div>' +
           (x.tags.length ? '<div class="nb-tags">' + x.tags.map(function (t) { return '<span class="nb-tag ' + t.c + '">' + escapeHtml(t.t) + '</span>'; }).join("") + '</div>' : "") +
           (i === 0 && decider ? '<div class="nb-decide">1位の決め手: ' + escapeHtml(decider) + '</div>' : "") +
-          '<div class="nb-buy">' + (x.n >= 1 ? "単元未満で約" + x.n + "株(年 +" + fmtYen(x.addDiv) + "の配当)" : "1株 " + fmtYen(x.price) + "で予算を超えます") +
-          ' ・ 100株なら ' + fmtYen(x.unitCost) + '</div>' +
+          '<div class="nb-buy">' + (x.n >= 1 ? "約" + x.n + "株(年+" + fmtYen(x.addDiv) + ")" : "1株" + fmtYen(x.price) + "で予算超") +
+          ' ・ 100株 ' + fmtYen(x.unitCost) + '</div>' +
           '<div class="nb-extra"></div></div></li>';
       }).join("") + '</ol>' + skipHtml +
-      '<p class="calendar-note">利回り(目標〜目標+2%が満点、それより高いと減点)・5年の増配率・分散の上限までの余裕・配当方針・日本株の景気敏感の比率・チェックシートの採点(採点済みの銘柄だけ)から点数を付けた目安です。要注意・チェックシートで❌の銘柄と、分散の上限に達している銘柄は順位を下げています。株価と予想配当が新しいほど正確になります。売買の判断はご自身で。</p>';
+      '<details class="nb-skip"><summary>点数のつけかた</summary><p class="calendar-note">利回り(目標〜目標+2%が満点、それより高いと減点)・5年の増配率(利回りが目標を1%以上下回る銘柄は半分)・分散の上限までの余裕・配当方針・日本株の景気敏感の比率・チェックシートの採点(採点済みの銘柄だけ)から点数を付けた目安です。要注意・チェックシートで❌の銘柄と、分散の上限に達している銘柄は順位を下げています。株価と予想配当が新しいほど正確になります。売買の判断はご自身で。</p></details>';
     // 2位・3位の開閉
     Array.prototype.forEach.call(body.querySelectorAll(".nb-list li.nb-fold .nb-head"), function (hd) {
       function toggle() {
@@ -4432,13 +4441,13 @@
   }
 
   function simulateBuy(v, shares) {
-    var before = aggregate(), beforeJp = aggregate("jp");
+    var beforeJp = aggregate("jp");
     var temp = { id: "__sim__", code: v.w.code, name: v.name, sector: sectorFor(v.w.code, v.sector),
                  account: "特定", shares: shares, cost: v.price, div: v.div, prevDiv: "" };
     state.holdings.push(temp);
-    var after, afterJp;
-    try { after = aggregate(); afterJp = aggregate("jp"); } finally { state.holdings.pop(); }
-    var b = guideShares(before, v.w.code, temp.sector), a = guideShares(after, v.w.code, temp.sector);
+    var afterJp;
+    try { afterJp = aggregate("jp"); } finally { state.holdings.pop(); }
+    var b = guideShares(beforeJp, v.w.code, temp.sector), a = guideShares(afterJp, v.w.code, temp.sector);
     // 景気敏感の比率は日本株だけで見る(次に買うならと同じ物差し)
     b.sensPct = guideShares(beforeJp, "", "").sensPct; a.sensPct = guideShares(afterJp, "", "").sensPct;
     return {
@@ -4648,6 +4657,10 @@
       else { gap.textContent = "あと " + fmtPct(-v.gapPct) + " 下落で到達"; gap.classList.add("is-far"); }
       top.appendChild(nm); top.appendChild(sc); top.appendChild(gap);
       li.appendChild(top);
+      if (!heldOf(v.w.code).length && forecastCut(v.w.code, v.fcast)) {
+        var cutTag = document.createElement("div"); cutTag.className = "risk-line lv1"; cutTag.textContent = "⚠ 会社予想が減配(前期より下がる予想)";
+        li.appendChild(cutTag);
+      }
       li.appendChild(checkLine(v.w.code, v.price));
 
       var grid = document.createElement("div");
