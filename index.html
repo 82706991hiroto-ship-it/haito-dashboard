@@ -4541,14 +4541,18 @@
     if (price > 0) { w.price = price; w.priceDate = todayStamp(); }
     var fdiv = num(q.get("fdiv"));
     if (fdiv > 0) w.fdiv = fdiv; else delete w.fdiv;
+    // チェックシートで保存したときに決めた目標利回り(渡されなければ、今の値か既定の4%のまま)
+    var target = num(q.get("target"));
+    if (target > 0 && target <= 30) w.targetYield = target;
     save();
     var back = document.getElementById("backToCheck");
     back.innerHTML = "チェックシートに戻る<small>" + escapeHtml(code + " " + String(info[0]).normalize("NFKC")) + " の採点</small>";
     back.hidden = false;
     justAddedWatch = code;
     var label = code + " " + String(info[0]).normalize("NFKC");
-    showToast(isNew ? "チェックシートから " + label + " を買い増し候補に入れました。"
-                    : label + " はすでに候補にあります。チェックの結果を更新しました。");
+    var tt = target > 0 && target <= 30 ? "目標利回りは" + target + "%です。" : "";
+    showToast(isNew ? "チェックシートから " + label + " を買い増し候補に入れました。" + tt
+                    : label + " はすでに候補にあります。チェックの結果を更新しました。" + tt);
   }
 
   var WATCH_SHOW = 5, watchShowAll = false;
