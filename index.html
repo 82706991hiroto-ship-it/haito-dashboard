@@ -247,6 +247,12 @@
   .nb-head { display: flex; align-items: center; gap: 8px; font-size: 14.5px; }
   .nb-rank { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 800; flex: none; }
   .nb-kind { font-size: 11px; color: var(--text-2); border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; }
+  .nb-head.is-toggle { cursor: pointer; }
+  .nb-chev { margin-left: auto; color: var(--muted); transition: transform .15s; }
+  .nb-fold.is-open .nb-chev { transform: rotate(90deg); }
+  .nb-mini { display: block; font-size: 12px; color: var(--text-2); margin: 2px 0 0 30px; }
+  .nb-fold.is-open .nb-mini { display: none; }
+  .nb-mini em { font-style: normal; color: var(--warn); font-weight: 700; }
   .nb-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0 0 30px; }
   .nb-stats span { background: var(--field); border-radius: 8px; padding: 6px 8px; min-width: 0; }
   .nb-stats small { display: block; font-size: 10.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2331,6 +2337,7 @@
       c: "チェックシートの重要項目がすべて基準内"
     }[best.k];
   }
+  var nbOpen = {};
   function renderNextBuy() {
     var body = document.getElementById("nextBuyBody");
     if (!body) return;
@@ -2341,10 +2348,17 @@
       return;
     }
     var top = r.list.slice(0, 3), decider = nextBuyDecider(r.list);
+    var firstBad = function (x) { var t = x.tags.filter(function (q) { return q.c; })[0]; return t ? t.t : ""; };
     body.innerHTML = '<p class="nb-lead">毎月 <b>' + fmtYen(r.budget) + '</b> を1銘柄に入れるなら(積立額は「将来見通し」で変えられます)</p>' +
       '<ol class="nb-list">' + top.map(function (x, i) {
-        return '<li data-code="' + escapeHtml(x.code) + '"><div class="nb-head"><span class="nb-rank">' + (i + 1) + '</span><b>' + escapeHtml(x.code + " " + x.name) + '</b>' +
-          '<span class="nb-kind">' + (x.kind === "held" ? "買い増し" : "候補") + '</span></div>' +
+        var folded = i > 0 && !nbOpen[x.code];
+        // 1位は全部見せ、2位・3位は1行にたたむ(押すと開く)
+        var mini = i > 0 ? '<span class="nb-mini">利回り' + x.y.toFixed(2) + '% ・ 増配' + (x.gr === null ? "—" : (x.gr >= 0 ? "+" : "") + (x.gr * 100).toFixed(1) + "%") +
+          (firstBad(x) ? ' ・ <em>' + escapeHtml(firstBad(x).replace(/[:。].*$/, "")) + '</em>' : "") + '</span>' : "";
+        return '<li data-code="' + escapeHtml(x.code) + '" class="' + (i > 0 ? "nb-fold" : "") + (folded ? "" : " is-open") + '">' +
+          '<div class="nb-head' + (i > 0 ? " is-toggle" : "") + '"' + (i > 0 ? ' role="button" tabindex="0" aria-expanded="' + (folded ? "false" : "true") + '"' : "") + '><span class="nb-rank">' + (i + 1) + '</span><b>' + escapeHtml(x.code + " " + x.name) + '</b>' +
+          '<span class="nb-kind">' + (x.kind === "held" ? "買い増し" : "候補") + '</span>' + (i > 0 ? '<span class="nb-chev" aria-hidden="true">›</span>' : "") + '</div>' + mini +
+          '<div class="nb-more"' + (folded ? " hidden" : "") + '>' +
           '<div class="nb-stats">' +
             '<span><small>利回り' + (x.yFore ? "(予想)" : "(実績)") + '</small><b>' + x.y.toFixed(2) + '%</b></span>' +
             '<span><small>増配率(5年)</small><b>' + (x.gr === null ? "—" : (x.gr >= 0 ? "+" : "") + (x.gr * 100).toFixed(1) + "%") + '</b></span>' +
@@ -2353,9 +2367,20 @@
           (i === 0 && decider ? '<div class="nb-decide">1位の決め手: ' + escapeHtml(decider) + '</div>' : "") +
           '<div class="nb-buy">' + (x.n >= 1 ? "単元未満で約" + x.n + "株(年 +" + fmtYen(x.addDiv) + "の配当)" : "1株 " + fmtYen(x.price) + "で予算を超えます") +
           ' ・ 100株なら ' + fmtYen(x.unitCost) + '</div>' +
-          '<div class="nb-extra"></div></li>';
+          '<div class="nb-extra"></div></div></li>';
       }).join("") + '</ol>' + skipHtml +
       '<p class="calendar-note">利回り(目標〜目標+2%が満点、それより高いと減点)・5年の増配率・分散の上限までの余裕・配当方針・景気敏感の比率・チェックシートの採点(採点済みの銘柄だけ)から点数を付けた目安です。要注意・チェックシートで❌の銘柄と、分散の上限に達している銘柄は順位を下げています。株価と予想配当が新しいほど正確になります。売買の判断はご自身で。</p>';
+    // 2位・3位の開閉
+    Array.prototype.forEach.call(body.querySelectorAll(".nb-list li.nb-fold .nb-head"), function (hd) {
+      function toggle() {
+        var li = hd.parentNode, code = li.dataset.code, open = li.classList.toggle("is-open");
+        nbOpen[code] = open;
+        li.querySelector(".nb-more").hidden = !open;
+        hd.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+      hd.addEventListener("click", toggle);
+      hd.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+    });
     // 各銘柄に、チェックシートの採点と「買ったら?」の試算を付ける
     Array.prototype.forEach.call(body.querySelectorAll(".nb-list li"), function (li, i) {
       var x = top[i], box = li.querySelector(".nb-extra");
