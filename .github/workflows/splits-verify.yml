@@ -1,0 +1,21 @@
+# EDINETの注記から自動で拾った株式分割(data/splits.json)を、出典の書類で読み直して疑わしいものを一覧にする。
+# 書き換えはしない。Actions の画面の「Run workflow」から手で動かす。
+name: 株式分割の見直し
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: 出典の書類で読み直す
+        env:
+          EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+        run: python3 tools/edinet/splits_scan.py --verify

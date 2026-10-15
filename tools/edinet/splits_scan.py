@@ -96,7 +96,10 @@ def find_splits(text):
         return {}
     # 日付ごとに票を数え、いちばん多いもの(と、それに迫る別の分割)を残す
     best = max(votes.values())
-    return {day: ratio for (day, ratio), v in votes.items() if v >= max(2, best * 0.5)}
+    out = {day: ratio for (day, ratio), v in votes.items() if v >= max(2, best * 0.5)}
+    # 票の少ない日付も含めた全部(期中の分割と同じものかを見分けるのに使う)
+    out["_all"] = sorted([day, ratio] for (day, ratio) in votes)
+    return out
 
 
 def main():
@@ -104,7 +107,10 @@ def main():
     ap.add_argument("--days", type=int, default=45)
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--cache", help="読んだ書類ごとの結果を残すフォルダ(やり直しのとき読み直さない)")
+    ap.add_argument("--verify", action="store_true", help="splits.json の EDINET から拾った分割を、出典の書類で見直す(書き換えない)")
     a = ap.parse_args()
+    if a.verify:
+        return verify()
 
     html = open(HTML, encoding="utf-8").read()
     info = json.loads(re.search(r"var CODE_INFO_MAP = (\{.*?\});\n", html).group(1))
@@ -142,8 +148,14 @@ def main():
     hits = {}
     with ThreadPoolExecutor(4) as ex:
         for (code, x), got in zip(todo, ex.map(lambda t: scan(t[1]["docID"]), todo)):
+            # 同じ書類に、同じ比率の分割が最新の有報の期末以前の日付でも書かれていれば、その期の有報で反映済みの分割。
+            # 後の日付は読み違い(例: ヨドコウ 2025-07-01 の1株→5株を 2026-04-01 と拾い、二重に割り戻した)とみて足さない
+            inside = {r for d, r in (got.get("_all") or got.items()) if d <= state[code]}
             for day, ratio in got.items():
-                if day <= state[code]:
+                if day.startswith("_") or day <= state[code]:
+                    continue
+                if ratio in inside:
+                    print("期中の分割と同じ比率なので見送り(手で確認):", code, day, ratio, x["docID"], flush=True)
                     continue
                 cur = splits.get(code)
                 known = [e.get("効力発生日") for e in (cur if isinstance(cur, list) else [cur]) if isinstance(e, dict)]
@@ -176,6 +188,33 @@ def main():
     lines[-1] = lines[-1].rstrip(",")
     open(SPLITS, "w", encoding="utf-8").write("\n".join(lines) + "\n}\n")
     print("data/splits.json に", added, "件足しました")
+
+
+def verify():
+    """EDINETの注記から拾った分割を出典の書類で読み直し、同じ比率の分割が期末以前の日付でも書かれているもの
+    (期中の分割を後の日付と読み違えた疑い)を一覧にする。"""
+    state = json.load(open(STATE)) if os.path.exists(STATE) else {}
+    splits = json.load(open(SPLITS, encoding="utf-8"))
+    rows = []
+    for code, e in splits.items():
+        if code.startswith("_") or not isinstance(e, dict):
+            continue
+        m = re.search(r"EDINET \S+ (S100[0-9A-Z]{4})", e.get("出典") or "")
+        if m:
+            rows.append((code, e, m.group(1)))
+    print("EDINETの注記から拾った分割", len(rows), "件を読み直します", flush=True)
+    with ThreadPoolExecutor(4) as ex:
+        res = list(ex.map(lambda t: find_splits(text_of(t[2])), rows))
+    bad = 0
+    for (code, e, doc), got in zip(rows, res):
+        fy = state.get(code) or ""
+        cands = got.get("_all") or []
+        earlier = [d for d, r in cands if r == float(e["比率"]) and d < e["効力発生日"] and d <= fy]
+        mark = "疑わしい" if earlier else "ok"
+        if earlier:
+            bad += 1
+        print("%s %s %s 1株→%s株 期末%s %s 候補%s" % (mark, code, e.get("名前"), e["効力発生日"], e["比率"], fy, doc, cands), flush=True)
+    print("疑わしいもの", bad, "件")
 
 
 if __name__ == "__main__":
