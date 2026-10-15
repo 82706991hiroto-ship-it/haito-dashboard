@@ -5192,10 +5192,24 @@
       function cell(key) { return colMap[key] !== undefined ? String(cells[colMap[key]] || "").trim() : ""; }
 
       var product = cell("product");
-      if (product && product.indexOf("国内株") === -1) { skipped.product++; return; }
+      // 米国株・外国株の行は、受け取った記録(これまでの軌跡)にだけ使う。権利確定月などの自動入力には使わない
+      var fx = /米国|外国/.test(product);
+      if (product && !fx && product.indexOf("国内株") === -1) { skipped.product++; return; }
 
       var rawName = cell("name");
       var code = cell("code");
+      if (fx) {
+        var tk = (code || rawName).match(/([A-Z][A-Z0-9.]{0,6})\s*$/), dm = cell("date").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+        var fq = parsePasteNum(cell("qty")), fg = parsePasteNum(cell("gross")), fn = parsePasteNum(cell("net"));
+        if (!tk || !dm || (fg === "" && fn === "")) { skipped.other++; return; }
+        var fNisa = /nisa|ニーサ/i.test(cell("account"));
+        // 税引後の額しか無いときは、米国の税10%と国内の税(NISAは無し)を足し戻して税引前にする
+        var fgross = fg !== "" ? fg : fn / (0.9 * (fNisa ? 1 : 1 - TAX_RATE));
+        rows.push({ code: tk[1], name: rawName, fx: true, gross: fgross, qty: fq === "" ? null : fq, per: fq > 0 ? fgross / fq : null,
+                    py: dm[1] + "/" + ("0" + dm[2]).slice(-2), date: dm[1] + "-" + ("0" + dm[2]).slice(-2) + "-" + ("0" + dm[3]).slice(-2),
+                    nisa: fNisa, estimated: fg === "" });
+        return;
+      }
       if (!/^[0-9][0-9A-Za-z]{3}$/.test(code)) {
         var inName = rawName.match(/([0-9][0-9A-Za-z]{3})\s*$/);
         code = inName ? inName[1] : "";
@@ -5230,6 +5244,8 @@
         code: code, name: rawName, per: per, qty: qty === "" ? null : qty,
         ry: ry, rm: rm, seq: ry * 12 + rm,
         py: m[1] + "/" + ("0" + m[2]).slice(-2),
+        date: (cell("date").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/) || []).slice(1).map(function (v, i) { return i ? ("0" + v).slice(-2) : v; }).join("-") || undefined,
+        gross: gross !== "" ? gross : undefined,
         nisa: isNisa,
         estimated: grossCol === "" && !isNisa && parsePasteNum(cell("tax")) === ""
       });
@@ -5344,11 +5360,12 @@
       return;
     }
     if (parsed.rows.length === 0) {
-      statusEl.textContent = "国内株式の行が見つかりませんでした。";
+      statusEl.textContent = "配当の行が見つかりませんでした。";
       return;
     }
 
-    var agg = aggregateDividendHistory(parsed.rows);
+    var domRows = parsed.rows.filter(function (r) { return !r.fx; });
+    var agg = aggregateDividendHistory(domRows);
     var monthsSet = 0, divSet = 0, prevSet = 0, unmatched = 0, partial = 0, suspect = 0, adjusted = 0;
 
     Object.keys(agg).forEach(function (code) {
@@ -5379,15 +5396,10 @@
 
     // 実績は「答え合わせ」で使うので残す。同じ入金を二重に数えないよう、
     // 銘柄+入金年月+金額 で重複を除く。
-    var keep = {};
-    (state.payouts || []).concat(parsed.rows.map(function (r) {
-      return { code: r.code, ym: r.py, gross: r.per * (r.qty || 0), qty: r.qty, per: r.per, nisa: r.nisa };
-    })).forEach(function (r) {
-      if (!r.code || !r.ym) return;
-      keep[r.code + "|" + r.ym + "|" + Math.round(r.gross)] = r;
-    });
-    state.payouts = Object.keys(keep).map(function (k) { return keep[k]; })
-      .sort(function (a, b) { return a.ym < b.ym ? -1 : a.ym > b.ym ? 1 : 0; });
+    mergePayouts(parsed.rows.map(function (r) {
+      return { code: r.code, ym: r.py, date: r.date, gross: r.fx ? round2(r.gross) : r.per * (r.qty || 0), qty: r.qty, per: r.per, nisa: r.nisa,
+               fx: r.fx || undefined, est: r.estimated || undefined, src: "csv" };
+    }));
 
     state.isSample = false;
     save(); renderTable(); renderDashboard();
@@ -5397,27 +5409,48 @@
     if (adjusted > 0) msg += " " + adjusted + "銘柄は株式分割を検出し、過去の配当を今の株数に合わせて調整しました。";
     if (suspect > 0) msg += " " + suspect + "銘柄は年度の途中で株式分割があったとみられ、配当額は入れていません。";
     if (unmatched > 0) msg += " " + unmatched + "銘柄は未登録のため見送りました。";
+    var fxN = parsed.rows.length - domRows.length;
+    if (fxN > 0) msg += " 米国株など外国株の入金" + fxN + "件は、受け取った記録(これまでの軌跡)に入れました。";
     var sk = parsed.skipped.product + parsed.skipped.other;
-    if (sk > 0) msg += " 国内株式以外の行を" + sk + "件読み飛ばしました。";
+    if (sk > 0) msg += " 読めない行を" + sk + "件読み飛ばしました。";
     statusEl.textContent = msg;
   }
 
   document.getElementById("divHistCsvBtn").addEventListener("click", function () {
     document.getElementById("divHistCsvFile").click();
   });
+  // 受け取った記録(payouts)に足す。同じ入金は1つにする(銘柄・年月・金額が同じもの)。
+  // 受取履歴CSVの税引後から戻した額(est)と、お知らせPDFの税引前の額が同じ入金(銘柄・数量が同じで日付が3日以内)なら、PDFのほうを残す
+  function mergePayouts(add) {
+    var keep = {};
+    function k2(x) { return x.code + "|" + x.ym + "|" + Math.round(x.gross); }
+    // 日付のある記録は日付で見分ける(月2回の入金がほぼ同じ額のことがある)。
+    // 日付を持たない前の取り込み分と同じ入金(銘柄・年月・金額が同じ)は、新しい取り込み分で置き換える
+    var dated = {};
+    add.forEach(function (x) { if (x.date) dated[k2(x)] = true; });
+    (state.payouts || []).filter(function (x) { return x.date || !dated[k2(x)]; }).concat(add).forEach(function (x) {
+      if (!x.code || !x.ym) return;
+      keep[x.date ? x.code + "|" + x.date + "|" + Math.round(x.gross) : k2(x)] = x;
+    });
+    var all = Object.keys(keep).map(function (k) { return keep[k]; });
+    var exact = all.filter(function (x) { return !x.est && x.date; });
+    all = all.filter(function (x) {
+      return !(x.est && x.date && exact.some(function (y) {
+        return y !== x && y.code === x.code && (y.qty == null || x.qty == null || y.qty === x.qty) &&
+          Math.abs(new Date(y.date) - new Date(x.date)) <= 3 * 86400000;
+      }));
+    });
+    state.payouts = all.sort(function (a, b) { return a.ym < b.ym ? -1 : a.ym > b.ym ? 1 : 0; });
+  }
   // 配当金のお知らせPDF(pdf-dividends.js)。受け取った記録として payouts に足す(権利確定月などの自動入力には使わない)
   function importDividendPdfs(files, status) {
     if (!window.HaitoPdfDividends) { status.textContent = "PDFを読む部品を読み込めませんでした。"; return; }
     status.textContent = "PDFを読んでいます…(" + files.length + "件)";
     window.HaitoPdfDividends.readAll(files).then(function (r) {
-      var keep = {}, before = (state.payouts || []).length;
-      (state.payouts || []).concat(r.rows.map(function (x) {
-        return { code: x.code, ym: x.ym, gross: x.gross, qty: x.qty, per: x.per || (x.qty > 0 ? round2(x.gross / x.qty) : null), nisa: false, fx: x.fx || undefined, src: "pdf" };
-      })).forEach(function (x) {
-        if (!x.code || !x.ym) return;
-        keep[x.code + "|" + x.ym + "|" + Math.round(x.gross)] = x;
-      });
-      state.payouts = Object.keys(keep).map(function (k) { return keep[k]; }).sort(function (a, b) { return a.ym < b.ym ? -1 : a.ym > b.ym ? 1 : 0; });
+      var before = (state.payouts || []).length;
+      mergePayouts(r.rows.map(function (x) {
+        return { code: x.code, ym: x.ym, date: x.date, gross: x.gross, qty: x.qty, per: x.per || (x.qty > 0 ? round2(x.gross / x.qty) : null), nisa: false, fx: x.fx || undefined, src: "pdf" };
+      }));
       var added = state.payouts.length - before, fx = r.rows.filter(function (x) { return x.fx; }).length;
       state.isSample = false;
       save(); renderTable(); renderDashboard();
