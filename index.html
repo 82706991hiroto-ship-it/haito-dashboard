@@ -2304,11 +2304,14 @@
       var y = v.div / v.price * 100, gr = cagr(ordinaryDivs(code), 5);
       var cls = sectorClassOf(sector), rec = finRec(code);
       var balUp = (sensNow > sensTarget + 5 && cls === "ディフェンシブ") || (sensNow < sensTarget - 5 && cls === "景気敏感");
+      // 積立額で買った後の景気敏感の比率。目標±5%の外へ離れてしまう銘柄は点を下げる
+      var n = Math.floor(budget / v.price), sensAfter = simulateBuy(v, Math.max(n, 1)).after.sensPct;
+      var balAway = !balUp && Math.abs(sensAfter - sensTarget) > 5 && Math.abs(sensAfter - sensTarget) > Math.abs(sensNow - sensTarget) + 0.05;
       var parts = {
         y: yieldPoints(y, target),
         g: gr === null ? 0 : Math.max(-5, Math.min(10, gr * 100)) * 2 * (y < target - 1 && gr > 0 ? 0.5 : 1),  // 利回りが目標を1%以上下回るときは、増配率の点を半分にする
         r: (num(g.maxStockPct) > 0 ? (1 - sh.stockPct / num(g.maxStockPct)) * 15 : 0) + (num(g.maxSectorPct) > 0 ? (1 - sh.sectorPct / num(g.maxSectorPct)) * 15 : 0),
-        b: balUp ? 6 : 0,
+        b: balUp ? 6 : balAway ? -6 : 0,
         p: rec && (rec.pol || []).length ? 5 : 0
       };
       // チェックシートで採点済みなら順位に反映する(❌があれば要注意と同じ扱い、重要項目がすべて基準内なら少し加点)
@@ -2322,13 +2325,13 @@
       if (yHigh) tags.push({ t: "利回り" + (target + 2) + "%超: 株価の下落や一時的な配当で高く見えていないか確認", c: "warn" });
       if (rec && (rec.pol || []).length) tags.push({ t: rec.pol.join("・"), c: "" });
       if (balUp) tags.push({ t: cls + "(" + sector + ")なので、日本株の景気敏感" + sensNow.toFixed(0) + "%(目標" + sensTarget + "%)の偏りを和らげる", c: "" });
+      if (balAway) tags.push({ t: "買うと日本株の景気敏感が" + sensNow.toFixed(0) + "→" + sensAfter.toFixed(0) + "%(目標" + sensTarget + "%)で目標から離れる", c: "warn" });
       if (overStock) tags.push({ t: "銘柄の上限" + g.maxStockPct + "%に達しています", c: "ng" });
       if (overSector) tags.push({ t: sector + "が上限" + g.maxSectorPct + "%に達しています", c: "ng" });
       if (risk && risk.level === 1) tags.push({ t: "要注意: " + risk.items[0].t, c: "warn" });
       // 札は大事なもの(上限・警告)を先に、最大2つまで
       var rankOf = { ng: 0, warn: 1 };
       tags = tags.map(function (t, i) { return { t: t, i: i }; }).sort(function (a, b) { return (rankOf[a.t.c] === undefined ? 2 : rankOf[a.t.c]) - (rankOf[b.t.c] === undefined ? 2 : rankOf[b.t.c]) || a.i - b.i; }).slice(0, 2).map(function (x) { return x.t; });
-      var n = Math.floor(budget / v.price);
       out.push({ code: code, name: name, kind: codes[code], score: score, parts: parts, tags: tags, price: v.price, div: v.div, n: n,
                  addDiv: n * v.div, unitCost: v.price * 100, y: y, yHigh: yHigh, target: target, yFore: fst && fst.kind === "ok" || v.divFromForecast, gr: gr,
                  sector: sector, sectorPct: sh.sectorPct, cls: cls,
@@ -2354,7 +2357,8 @@
       var avg = rest.reduce(function (s, x) { return s + x.parts[k]; }, 0) / rest.length;
       var d = top.parts[k] - avg;
       if (k === "y" && top.yHigh) return;  // 高すぎる利回りは決め手にしない
-      if (k === "r" && top.tier === 2) return;  // 上限に達しているのに「余裕がある」とは言わない
+      if (k === "r" && top.tier === 2) return;
+      if (k === "b" && top.parts.b <= 0) return;  // 偏りを和らげる銘柄だけ決め手にする  // 上限に達しているのに「余裕がある」とは言わない
       if (d > 0.5 && (!best || d > best.d)) best = { k: k, d: d };
     });
     if (!best) return "";
@@ -2399,7 +2403,7 @@
           ' ・ 100株 ' + fmtYen(x.unitCost) + '</div>' +
           '<div class="nb-extra"></div></div></li>';
       }).join("") + '</ol>' + skipHtml +
-      '<details class="nb-skip"><summary>点数のつけかた</summary><p class="calendar-note">利回り(目標〜目標+2%が満点、それより高いと減点)・5年の増配率(利回りが目標を1%以上下回る銘柄は半分)・分散の上限までの余裕・配当方針・日本株の景気敏感の比率・チェックシートの採点(採点済みの銘柄だけ)から点数を付けた目安です。要注意・チェックシートで❌の銘柄と、分散の上限に達している銘柄は順位を下げています。株価と予想配当が新しいほど正確になります。売買の判断はご自身で。</p></details>';
+      '<details class="nb-skip"><summary>点数のつけかた</summary><p class="calendar-note">利回り(目標〜目標+2%が満点、それより高いと減点)・5年の増配率(利回りが目標を1%以上下回る銘柄は半分)・分散の上限までの余裕・配当方針・日本株の景気敏感の比率(積立額で買った後に目標±5%の外へ離れるなら減点)・チェックシートの採点(採点済みの銘柄だけ)から点数を付けた目安です。要注意・チェックシートで❌の銘柄と、分散の上限に達している銘柄は順位を下げています。株価と予想配当が新しいほど正確になります。売買の判断はご自身で。</p></details>';
     // 2位・3位の開閉
     Array.prototype.forEach.call(body.querySelectorAll(".nb-list li.nb-fold .nb-head"), function (hd) {
       function toggle() {
@@ -2427,7 +2431,8 @@
         if (open) renderWatchSim(sim, v);
       }
       btn.addEventListener("click", function () {
-        if (watchSimOpen[v.w.id] !== undefined) delete watchSimOpen[v.w.id]; else watchSimOpen[v.w.id] = 100;
+        // 積立額で買える株数から試算する(順位もこの株数で付けている)
+        if (watchSimOpen[v.w.id] !== undefined) delete watchSimOpen[v.w.id]; else watchSimOpen[v.w.id] = Math.max(x.n, 1);
         paintSim();
       });
       act.appendChild(btn); box.appendChild(act); box.appendChild(sim);
