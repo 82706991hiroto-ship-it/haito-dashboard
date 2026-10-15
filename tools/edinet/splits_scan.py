@@ -25,7 +25,7 @@ DATE = r"(\d{4})年(\d{1,2})月(\d{1,2})日(?:\([^)]{1,3}\))?"
 #  ・「2026年7月1日付で(普通株式1株につき2株の割合で)株式分割」「2026年7月1日を効力発生日として…株式分割」
 LABELED = re.compile(r"効力発生日[\s::]{0,3}" + DATE)
 INLINE = re.compile(DATE + r"(?:付で|付けで|をもって|を効力発生日として|を効力発生日とし)[^。]{0,40}?(?:株式分割|株式併合|1株につき|株を1株に)")
-RATIO_SPLIT = re.compile(r"1株につき[、,]?\s*(\d+(?:\.\d+)?)株")
+RATIO_SPLIT = re.compile(r"1株(?:につき|当たり)[、,]?\s*(\d[\d,]*(?:\.\d+)?)株|1株を(\d[\d,]*)株に")
 RATIO_MERGE = re.compile(r"(\d+)株を1株に(?:併合|株式併合)")
 
 
@@ -61,6 +61,20 @@ def text_of(doc_id):
     return unicodedata.normalize("NFKC", "\n".join(parts))
 
 
+OTHER = re.compile(r"(?:\(株\)|株式会社|㈱)[^、。\n]{0,30}は、|[^、。\n]{1,30}(?:\(株\)|株式会社|㈱|銀行|ホールディングス|グループ|フィナンシャル)は、")
+
+
+def other_company(text, pos):
+    """pos の「株式分割」が、当社ではない会社(持っている他社の株など)の話か。
+    同じ文の中で、分割より前に「(株)○○は、」「○○銀行は、」のような他社の主語があり「当社」が無ければ他社とみる。
+    特定投資株式・保有目的の注記の中の文も他社とみる"""
+    start = max(text.rfind("。", 0, pos), text.rfind("\n", 0, pos), text.rfind("\"", 0, pos)) + 1
+    sent = text[start:pos]
+    if re.search(r"特定投資株式|保有目的|純投資", text[max(0, pos - 400):pos]):
+        return True
+    return bool(OTHER.search(sent)) and "当社" not in sent
+
+
 def find_splits(text):
     """本文から分割・併合を拾い {効力発生日: 比率} で返す。比率は 1株→N株 のN(併合は 1/N)。
 
@@ -69,27 +83,37 @@ def find_splits(text):
     """
     votes = {}
     for m in re.finditer(r"株式分割|株式併合", text):
-        win = text[max(0, m.start() - 300): m.end() + 900]
-        rs, rm = RATIO_SPLIT.search(win), RATIO_MERGE.search(win)
-        if m.group(0) == "株式分割" and rs:
-            ratio = float(rs.group(1))
-        elif m.group(0) == "株式併合" and rm and float(rm.group(1)) > 1:
-            ratio = round(1 / float(rm.group(1)), 6)
-        else:
-            continue
-        if ratio == 1 or ratio <= 0 or ratio > 100:
+        w0 = max(0, m.start() - 300)
+        win = text[w0: m.end() + 900]
+        merge = m.group(0) == "株式併合"
+        ratios = []
+        for r in (RATIO_MERGE if merge else RATIO_SPLIT).finditer(win):
+            v = float((r.group(1) or r.group(2) if not merge else r.group(1)).replace(",", ""))
+            if merge:
+                v = round(1 / v, 6) if v > 1 else 0
+            if v and v != 1 and 0 < v <= 1000:
+                ratios.append((r.start(), v))
+        if not ratios:
             continue
         # 吸収分割・子会社など、当社ではない会社の株式分割の話は除く
         if re.search(r"吸収分割|新設分割|会社分割|承継会社|子会社|完全親会社", text[max(0, m.start() - 200): m.end() + 60]):
+            continue
+        # 持っている他社の株(政策保有株式・特定投資株式)の注記にある、その会社の分割は除く
+        # 例:「(株)滋賀銀行は、2026年4月1日付で普通株式1株につき5株の割合で株式分割を行っており」
+        if other_company(text, m.start()):
             continue
         for pat in (LABELED, INLINE):
             for d in pat.finditer(win):
                 if pat is LABELED and "配当" in win[max(0, d.start() - 40): d.start()]:
                     continue  # 「配当の効力発生日」
+                if other_company(text, w0 + d.start()):
+                    continue  # 日付のある文が他社の話
                 try:
                     day = dt.date(int(d.group(1)), int(d.group(2)), int(d.group(3))).isoformat()
                 except ValueError:
                     continue
+                # 比率は、その日付にいちばん近いもの(後ろを少し優先)。窓の中の別の分割の比率と取り違えないように
+                ratio = min(ratios, key=lambda r: abs(r[0] - d.end()) if r[0] >= d.end() else (d.start() - r[0]) * 1.5)[1]
                 v = votes.setdefault((day, ratio), 0)
                 votes[(day, ratio)] = v + (2 if pat is INLINE else 1)
     if not votes:
@@ -210,17 +234,26 @@ def verify():
     for (code, e, doc), got, text in zip(rows, res, texts):
         fy = state.get(code) or ""
         cands = got.get("_all") or []
-        earlier = [d for d, r in cands if r == float(e["比率"]) and d < e["効力発生日"] and d <= fy]
-        mark = "疑わしい" if earlier else "ok"
-        if earlier:
+        day, ratio = e["効力発生日"], float(e["比率"])
+        if not text:
+            mark = "読めず"
+        elif [day, ratio] in cands:
+            mark = "ok"
+        elif any(r == ratio and d <= fy for d, r in cands):
+            mark = "期中の分割(二重の割り戻し)"
+        elif any(d == day for d, r in cands):
+            mark = "比率違い"
+        else:
+            mark = "根拠なし(他社の分割の可能性)"
+        if mark != "ok":
             bad += 1
-        print("%s %s %s %s 1株→%s株 期末%s %s 候補%s" % (mark, code, e.get("名前"), e["効力発生日"], e["比率"], fy, doc, cands), flush=True)
-        if earlier:
-            # 判断の材料に、分割の書かれた文を出しておく(同じ文は1回だけ)
+        print("%s %s %s %s 1株→%s株 期末%s %s 当社の候補%s" % (mark, code, e.get("名前"), day, e["比率"], fy, doc, cands), flush=True)
+        if mark != "ok":
+            # 判断の材料に、当社の分割として書かれた文を出しておく(同じ文は1回だけ)
             seen = set()
-            for m2 in re.finditer(r"[^。\n]{0,160}(?:株式分割|株式併合)[^。\n]{0,160}", text):
+            for m2 in re.finditer(r"[^。\n\"]{0,160}(?:株式分割|株式併合)[^。\n\"]{0,160}", text):
                 t = re.sub(r"\s+", " ", m2.group(0)).strip()
-                if re.search(r"\d{4}年\d{1,2}月\d{1,2}日", t) and t not in seen and len(seen) < 6:
+                if re.search(r"\d{4}年\d{1,2}月\d{1,2}日", t) and t not in seen and len(seen) < 4 and not other_company(text, m2.end() - 1):
                     seen.add(t)
                     print("    「" + t + "」", flush=True)
     print("疑わしいもの", bad, "件")
