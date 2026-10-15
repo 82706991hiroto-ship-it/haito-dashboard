@@ -1525,10 +1525,11 @@
         </p>
         <div class="toolbar">
           <button class="btn primary" id="divHistCsvBtn">CSVファイルを選択して読み込む</button>
-          <input type="file" id="divHistCsvFile" style="display:none">
+          <input type="file" id="divHistCsvFile" multiple style="display:none">
           <span class="paste-status" id="divHistStatus"></span>
         </div>
         <p class="hint" style="margin-top:14px;">
+          SBI証券(SBIネオモバイル証券)の電子交付書面にある「配当金のお知らせ」「外国株式等配当金等のご案内」のPDFも、まとめて選ぶと読み込めます(受け取った額の記録になり、「これまでの軌跡」に入ります)。
           ファイルを選べない端末では、受取履歴の表を見出し行ごとコピーして下に貼り付けても読み込めます。
         </p>
         <textarea id="divHistArea" rows="5" placeholder="ここに配当金の受取履歴を貼り付け"></textarea>
@@ -1623,6 +1624,7 @@
 <script src="sync-config.js"></script>
 <script src="sync-core.js"></script>
 <script src="splits-core.js"></script>
+<script src="pdf-dividends.js"></script>
 <script>
 (function () {
   "use strict";
@@ -5401,10 +5403,35 @@
   document.getElementById("divHistCsvBtn").addEventListener("click", function () {
     document.getElementById("divHistCsvFile").click();
   });
+  // 配当金のお知らせPDF(pdf-dividends.js)。受け取った記録として payouts に足す(権利確定月などの自動入力には使わない)
+  function importDividendPdfs(files, status) {
+    if (!window.HaitoPdfDividends) { status.textContent = "PDFを読む部品を読み込めませんでした。"; return; }
+    status.textContent = "PDFを読んでいます…(" + files.length + "件)";
+    window.HaitoPdfDividends.readAll(files).then(function (r) {
+      var keep = {}, before = (state.payouts || []).length;
+      (state.payouts || []).concat(r.rows.map(function (x) {
+        return { code: x.code, ym: x.ym, gross: x.gross, qty: x.qty, per: x.per || (x.qty > 0 ? round2(x.gross / x.qty) : null), nisa: false, fx: x.fx || undefined, src: "pdf" };
+      })).forEach(function (x) {
+        if (!x.code || !x.ym) return;
+        keep[x.code + "|" + x.ym + "|" + Math.round(x.gross)] = x;
+      });
+      state.payouts = Object.keys(keep).map(function (k) { return keep[k]; }).sort(function (a, b) { return a.ym < b.ym ? -1 : a.ym > b.ym ? 1 : 0; });
+      var added = state.payouts.length - before, fx = r.rows.filter(function (x) { return x.fx; }).length;
+      state.isSample = false;
+      save(); renderTable(); renderDashboard();
+      if (window.HaitoSync) window.HaitoSync.soon();
+      status.textContent = "PDF " + r.read + "件から、配当の入金 " + r.rows.length + "件を読みました(国内株 " + (r.rows.length - fx) + "件・外国株 " + fx + "件)。" +
+        (added < r.rows.length ? "うち " + (r.rows.length - added) + "件は読み込み済みでした。" : "") +
+        (r.failed.length ? " 読めなかったファイル: " + r.failed.slice(0, 5).join("、") + (r.failed.length > 5 ? " ほか" + (r.failed.length - 5) + "件" : "") + "(配当金のお知らせ以外のPDFかもしれません)" : "");
+    }, function () { status.textContent = "PDFを読めませんでした。通信が切れていないか確かめて、もう一度試してください。"; });
+  }
   document.getElementById("divHistCsvFile").addEventListener("change", function (e) {
-    var file = e.target.files[0];
-    if (!file) return;
+    var all = Array.prototype.slice.call(e.target.files || []);
+    var pdfs = all.filter(function (f) { return /\.pdf$/i.test(f.name) || f.type === "application/pdf"; });
     var status = document.getElementById("divHistStatus");
+    if (pdfs.length) { importDividendPdfs(pdfs, status); e.target.value = ""; return; }
+    var file = all[0];
+    if (!file) return;
     var reader = new FileReader();
     reader.onload = function () { applyDividendHistory(decodeCsvBuffer(reader.result), status); };
     reader.onerror = function () { status.textContent = "ファイルの読み込みに失敗しました。"; };
@@ -6926,7 +6953,8 @@
     var body = document.getElementById("actualBody");
     if (!panel || !body) return;
 
-    var payouts = Array.isArray(state.payouts) ? state.payouts : [];
+    // 外国株の入金(お知らせPDFから)は、今の保有の予想と比べる「答え合わせ」には入れない(受取履歴CSVと同じく国内株だけ)
+    var payouts = (Array.isArray(state.payouts) ? state.payouts : []).filter(function (r) { return !r.fx; });
     panel.hidden = payouts.length === 0;
     if (payouts.length === 0) { body.innerHTML = ""; return; }
 
