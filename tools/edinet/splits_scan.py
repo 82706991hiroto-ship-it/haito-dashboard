@@ -132,7 +132,16 @@ def main():
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--cache", help="読んだ書類ごとの結果を残すフォルダ(やり直しのとき読み直さない)")
     ap.add_argument("--verify", action="store_true", help="splits.json の EDINET から拾った分割を、出典の書類で見直す(書き換えない)")
+    ap.add_argument("--show", nargs="*", help="書類番号(S100…)の本文から、当社の分割として読める文と結果を出す")
     a = ap.parse_args()
+    if a.show:
+        for doc in a.show:
+            text = text_of(doc)
+            print(doc, "読めた" if text else "読めず", find_splits(text) if text else "", flush=True)
+            for m2 in re.finditer(r"[^。\n\"]{0,160}(?:株式分割|株式併合|1株当たり配当額)[^。\n\"]{0,200}", text):
+                if not other_company(text, m2.end() - 1):
+                    print("    「" + re.sub(r"\s+", " ", m2.group(0)).strip()[:300] + "」", flush=True)
+        return
     if a.verify:
         return verify()
 

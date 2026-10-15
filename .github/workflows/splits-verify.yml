@@ -3,6 +3,10 @@
 name: 株式分割の見直し
 on:
   workflow_dispatch:
+    inputs:
+      show:
+        description: "本文を書き出す書類番号(S100…、空白区切り。空なら書き出さない)"
+        default: ""
 permissions:
   contents: read
 jobs:
@@ -18,4 +22,4 @@ jobs:
       - name: 出典の書類で読み直す
         env:
           EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
-        run: python3 tools/edinet/splits_scan.py --verify
+        run: python3 tools/edinet/splits_scan.py --verify && if [ -n "${{ inputs.show }}" ]; then python3 tools/edinet/splits_scan.py --show ${{ inputs.show }}; fi
