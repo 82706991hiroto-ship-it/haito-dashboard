@@ -260,6 +260,7 @@
   .nb-stats i { display: block; font-style: normal; font-weight: 400; font-size: 10.5px; color: var(--muted); }
   .nb-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 0 30px; }
   .nb-tag { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 8px; background: var(--accent-soft); color: var(--accent); }
+  .nb-tag.dim { background: var(--field); color: var(--text-2); font-weight: 500; }
   .nb-tag.warn { background: var(--warn-soft); color: var(--warn); }
   .nb-tag.ng { background: var(--crit-soft, var(--warn-soft)); color: var(--crit); }
   .nb-decide { font-size: 12.5px; font-weight: 700; margin: 7px 0 0 30px; }
@@ -2324,8 +2325,8 @@
       var yHigh = y > target + 2;
       if (yHigh) tags.push({ t: "利回り" + (target + 2) + "%超: 株価の下落や一時的な配当で高く見えていないか確認", c: "warn" });
       if (rec && (rec.pol || []).length) tags.push({ t: rec.pol.join("・"), c: "" });
-      if (balUp) tags.push({ t: cls + "(" + sector + ")なので、日本株の景気敏感" + sensNow.toFixed(0) + "%(目標" + sensTarget + "%)の偏りを和らげる", c: "" });
-      if (balAway) tags.push({ t: "買うと日本株の景気敏感が" + sensNow.toFixed(0) + "→" + sensAfter.toFixed(0) + "%(目標" + sensTarget + "%)で目標から離れる", c: "warn" });
+      if (balUp) tags.push({ t: "景気敏感 " + sensNow.toFixed(0) + "%を目標" + sensTarget + "%へ", c: "" });
+      if (balAway) tags.push({ t: "景気敏感 " + sensNow.toFixed(0) + "→" + sensAfter.toFixed(0) + "%(目標" + sensTarget + "%)", c: "dim" });
       if (overStock) tags.push({ t: "銘柄の上限" + g.maxStockPct + "%に達しています", c: "ng" });
       if (overSector) tags.push({ t: sector + "が上限" + g.maxSectorPct + "%に達しています", c: "ng" });
       if (risk && risk.level === 1) tags.push({ t: "要注意: " + risk.items[0].t, c: "warn" });
@@ -2382,7 +2383,7 @@
       return;
     }
     var top = r.list.slice(0, 3), decider = nextBuyDecider(r.list);
-    var firstBad = function (x) { var t = x.tags.filter(function (q) { return q.c; })[0]; return t ? t.t : ""; };
+    var firstBad = function (x) { var t = x.tags.filter(function (q) { return q.c && q.c !== "dim"; })[0]; return t ? t.t : ""; };
     body.innerHTML = '<p class="nb-lead">毎月 <b>' + fmtYen(r.budget) + '</b> を1銘柄に入れるなら(積立額は「将来見通し」で変えられます)</p>' +
       '<ol class="nb-list">' + top.map(function (x, i) {
         var folded = i > 0 && !nbOpen[x.code];
