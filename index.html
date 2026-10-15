@@ -273,6 +273,11 @@
   .season-list li { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
   .season-list li:last-child { border-bottom: none; }
   .se-ico { flex: none; width: 22px; text-align: center; }
+  .split-list { list-style: none; margin: 8px 0 0; padding: 0; }
+  .split-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+  .se-split { margin-top: 8px; }
+  .se-split + .se-split { border-top: 1px dashed var(--line); padding-top: 8px; }
+  .se-btns { display: flex; flex-wrap: wrap; gap: 6px; }
   .se-sub { font-size: 12px; color: var(--text-2); margin-top: 2px; line-height: 1.55; }
   .se-up { color: var(--accent); } .se-down { color: var(--crit); }
   .season-list .btn { margin-top: 6px; padding: 6px 12px; font-size: 12.5px; }
@@ -1517,6 +1522,11 @@
         </div>
       </div>
     </details>
+
+    <details class="paste-import" id="splitListBox" hidden>
+      <summary>この端末で登録した株式分割</summary>
+      <div class="paste-import-body" id="splitListBody"></div>
+    </details>
   </section>
 
   <a class="sibling sibling-top" href="../ir-check/" data-view="extras">
@@ -1597,6 +1607,7 @@
 
 <script src="sync-config.js"></script>
 <script src="sync-core.js"></script>
+<script src="splits-core.js"></script>
 <script>
 (function () {
   "use strict";
@@ -1947,7 +1958,7 @@
   function perOf(h) {
     var c = String(h.code || "").trim().toUpperCase(), p = num(h.price);
     if (isUS(h) || !(p > 0) || !FIN[c[0]]) return null;
-    var rec = FIN[c[0]][c], e = rec && rec.eps ? rec.eps[rec.eps.length - 1] : null;
+    var rec = finRec(c), e = rec && rec.eps ? rec.eps[rec.eps.length - 1] : null;
     if (e == null) return null;
     return e > 0 ? { v: p / e, eps: e } : { deficit: true };
   }
@@ -2141,7 +2152,8 @@
   var FIN_SECTORS = ["銀行業", "保険業", "証券、商品先物取引業", "その他金融業"];
   function finRec(code) {
     code = String(code || "").trim().toUpperCase();
-    return FIN[code[0]] && FIN[code[0]][code] || null;
+    var rec = FIN[code[0]] && FIN[code[0]][code] || null;
+    return rec && HS ? HS.adjustFin(code, rec) : rec;
   }
   function pctTxt(x) { return x > 3 ? "300%超" : Math.round(x * 100) + "%"; }
   // 点数制: 兆しごとに点を足し、方針や財務の余裕で引く。4点以上=減配リスク高、2〜3点=要注意。
@@ -2158,7 +2170,11 @@
     var e = re[re.length - 1], e1 = re[re.length - 2], e2 = re[re.length - 3];
     var fin = FIN_SECTORS.indexOf(rec.sec) !== -1;
     // 会社予想(取り込んだとき)
-    if (fdiv > 0 && last > 0 && fdiv < last * 0.97) add(4, "減配予想", "会社予想が減配(前期" + fmtPerShare(last) + "→予想" + fmtPerShare(fdiv) + ")");
+    // 株式分割の疑い(確かめ待ち): 株価も同じ割合で下がっていれば減配としない。配当だけで疑ったときは、減配のまま理由に添える
+    var sh = fdiv > 0 && last > 0 && fdiv < last * 0.97 ? splitHintFor(code) : null;
+    if (sh && sh.by === "price") good.push("予想配当の下げは株式分割(1株→" + sh.n + "株)の可能性。確かめて登録してください");
+    else if (fdiv > 0 && last > 0 && fdiv < last * 0.97) add(4, "減配予想", "会社予想が減配(前期" + fmtPerShare(last) + "→予想" + fmtPerShare(fdiv) + ")" +
+      (sh ? "。株式分割(1株→" + sh.n + "株)なら減配ではありません" : ""));
     var d = fdiv > 0 ? fdiv : last;
     // 当期の配当性向(赤字は別に見る)
     if (e != null) {
@@ -2275,8 +2291,8 @@
   }
   // 会社予想の配当が、直近の実績より下がっているか(有報の点検とは別に、予想配当を直接見る)
   function forecastCut(code, fcDiv) {
-    var last = (ordinaryDivs(code) || dividendsFor(code) || [])[0];
-    return fcDiv > 0 && last > 0 && fcDiv < last * 0.97;
+    var last = (ordinaryDivs(code) || dividendsFor(code) || [])[0], sh = splitHintFor(code);
+    return fcDiv > 0 && last > 0 && fcDiv < last * 0.97 && !(sh && sh.by === "price");
   }
   function nextBuyList() {
     var budget = num(state.sim.monthlyInvest) || 30000, g = state.guides || {}, target = goalYieldOf(state.goals);
@@ -2474,6 +2490,27 @@
     if (!panel || !body) return;
     if (state.isSample || !state.holdings.length) { panel.hidden = true; return; }
     var parts = [];
+    // 株式分割の疑い(確かめ待ち)。いちばん上に出す
+    var hints = [], seenH = {};
+    state.holdings.forEach(function (h) {
+      var c = codeOf(h);
+      if (seenH[c] || !h.splitHint || h.splitHint.no) return;
+      seenH[c] = true; hints.push(h);
+    });
+    if (hints.length) {
+      parts.push('<li><span class="se-ico">✂</span><div><b>株式分割かもしれません ' + hints.length + '銘柄</b>' + hints.map(function (h) {
+        var x = h.splitHint, c = codeOf(h), frac = x.n + "分の1";
+        var g = (x.growth >= 0 ? "+" : "") + (x.growth * 100).toFixed(1) + "%";
+        var why = x.by === "price"
+          ? "予想配当 " + fmtPerShare(x.fdiv) + "・株価 " + fmtYen(x.p) + " が、前期 " + fmtPerShare(x.last) + "・前回の株価 " + fmtYen(x.pp) + " の約" + frac + "です。"
+          : "予想配当 " + fmtPerShare(x.fdiv) + " が前期 " + fmtPerShare(x.last) + " の約" + frac + "です。株価では確かめられないので、本当の減配のこともあります。";
+        return '<div class="se-split" data-code="' + escapeHtml(c) + '"><div class="se-sub"><b>' + escapeHtml(c + " " + shortStockName(h.name || c)) + '</b> ' + escapeHtml(why) +
+          '1株→' + x.n + '株の分割なら、実質 ' + g + 'の' + (x.growth >= 0.005 ? "増配" : x.growth <= -0.005 ? "減配" : "据え置き") + 'です。</div><div class="se-btns">' +
+          '<a class="btn" target="_blank" rel="noopener noreferrer" href="https://finance.yahoo.co.jp/quote/' + encodeURIComponent(c) + '.T/disclosure">会社の発表を確かめる ↗</a>' +
+          [x.n].concat(x.alts || []).map(function (n) { return '<button type="button" class="btn' + (n === x.n ? " primary" : "") + '" data-sp="reg" data-n="' + n + '">1株→' + n + '株として計算</button>'; }).join("") +
+          '<button type="button" class="btn ghost" data-sp="no">分割ではない</button></div></div>';
+      }).join("") + '</div></li>');
+    }
     var todo = forecastTodo();
     if (todo.length) {
       parts.push('<li><span class="se-ico">📋</span><div><b>予想配当の取り込み・見直し ' + todo.length + '銘柄</b><div class="se-sub">' +
@@ -2521,6 +2558,19 @@
     body.innerHTML = '<ul class="season-list">' + parts.join("") + '</ul>';
   }
   document.getElementById("seasonBody").addEventListener("click", function (e) {
+    var sp = e.target.closest("[data-sp]"), box = sp && sp.closest(".se-split");
+    if (sp && box) {
+      var code = box.dataset.code, name = (CODE_INFO_MAP[code] ? String(CODE_INFO_MAP[code][0]).normalize("NFKC") : code);
+      if (sp.dataset.sp === "reg") {
+        var n = Number(sp.dataset.n);
+        if (!confirm(name + "の株式分割(1株→" + n + "株)の発表を確かめましたか？\n登録すると、過去の1株配当を" + n + "分の1にして予想配当と比べます。あとで取り消せます。")) return;
+        registerSplit(code, n);
+      } else if (sp.dataset.sp === "no") {
+        state.holdings.forEach(function (h) { if (codeOf(h) === code && h.splitHint) h.splitHint.no = true; });
+        save(); renderDecisionPanels(); renderTable();
+      }
+      return;
+    }
     var b = e.target.closest("[data-se]");
     if (!b) return;
     if (b.dataset.se === "fq") {
@@ -3409,9 +3459,21 @@
       return (i === 0 ? "前期" : i === 1 ? "前々期" : i + "期前") + "は記念・特別配当" + fmtPerShare(Math.round(s[i] * sp[i] * 100) / 100) + "を含む";
     }).join("、");
   }
-  function dividendsFor(code) {
+  function rawDividendsFor(code) {
     var info = CODE_INFO_MAP[code];
     return info && Array.isArray(info[3]) && info[3].length > 0 ? info[3] : null;
+  }
+  // この端末で登録した株式分割(splits-core.js)で、まだ内蔵データに入っていないものは割り戻して返す
+  function dividendsFor(code) {
+    var s = rawDividendsFor(code), f = s ? localSplitFactor(code) : 1;
+    return f > 1 ? s.map(function (v) { return round2(v / f); }) : s;
+  }
+  var HS = window.HaitoSplits || null;
+  function rawFinFy(code) { var r = FIN[code[0]] && FIN[code[0]][code]; return r && r.fy || ""; }
+  function splitCtx(code) { return { fy: rawFinFy(code), official: SPLIT_MAP[code] || [] }; }
+  function localSplitFactor(code) {
+    code = String(code || "").trim().toUpperCase();
+    return HS && code ? HS.factor(code, splitCtx(code)) : 1;
   }
 
   // 内蔵の1株配当(新しい順)から、直近で何期続けて増配しているかと、期間中の減配の有無を出す。
@@ -3921,10 +3983,22 @@
     var yearAgo = (Number(todayIso().slice(0, 4)) - 1) + todayIso().slice(4);
     var known = (SPLIT_MAP[code] || []).some(function (sp) { return Number(sp[1]) === k && sp[0] > yearAgo; });
     if (known) return;
-    var s = dividendsFor(code);
-    if (num(h.div) > 0 && s && s[0] > 0 && Math.abs(num(h.div) / s[0] - 1) < 0.15) h.div = round2(num(h.div) / k);
-    if (num(h.prevDiv) > 0) h.prevDiv = round2(num(h.prevDiv) / k);
-    else if (s && s[0] > 0) h.prevDiv = round2(s[0] / k);  // 内蔵の前期実績(分割前)を分割後に直して比べる
+    // 証券会社の株数がちょうど k 倍なら分割は確か。内蔵データに入るまでの分として、この端末に登録しておく
+    // (過去の1株配当の割り戻しに使う。株数は取り込んだ時点で分割後なので、登録の印だけ付ける)
+    var e = null;
+    if (HS) {
+      e = HS.entries(code).filter(function (x) { return Number(x.n) === k && x.d > yearAgo; })[0];
+      if (!e) { var rec = FIN[code[0]] && FIN[code[0]][code]; e = HS.add(code, { n: k, d: todayIso(), fy: rec && rec.fy, src: "証券会社の株数" }); }
+      h.splitsDone = h.splitsDone || [];
+      if (h.splitsDone.indexOf("L" + e.d) !== -1) return;
+      h.splitsDone.push("L" + e.d);
+      delete h.splitHint;
+    }
+    var s = rawDividendsFor(code), u = {};
+    if (num(h.div) > 0 && s && s[0] > 0 && Math.abs(num(h.div) / s[0] - 1) < 0.15) { h.div = round2(num(h.div) / k); u.div = true; }
+    if (num(h.prevDiv) > 0) { h.prevDiv = round2(num(h.prevDiv) / k); u.prev = true; }
+    else if (s && s[0] > 0 && !HS) h.prevDiv = round2(s[0] / k);  // 内蔵の前期実績(分割前)を分割後に直して比べる
+    if (e) { h.localSplitUndo = h.localSplitUndo || {}; h.localSplitUndo[e.d] = u; }
   }
   // 口座が書かれていない取り込みで「特定」にした銘柄は、あとで要確認に出す。口座が書かれた取り込みで上書きされたら外す
   function markAccGuess(h, r) {
@@ -8388,6 +8462,7 @@
   }
   // 株価と会社予想の1株配当を保有銘柄に入れる。配当/株は「今期の予想」として扱う(前年配当は内蔵の実績のまま)
   function applyQuoteTo(h, q, stamp) {
+    noteSplitHint(h, q, stamp);
     if (q.price > 0) { h.price = q.price; h.priceDate = stamp; }
     if (q.fdiv > 0) { h.div = q.fdiv; h.fdivDate = stamp; }
     h.quoteDate = isoDay(stamp);
@@ -8446,6 +8521,141 @@
     if (fixed) save();
   }
 
+  // ---------- この端末で登録する株式分割 ----------
+  // 内蔵データの分割は EDINET に載ってから入るので、その前に予想配当・株価の取り込みで気づいたものを
+  // 利用者に確かめてもらって登録する(splits-core.js)。登録した分割は保有銘柄に一度だけ当て、"L"+登録日 の印を付ける
+  function codeOf(h) { return String(h.code || "").trim().toUpperCase(); }
+  // 予想配当を取り込む前に、株価・配当の比率から分割を疑うか見ておく(確かめるまでは計算に使わない)
+  function noteSplitHint(h, q, stamp) {
+    var code = codeOf(h);
+    if (!HS || isUS(h) || isFund(h) || !(q.fdiv > 0)) return;
+    var last = (ordinaryDivs(code) || [])[0];
+    var g = HS.guess({ last: last, fdiv: q.fdiv, price: q.price, prevPrice: num(h.price), prevDate: h.priceDate });
+    if (!g) { if (h.splitHint && !h.splitHint.no) delete h.splitHint; return; }
+    if (h.splitHint && h.splitHint.no && h.splitHint.n === g.n) return;  // 「分割ではない」と答えたもの
+    h.splitHint = { n: g.n, alts: g.alts, by: g.by, growth: Math.round(g.growth * 1000) / 1000, fdiv: q.fdiv, last: last,
+                    p: q.price > 0 ? q.price : undefined, pp: num(h.price) > 0 ? num(h.price) : undefined,
+                    sh: num(h.shares) > 0 ? num(h.shares) : undefined, at: isoDay(stamp) };
+  }
+  // 確かめ待ちの分割の疑い(同じコードの保有のどれか)
+  function splitHintFor(code) {
+    code = String(code || "").trim().toUpperCase();
+    var h = state.holdings.filter(function (x) { return codeOf(x) === code && x.splitHint && !x.splitHint.no; })[0];
+    return h ? h.splitHint : null;
+  }
+  function registerSplit(code, n) {
+    var hint = splitHintFor(code), rec = FIN[code[0]] && FIN[code[0]][code];
+    HS.add(code, { n: n, d: todayIso(), p: hint && hint.p, fy: rec && rec.fy, src: hint ? (hint.by === "price" ? "株価と予想配当" : "予想配当") : "" });
+    var note = applyLocalSplits();
+    save(); renderAll();
+    if (window.HaitoSync) window.HaitoSync.soon();
+    showToast("株式分割(1株→" + n + "株)として計算します。" + (note || ""));
+  }
+  // 登録した分割を保有銘柄に当てる。株数は「分割前の株価のころの株数か」で決める
+  // (分割に気づいたときの株価 e.p と、保有に入っている株価を比べる。比率ぶん高ければ分割前)
+  function applyLocalSplits() {
+    if (!HS) return "";
+    var unsure = [];
+    function near(a, b) { return a > 0 && b > 0 && Math.abs(a / b - 1) < 0.25; }
+    state.holdings.forEach(function (h) {
+      var code = codeOf(h);
+      if (isUS(h) || isFund(h) || !code) return;
+      HS.entries(code).forEach(function (e) {
+        var mark = "L" + e.d, n = Number(e.n);
+        h.splitsDone = h.splitsDone || [];
+        if (h.splitsDone.indexOf(mark) !== -1 || !HS.pending(e, splitCtx(code))) return;
+        h.splitsDone.push(mark);
+        var hint = h.splitHint && h.splitHint.n === n ? h.splitHint : null;
+        // 気づいたあとに証券会社から取り込み直していれば、いまの株価で比べる
+        var ref = hint && hint.pp && (hint.sh == null || hint.sh === num(h.shares)) ? hint.pp : num(h.price);
+        var u = {};
+        if (e.p > 0 && ref > 0 && near(ref, e.p * n)) u.sh = true;
+        else if (!(e.p > 0 && ref > 0 && near(ref, e.p)) && num(h.shares) > 0) unsure.push(h.name || code);
+        if (u.sh) {
+          if (num(h.shares) > 0) h.shares = round2(num(h.shares) * n);
+          if (num(h.cost) > 0) h.cost = round2(num(h.cost) / n);
+          if (num(h.price) > 0 && near(num(h.price), e.p * n)) { h.price = round2(num(h.price) / n); u.pr = true; }
+          (h.buys || []).forEach(function (b) { if (String(b.date || "") < e.d) { b.shares = round2(num(b.shares) * n); b.price = round2(num(b.price) / n); } });
+        }
+        // 1株配当・前年配当: 前期の実績(分割前)に近ければ分割前の値
+        var pre = (rawDividendsFor(code) || [])[0] || 0;
+        if (num(h.div) > 0 && pre > 0 && num(h.div) > pre * 0.85) { h.div = round2(num(h.div) / n); u.div = true; }
+        if (num(h.prevDiv) > 0 && pre > 0 && num(h.prevDiv) > pre * 0.6) { h.prevDiv = round2(num(h.prevDiv) / n); u.prev = true; }
+        h.localSplitUndo = h.localSplitUndo || {};
+        h.localSplitUndo[e.d] = u;
+        delete h.splitHint;
+      });
+    });
+    (state.watch || []).forEach(function (w) {
+      var code = String(w.code || "").trim().toUpperCase();
+      HS.entries(code).forEach(function (e) {
+        var mark = "L" + e.d;
+        w.splitsDone = w.splitsDone || [];
+        if (w.splitsDone.indexOf(mark) !== -1 || !HS.pending(e, splitCtx(code))) return;
+        w.splitsDone.push(mark);
+        if (num(w.price) > 0 && e.p > 0 && near(num(w.price), e.p * Number(e.n))) { w.price = round2(num(w.price) / Number(e.n)); w.localSplitPr = (w.localSplitPr || []).concat([e.d]); }
+      });
+    });
+    return unsure.length ? "保有株数が分割前か分からなかった銘柄があります(" + unsure.join("、") + ")。証券会社の画面と株数を見比べてください。" : "";
+  }
+  // 登録の取り消し。保有に当てた分だけ元に戻す
+  function undoLocalSplit(code, d) {
+    var e = HS.entries(code).filter(function (x) { return x.d === d; })[0];
+    if (!e) return;
+    var n = Number(e.n), mark = "L" + d;
+    state.holdings.forEach(function (h) {
+      if (codeOf(h) !== code || !h.splitsDone || h.splitsDone.indexOf(mark) === -1) return;
+      var u = (h.localSplitUndo || {})[d] || {};
+      if (u.sh) {
+        if (num(h.shares) > 0) h.shares = round2(num(h.shares) / n);
+        if (num(h.cost) > 0) h.cost = round2(num(h.cost) * n);
+        (h.buys || []).forEach(function (b) { if (String(b.date || "") < d) { b.shares = round2(num(b.shares) / n); b.price = round2(num(b.price) * n); } });
+      }
+      if (u.pr && num(h.price) > 0) h.price = round2(num(h.price) * n);
+      if (u.div && num(h.div) > 0) h.div = round2(num(h.div) * n);
+      if (u.prev && num(h.prevDiv) > 0) h.prevDiv = round2(num(h.prevDiv) * n);
+      h.splitsDone = h.splitsDone.filter(function (x) { return x !== mark; });
+      delete h.localSplitUndo[d];
+    });
+    (state.watch || []).forEach(function (w) {
+      if (String(w.code || "").toUpperCase() !== code || !w.splitsDone) return;
+      if ((w.localSplitPr || []).indexOf(d) !== -1 && num(w.price) > 0) w.price = round2(num(w.price) * n);
+      w.splitsDone = w.splitsDone.filter(function (x) { return x !== mark; });
+      w.localSplitPr = (w.localSplitPr || []).filter(function (x) { return x !== d; });
+    });
+    HS.remove(code, d);
+    save(); renderAll();
+    if (window.HaitoSync) window.HaitoSync.soon();
+  }
+  // 公式の分割(SPLIT_MAP)が、この保有に当て済みの登録と同じものか
+  function localCovers(x, code, date, n) {
+    return HS && HS.entries(code).some(function (e) { return HS.sameSplit(e, date, n) && (x.splitsDone || []).indexOf("L" + e.d) !== -1; });
+  }
+  function renderSplitList() {
+    var box = document.getElementById("splitListBox"), body = document.getElementById("splitListBody");
+    if (!box || !body || !HS) return;
+    var all = HS.load(), codes = Object.keys(all);
+    box.hidden = !codes.length;
+    if (!codes.length) { body.innerHTML = ""; return; }
+    body.innerHTML = '<p class="hint">予想配当・株価の取り込みで気づいて登録した株式分割です。内蔵データに同じ分割が入るまで、過去の1株配当を割り戻して比べています。' +
+      'この登録は同期している端末とチェックシートにも効きます。</p><ul class="split-list">' +
+      codes.map(function (code) {
+        var info = CODE_INFO_MAP[code], name = info ? String(info[0]).normalize("NFKC") : code;
+        return all[code].map(function (e) {
+          var on = HS.pending(e, splitCtx(code));
+          return '<li><div><b>' + escapeHtml(code + " " + name) + '</b> 1株→' + e.n + '株<div class="se-sub">' + escapeHtml(mdOf(e.d)) + 'に登録' + (e.src ? "(" + escapeHtml(e.src) + "から)" : "") + ' ・ ' +
+            (on ? "計算に使っています" : "内蔵データに反映済みのため、この登録はもう使っていません") + '</div></div>' +
+            (on ? '<button type="button" class="btn ghost" data-undo-split="' + escapeHtml(code) + '" data-d="' + escapeHtml(e.d) + '">取り消す</button>' : "") + '</li>';
+        }).join("");
+      }).join("") + '</ul>';
+  }
+  document.getElementById("splitListBody").addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-undo-split]");
+    if (!b) return;
+    if (!confirm("この株式分割の登録を取り消しますか？\n保有銘柄の株数・1株配当も登録前に戻します。")) return;
+    undoLocalSplit(b.dataset.undoSplit, b.dataset.d);
+  });
+
   // 決算後の株式分割(SPLIT_MAP: コード → [[効力発生日, 比率], …])で、分割前の値のまま入っている保有を一度だけ直す。
   // 株数は比率倍、1株配当・取得単価・株価は比率で割る(取得額と年間配当は変わらない)。
   // 分割前の値かどうかは、1株配当が内蔵データ(割り戻し済み)の比率倍に近いかで見分け、
@@ -8461,6 +8671,7 @@
         var date = sp[0], n = Number(sp[1]);
         if (date > today || !(n > 0) || h.splitsDone.indexOf(date) !== -1) return;
         h.splitsDone.push(date);
+        if (localCovers(h, code, date, n)) return;  // この端末で登録して当て済みの分割
         var divs = dividendsFor(code), cur = divs ? divs[0] : 0, d = num(h.div);
         var pDay = String(h.priceDate || "").replace(/\//g, "-").slice(0, 10);
         // 株数・取得単価: 株価(CSVならファイルの日付)が分割後の日付なら、分割後の株数で入っている
@@ -8490,6 +8701,7 @@
       list.forEach(function (sp) {
         if (sp[0] > today || w.splitsDone.indexOf(sp[0]) !== -1) return;
         w.splitsDone.push(sp[0]);
+        if (localCovers(w, String(w.code || "").trim().toUpperCase(), sp[0], Number(sp[1]))) return;
         if (num(w.price) > 0 && String(w.priceDate || "").replace(/\//g, "-").slice(0, 10) < sp[0]) w.price = round2(num(w.price) / Number(sp[1]));
       });
     });
@@ -8666,8 +8878,10 @@
     setTab(document.body.dataset.tab || "home", true);
     fixUnknownSectors();
     if (!state.isSample) fillFromBuiltin();
+    if (!state.isSample) applyLocalSplits();
     if (!state.isSample) takeQuotesFromCheck();
     if (!state.isSample) applyHoldingSplits();
+    renderSplitList();
     bindGoalInputs();
     renderTable();
     renderWatchList();

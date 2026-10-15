@@ -35,6 +35,33 @@ function expect(cond, msg) { if (!cond) fails.push(msg); }
   expect(/増配 \+8\.8%/.test(row("h2169")), "CDSの増配率が +8.8% でない: " + row("h2169"));
   expect(!/減配/.test(row("h3176")), "三洋貿易が減配に見えている(分割の割り戻し漏れ): " + row("h3176"));
   expect(!errs.length, "画面のエラー: " + errs.join(" / "));
+
+  // 株式分割の見張り: 予想配当と株価がどちらも約4分の1なら、減配ではなく分割を疑い、登録すると株数と過去の配当を直す
+  const ctx2 = await br.newContext({ viewport: { width: 390, height: 844 } });
+  await ctx2.addInitScript(() => {
+    if (sessionStorage.getItem("t")) return;
+    sessionStorage.setItem("t", "1");
+    localStorage.clear();
+    localStorage.setItem("haitoDashboardV1", JSON.stringify({ holdings: [{ id: "s1", code: "1926", name: "ライト工業", sector: "建設業", account: "特定",
+      shares: 100, cost: 2000, div: 146, prevDiv: "", price: 14800, priceDate: "2026/09/20", months: [3, 9] }] }));
+    localStorage.setItem("irPrices", JSON.stringify({ "1926": { p: 3715, d: "2099-01-01", f: 36.5 } }));
+  });
+  const q = await ctx2.newPage();
+  const errs2 = [];
+  q.on("pageerror", e => errs2.push(e.message));
+  q.on("dialog", d => d.accept());
+  await q.goto(BASE + "/haito-dashboard/index.html#home");
+  await q.waitForTimeout(2500);
+  const season = await q.textContent("#seasonBody");
+  expect(/株式分割かもしれません[^]*?約4分の1/.test(season), "予想配当・株価が4分の1なのに分割の疑いが出ていない");
+  await q.click('#seasonBody [data-sp="reg"][data-n="4"]');
+  await q.waitForTimeout(800);
+  const h1 = await q.evaluate(() => JSON.parse(localStorage.getItem("haitoDashboardV1")).holdings[0]);
+  expect(h1.shares === 400 && h1.cost === 500, "分割の登録で株数・取得単価が直っていない: " + h1.shares + "株・" + h1.cost + "円");
+  await q.click('.tabbar .tab[data-tab="analysis"]');
+  await q.waitForTimeout(800);
+  expect(!/ライト工業[^]*?減配予想/.test((await q.textContent("#riskBody")).split("判定のしかた")[0]), "分割を登録したのに減配予想になっている");
+  expect(!errs2.length, "画面のエラー(分割): " + errs2.join(" / "));
   await br.close();
   if (fails.length) { console.log("NG\n- " + fails.join("\n- ")); process.exit(1); }
   console.log("OK: 画面の計算の点検をすべて通過");

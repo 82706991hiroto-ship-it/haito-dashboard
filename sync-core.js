@@ -9,7 +9,9 @@
   var CODE_KEY = "haitoSyncCode", META_KEY = "haitoSyncMeta";
   var HAITO_KEY = "haitoDashboardV1";
   // 送る localStorage のキー → 送るときの名前
-  var CHECK = { irCheckV1: "irCheck", irPrices: "irPrices" };
+  var CHECK = { irCheckV1: "irCheck", irPrices: "irPrices", haitoSplitsV1: "splits" };
+  // 後から足したキー。古い版の端末から来た中身に無ければ、この端末の値を消さずに残す
+  var LATE = ["haitoSplitsV1"];
   // 端末ごとの表示の都合は送らない
   var LOCAL_ONLY = ["lastExport", "installDismissed", "installMoved"];
   var ALPHA = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // 見間違えやすい I L O 0 1 を除く
@@ -77,6 +79,7 @@
     LOCAL_ONLY.forEach(function (k) { if (k in cur) st[k] = cur[k]; else delete st[k]; });
     set(HAITO_KEY, JSON.stringify(st));
     Object.keys(CHECK).forEach(function (k) {
+      if (LATE.indexOf(k) !== -1 && !(CHECK[k] in d)) return;
       var v = d[CHECK[k]];
       set(k, v && typeof v === "object" ? JSON.stringify(v) : null);
     });
