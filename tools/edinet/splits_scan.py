@@ -213,7 +213,7 @@ def verify():
         mark = "疑わしい" if earlier else "ok"
         if earlier:
             bad += 1
-        print("%s %s %s 1株→%s株 期末%s %s 候補%s" % (mark, code, e.get("名前"), e["効力発生日"], e["比率"], fy, doc, cands), flush=True)
+        print("%s %s %s %s 1株→%s株 期末%s %s 候補%s" % (mark, code, e.get("名前"), e["効力発生日"], e["比率"], fy, doc, cands), flush=True)
     print("疑わしいもの", bad, "件")
 
 
