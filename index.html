@@ -7212,7 +7212,7 @@
     // どんな前提の試算かを見出しに添える(積立額は「将来見通し」で変えられる)
     var mInv = num(state.sim.monthlyInvest);
     var bInv = num(state.sim.bonusInvest);
-    var simNote = (mInv > 0 ? "毎月" + manYen(mInv) + "積立" : bInv > 0 ? "" : "追加投資なし") + (bInv > 0 ? (mInv > 0 ? "・" : "") + "ボーナス年" + manYen(bInv) : "") + (state.sim.reinvest ? "・配当再投資" : "");
+    var simNote = (mInv > 0 ? "毎月" + manYen(mInv) + "積立" : bInv > 0 ? "" : "追加投資なし") + (bInv > 0 ? (mInv > 0 ? "・" : "") + "ボーナス年" + manYen(bInv) : "") + (num(state.sim.newYield) > 0 ? "・利回り" + state.sim.newYield + "%" : "") + (state.sim.reinvest ? "・配当再投資" : "");
     if (sim) subs.push({ label: "目標到達", note: simNote, value: sim.reached === null ? SIM_MAX_YEARS + "年超" : "約" + sim.reached + "年後(" + (new Date().getFullYear() + sim.reached) + "年)", jump: "simPanel" });
     document.getElementById("heroSubstats").innerHTML = subs.map(function (s) {
       return s.jump
@@ -7910,6 +7910,8 @@
     var goalAnnual = num(state.goals.monthly) * 12;
 
     if (yieldRate <= 0) return null;
+    // 新しく買う分の利回り。空欄なら今の保有の簿価利回りと同じとみる
+    var newYield = num(state.sim.newYield) > 0 ? num(state.sim.newYield) / 100 : yieldRate;
 
     var annualDiv = agg.totalDivPre;
     var principal = agg.totalAcq;
@@ -7922,15 +7924,15 @@
       // 新たに投じる資金(積立 + 税引後配当の再投資)
       var invest = monthly * 12 + num(state.sim.bonusInvest) + (state.sim.reinvest ? annualDiv * (1 - TAX_RATE) : 0);
       principal += invest;
-      annualDiv = grown + invest * yieldRate;
+      annualDiv = grown + invest * newYield;
       series.push({ year: y, div: annualDiv, principal: principal });
       if (reached === null && annualDiv >= goalAnnual && goalAnnual > 0) reached = y;
     }
     return {
       series: series, reached: reached, growth: growth * 100, basis: basis, hist: hist,
-      yieldRate: yieldRate * 100, goalAnnual: goalAnnual,
+      yieldRate: yieldRate * 100, newYield: newYield * 100, goalAnnual: goalAnnual,
       // 追加投資だけで目標に届かせる場合に必要な額(増配・再投資を織り込まない)
-      neededNow: goalAnnual > agg.totalDivPre ? (goalAnnual - agg.totalDivPre) / yieldRate : 0
+      neededNow: goalAnnual > agg.totalDivPre ? (goalAnnual - agg.totalDivPre) / newYield : 0
     };
   }
 
@@ -8074,6 +8076,8 @@
       return;
     }
 
+    var nyEl = document.getElementById("simNewYield");
+    if (nyEl) nyEl.placeholder = "空欄なら今の " + sim.yieldRate.toFixed(2) + "%";
     var reachText = sim.reached === null
       ? SIM_MAX_YEARS + "年以内には届きません"
       : sim.reached + "年後";
@@ -8140,8 +8144,9 @@
 
     var note2 = document.createElement("p");
     note2.className = "calendar-note";
-    note2.textContent = "横軸は経過年数(20年まで)。簿価利回り " + fmtPct(sim.yieldRate, 2) +
-      " が続き、保有銘柄が年 " + fmtPct(sim.growth, 1) + " 増配し、毎月 " + fmtYen(num(state.sim.monthlyInvest)) +
+    note2.textContent = "横軸は経過年数(20年まで)。新しく買う分は利回り " + fmtPct(sim.newYield, 2) +
+      (num(state.sim.newYield) > 0 ? "(入力した値。今の簿価利回りは " + fmtPct(sim.yieldRate, 2) + ")" : "(今の簿価利回り)") +
+      "、保有銘柄が年 " + fmtPct(sim.growth, 1) + " 増配し、毎月 " + fmtYen(num(state.sim.monthlyInvest)) +
       (num(state.sim.bonusInvest) > 0 ? "と、ボーナスで年 " + fmtYen(num(state.sim.bonusInvest)) : "") +
       " を追加投資する前提での試算です" +
       (state.sim.reinvest ? "(受取配当は税引後に再投資)" : "(配当の再投資はしない)") +
@@ -8351,6 +8356,12 @@
     var reinvest = document.getElementById("simReinvest");
 
     invest.value = state.sim.monthlyInvest;
+    var ny = document.getElementById("simNewYield");
+    ny.value = num(state.sim.newYield) > 0 ? state.sim.newYield : "";
+    ny.addEventListener("input", function () {
+      state.sim.newYield = ny.value.trim() === "" ? null : parseFloat(ny.value);
+      save(); renderSimulation(aggregate());
+    });
     var bonus = document.getElementById("simBonusInvest");
     bonus.value = num(state.sim.bonusInvest) > 0 ? state.sim.bonusInvest : "";
     bonus.addEventListener("input", function () {
@@ -8465,6 +8476,9 @@
       '  <div class="grid-inputs sim-inputs">' +
       '    <label class="field">毎月の追加投資額(円)' +
       '      <input type="number" id="simMonthlyInvest" min="0" step="10000">' +
+      '    </label>' +
+      '    <label class="field">新しく買う分の利回り(%)' +
+      '      <input type="number" id="simNewYield" step="0.1" min="0" placeholder="空欄なら今の簿価利回り">' +
       '    </label>' +
       '    <label class="field">ボーナスの追加投資(円/年)' +
       '      <input type="number" id="simBonusInvest" min="0" step="10000" placeholder="例: 夏と冬で200000">' +
