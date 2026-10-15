@@ -8530,12 +8530,15 @@
     var code = codeOf(h);
     if (!HS || isUS(h) || isFund(h) || !(q.fdiv > 0)) return;
     var last = (ordinaryDivs(code) || [])[0];
-    var g = HS.guess({ last: last, fdiv: q.fdiv, price: q.price, prevPrice: num(h.price), prevDate: h.priceDate });
+    // 疑いが出たあとに貼り直したときは、いまの株価はもう分割後なので、最初に疑ったときの分割前の株価で比べる
+    var h0 = h.splitHint && h.splitHint.pp ? h.splitHint : null;
+    var pp = h0 ? h0.pp : num(h.price), ppDate = h0 ? h0.ppd || h0.at : h.priceDate;
+    var g = HS.guess({ last: last, fdiv: q.fdiv, price: q.price, prevPrice: pp, prevDate: ppDate });
     if (!g) { if (h.splitHint && !h.splitHint.no) delete h.splitHint; return; }
     if (h.splitHint && h.splitHint.no && h.splitHint.n === g.n) return;  // 「分割ではない」と答えたもの
     h.splitHint = { n: g.n, alts: g.alts, by: g.by, growth: Math.round(g.growth * 1000) / 1000, fdiv: q.fdiv, last: last,
-                    p: q.price > 0 ? q.price : undefined, pp: num(h.price) > 0 ? num(h.price) : undefined,
-                    sh: num(h.shares) > 0 ? num(h.shares) : undefined, at: isoDay(stamp) };
+                    p: q.price > 0 ? q.price : undefined, pp: pp > 0 ? pp : undefined, ppd: ppDate ? isoDay(ppDate) : undefined,
+                    sh: h0 && h0.sh != null ? h0.sh : num(h.shares) > 0 ? num(h.shares) : undefined, at: isoDay(stamp) };
   }
   // 確かめ待ちの分割の疑い(同じコードの保有のどれか)
   function splitHintFor(code) {
