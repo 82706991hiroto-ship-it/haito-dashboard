@@ -202,6 +202,17 @@
   .sim-readout { margin: 10px 0 4px; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
   .sim-readout b { color: var(--text); }
   .sim-chart { touch-action: pan-y; cursor: pointer; }
+  .track-body { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .track-title { font-size: 13.5px; font-weight: 700; margin: 0 0 8px; }
+  .track-title .hint { font-weight: 400; }
+  .track-chart { height: 150px; touch-action: pan-y; cursor: pointer; }
+  .track-chart .cal-col.is-sel { background: var(--field); border-radius: 4px; }
+  .track-chart .tk-paid .cal-bar, .track-legend i.tk-paid { background: var(--s1); }
+  .track-chart .tk-log .cal-bar, .track-legend i.tk-log { background: var(--s2); }
+  .track-chart .tk-now .cal-bar { background: var(--s2); }
+  .track-chart.few .cal-value { display: block; }
+  .track-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; color: var(--text-2); }
+  .track-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
   .sim-chart .cal-col.is-sel { background: var(--field); border-radius: 4px; }
   .sim-chart .cal-col.is-sel .cal-bar { filter: brightness(.82); }
   .fq-box { margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; line-height: 1.6; }
@@ -7048,6 +7059,7 @@
       }
     });
     if (Math.round(annual) !== Math.round(prev)) { state.lastAnnual = Math.round(annual); changed = true; }
+    if (recordAnnual(annual)) changed = true;
     if (changed) save();
     if (!first && annual > prev) {
       var t = tierOf(annual);
@@ -7737,7 +7749,78 @@
   }
 
   var simAnimate = false;  // 再投資・期間を切り替えたときだけ棒を伸ばし直す(金額の入力中は動かさない)
+  // ---------- 配当の軌跡(これまで) ----------
+  // 自分の年間配当がどう増えてきたか。過去の年は、受取履歴CSVがあれば実際に受け取った額(暦年・税引前)、
+  // 無ければ毎月残している年間配当(予想)の記録のうち、その年の最後のもの。今年は今の年間予想
+  function recordAnnual(annual) {
+    if (state.isSample || !(annual > 0)) return false;
+    if (!Array.isArray(state.annualLog)) state.annualLog = [];
+    var ym = todayIso().slice(0, 7), y = Math.round(annual), last = state.annualLog[state.annualLog.length - 1];
+    if (last && last.ym === ym) { if (last.y === y) return false; last.y = y; return true; }
+    state.annualLog.push({ ym: ym, y: y });
+    return true;
+  }
+  function trackYears(agg) {
+    var now = new Date().getFullYear(), paid = {}, logged = {};
+    (Array.isArray(state.payouts) ? state.payouts : []).forEach(function (r) {
+      var y = parseInt(String(r.ym).slice(0, 4), 10);
+      if (y > 0) paid[y] = (paid[y] || 0) + num(r.gross);
+    });
+    (state.isSample ? [] : state.annualLog || []).forEach(function (e) { logged[parseInt(e.ym.slice(0, 4), 10)] = e; });
+    var ys = Object.keys(paid).concat(Object.keys(logged)).map(Number).filter(function (y) { return y < now; });
+    var first = ys.length ? Math.min.apply(null, ys) : now, out = [];
+    for (var y = Math.max(first, now - 15); y <= now; y++) {
+      if (y === now) out.push({ y: y, v: agg.totalDivPre, kind: "now", paid: paid[y] || 0 });
+      else if (paid[y] > 0) out.push({ y: y, v: paid[y], kind: "paid" });
+      else if (logged[y]) out.push({ y: y, v: logged[y].y, kind: "log", m: parseInt(logged[y].ym.slice(5, 7), 10) });
+      else out.push({ y: y, v: 0, kind: "none" });
+    }
+    return out;
+  }
+  function renderTrack(agg) {
+    var el = document.getElementById("trackBody");
+    if (!el) return;
+    var ys = trackYears(agg), hasPaid = ys.some(function (x) { return x.kind === "paid"; });
+    if (!(agg.totalDivPre > 0)) { el.innerHTML = ""; return; }
+    var head = '<p class="track-title">これまでの軌跡 <span class="hint">年ごとの配当(税引前)</span></p>';
+    if (ys.length < 2) {
+      var log = state.annualLog || [], since = log.length ? log[0].ym.replace("-", "年") + "月" : "今月";
+      el.innerHTML = head + '<p class="calendar-note">' + since + 'から、年間配当(予想)を毎月記録しています。来年から、ここに年ごとの棒が並びます。' +
+        '証券会社の「配当金の受取履歴」CSVを読み込むと(保有銘柄の画面)、過去の年も実際に受け取った額で出ます。</p>';
+      return;
+    }
+    var max = Math.max.apply(null, ys.map(function (x) { return x.v; })) || 1;
+    var html = head + '<div class="calendar-chart track-chart' + (ys.length <= 8 ? " few" : "") + '">' + ys.map(function (x, i) {
+      return '<div class="cal-col tk-' + x.kind + '" data-i="' + i + '"><div class="cal-value">' + (x.v > 0 ? (x.v >= 10000 ? Math.round(x.v / 1000) / 10 + "万" : Math.round(x.v).toLocaleString("ja-JP")) : "") + '</div>' +
+        '<div class="cal-bar-slot"><div class="cal-bar" style="height:' + (x.v > 0 ? Math.max(2, x.v / max * 100) : 0) + '%"></div></div>' +
+        '<div class="cal-month">' + (ys.length > 8 && i % 2 && i !== ys.length - 1 ? "&nbsp;" : "'" + String(x.y).slice(2)) + '</div></div>';
+    }).join("") + '</div><p class="sim-readout" id="trackReadout"></p>' +
+      '<div class="track-legend">' + (hasPaid ? '<span><i class="tk-paid"></i>受け取った額(受取履歴)</span>' : "") +
+      '<span><i class="tk-log"></i>年間予想(過去の年はその年の最後の記録・今年は今の値)</span></div>';
+    el.innerHTML = html;
+    var chart = el.querySelector(".track-chart"), out = document.getElementById("trackReadout"), sel = -1;
+    function pick(i) {
+      var x = ys[i];
+      if (!x || i === sel) return;
+      if (chart.children[sel]) chart.children[sel].classList.remove("is-sel");
+      sel = i; chart.children[i].classList.add("is-sel");
+      var prev = ys[i - 1], up = prev && prev.v > 0 && x.v > 0 ? (x.v / prev.v - 1) * 100 : null;
+      var what = x.kind === "paid" ? "受け取った額" : x.kind === "log" ? x.m + "月時点の年間予想" : x.kind === "now" ? "今の年間予想" : "記録なし";
+      out.innerHTML = '<b>' + x.y + '年</b> ' + what + (x.v > 0 ? ' 年 <b>' + fmtYen(x.v) + '</b>(月 ' + fmtYen(x.v / 12) + ')' : "") +
+        (up !== null ? ' ・ 前年比 ' + fmtSignedPct(up) : "") +
+        (x.kind === "now" && x.paid > 0 ? ' ・ 今年これまでに受け取った額 ' + fmtYen(x.paid) : "");
+    }
+    function pickAt(e) {
+      var r = chart.getBoundingClientRect();
+      pick(Math.max(0, Math.min(ys.length - 1, Math.floor((e.clientX - r.left) / r.width * ys.length))));
+    }
+    chart.addEventListener("pointerdown", pickAt);
+    chart.addEventListener("pointermove", function (e) { if (e.pointerType === "mouse" || e.buttons) pickAt(e); });
+    pick(ys.length - 1);
+  }
+
   function renderSimulation(agg) {
+    renderTrack(agg);
     var el = document.getElementById("simBody");
     el.innerHTML = "";
     var sim = simulate(agg);
@@ -8127,6 +8210,7 @@
       '</div>' +
       '<div class="panel" data-view="home" id="simPanel">' +
       '  <h2><span class="chap">八</span>将来見通し <span class="hint">前提を変えると試算が変わります</span></h2>' +
+      '  <div id="trackBody" class="track-body"></div>' +
       '  <div class="grid-inputs sim-inputs">' +
       '    <label class="field">毎月の追加投資額(円)' +
       '      <input type="number" id="simMonthlyInvest" min="0" step="10000">' +
