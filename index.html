@@ -7211,7 +7211,8 @@
     var sim = !done && goal > 0 ? simulate(agg) : null;
     // どんな前提の試算かを見出しに添える(積立額は「将来見通し」で変えられる)
     var mInv = num(state.sim.monthlyInvest);
-    var simNote = (mInv > 0 ? "毎月" + manYen(mInv) + "積立" : "追加投資なし") + (state.sim.reinvest ? "・配当再投資" : "");
+    var bInv = num(state.sim.bonusInvest);
+    var simNote = (mInv > 0 ? "毎月" + manYen(mInv) + "積立" : bInv > 0 ? "" : "追加投資なし") + (bInv > 0 ? (mInv > 0 ? "・" : "") + "ボーナス年" + manYen(bInv) : "") + (state.sim.reinvest ? "・配当再投資" : "");
     if (sim) subs.push({ label: "目標到達", note: simNote, value: sim.reached === null ? SIM_MAX_YEARS + "年超" : "約" + sim.reached + "年後(" + (new Date().getFullYear() + sim.reached) + "年)", jump: "simPanel" });
     document.getElementById("heroSubstats").innerHTML = subs.map(function (s) {
       return s.jump
@@ -7919,7 +7920,7 @@
       // 保有中の銘柄が増配する分
       var grown = annualDiv * (1 + growth);
       // 新たに投じる資金(積立 + 税引後配当の再投資)
-      var invest = monthly * 12 + (state.sim.reinvest ? annualDiv * (1 - TAX_RATE) : 0);
+      var invest = monthly * 12 + num(state.sim.bonusInvest) + (state.sim.reinvest ? annualDiv * (1 - TAX_RATE) : 0);
       principal += invest;
       annualDiv = grown + invest * yieldRate;
       series.push({ year: y, div: annualDiv, principal: principal });
@@ -8141,6 +8142,7 @@
     note2.className = "calendar-note";
     note2.textContent = "横軸は経過年数(20年まで)。簿価利回り " + fmtPct(sim.yieldRate, 2) +
       " が続き、保有銘柄が年 " + fmtPct(sim.growth, 1) + " 増配し、毎月 " + fmtYen(num(state.sim.monthlyInvest)) +
+      (num(state.sim.bonusInvest) > 0 ? "と、ボーナスで年 " + fmtYen(num(state.sim.bonusInvest)) : "") +
       " を追加投資する前提での試算です" +
       (state.sim.reinvest ? "(受取配当は税引後に再投資)" : "(配当の再投資はしない)") +
       "。株価変動・減配・増配率の変化は考慮していません。";
@@ -8349,6 +8351,12 @@
     var reinvest = document.getElementById("simReinvest");
 
     invest.value = state.sim.monthlyInvest;
+    var bonus = document.getElementById("simBonusInvest");
+    bonus.value = num(state.sim.bonusInvest) > 0 ? state.sim.bonusInvest : "";
+    bonus.addEventListener("input", function () {
+      state.sim.bonusInvest = num(bonus.value);
+      save(); renderSimulation(aggregate());
+    });
     growth.value = state.sim.growth == null ? "" : state.sim.growth;
     reinvest.checked = !!state.sim.reinvest;
 
@@ -8457,6 +8465,9 @@
       '  <div class="grid-inputs sim-inputs">' +
       '    <label class="field">毎月の追加投資額(円)' +
       '      <input type="number" id="simMonthlyInvest" min="0" step="10000">' +
+      '    </label>' +
+      '    <label class="field">ボーナスの追加投資(円/年)' +
+      '      <input type="number" id="simBonusInvest" min="0" step="10000" placeholder="例: 夏と冬で200000">' +
       '    </label>' +
       '    <label class="field">想定増配率(%/年)' +
       '      <input type="number" id="simGrowth" step="0.1" placeholder="空欄なら実績">' +
