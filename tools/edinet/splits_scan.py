@@ -132,6 +132,7 @@ def main():
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--cache", help="読んだ書類ごとの結果を残すフォルダ(やり直しのとき読み直さない)")
     ap.add_argument("--verify", action="store_true", help="splits.json の EDINET から拾った分割を、出典の書類で見直す(書き換えない)")
+    ap.add_argument("--drop", action="store_true", help="--verify と一緒に: 確かめられなかったもののうち、まだ割り戻していないものを splits.json から外す")
     ap.add_argument("--show", nargs="*", help="書類番号(S100…)の本文から、当社の分割として読める文と結果を出す")
     a = ap.parse_args()
     if a.show:
@@ -143,7 +144,7 @@ def main():
                     print("    「" + re.sub(r"\s+", " ", m2.group(0)).strip()[:300] + "」", flush=True)
         return
     if a.verify:
-        return verify()
+        return verify(a.drop)
 
     html = open(HTML, encoding="utf-8").read()
     info = json.loads(re.search(r"var CODE_INFO_MAP = (\{.*?\});\n", html).group(1))
@@ -223,7 +224,7 @@ def main():
     print("data/splits.json に", added, "件足しました")
 
 
-def verify():
+def verify(drop=False):
     """EDINETの注記から拾った分割を出典の書類で読み直し、同じ比率の分割が期末以前の日付でも書かれているもの
     (期中の分割を後の日付と読み違えた疑い)を一覧にする。"""
     state = json.load(open(STATE)) if os.path.exists(STATE) else {}
@@ -239,23 +240,26 @@ def verify():
     with ThreadPoolExecutor(4) as ex:
         texts = list(ex.map(lambda t: text_of(t[2]), rows))
     res = [find_splits(t) for t in texts]
-    bad = 0
+    bad, dropped = 0, []
     for (code, e, doc), got, text in zip(rows, res, texts):
         fy = state.get(code) or ""
         cands = got.get("_all") or []
         day, ratio = e["効力発生日"], float(e["比率"])
         if not text:
             mark = "読めず"
+        elif any(r == ratio and d < day and d <= fy for d, r in cands):
+            # 同じ比率の分割が期末以前にも書かれている: 期中の分割を後の日付と読み違えた(書類の誤記を含む)
+            mark = "期中の分割(二重の割り戻し)"
         elif [day, ratio] in cands:
             mark = "ok"
-        elif any(r == ratio and d <= fy for d, r in cands):
-            mark = "期中の分割(二重の割り戻し)"
         elif any(d == day for d, r in cands):
             mark = "比率違い"
         else:
             mark = "根拠なし(他社の分割の可能性)"
         if mark != "ok":
             bad += 1
+            if text:
+                dropped.append(code)
         print("%s %s %s %s 1株→%s株 期末%s %s 当社の候補%s" % (mark, code, e.get("名前"), day, e["比率"], fy, doc, cands), flush=True)
         if mark != "ok":
             # 判断の材料に、当社の分割として書かれた文を出しておく(同じ文は1回だけ)
@@ -266,6 +270,20 @@ def verify():
                     seen.add(t)
                     print("    「" + t + "」", flush=True)
     print("疑わしいもの", bad, "件")
+    if drop and dropped:
+        applied_path = os.path.join(ROOT, "data", "splits-applied.json")
+        applied = json.load(open(applied_path, encoding="utf-8")) if os.path.exists(applied_path) else {}
+        gone = [c for c in dropped if not any(k.startswith(c + "@") for k in applied)]
+        if gone:
+            lines = open(SPLITS, encoding="utf-8").read().split("\n")
+            keep = [l for l in lines if not any(l.startswith('  "%s":' % c) for c in gone)]
+            txt = re.sub(r",\n}\n?$", "\n}\n", "\n".join(keep))
+            json.loads(txt)
+            open(SPLITS, "w", encoding="utf-8").write(txt)
+            print("確かめられなかったので外した:", " ".join(gone))
+        left = [c for c in dropped if c not in gone]
+        if left:
+            print("割り戻し済みなので外さず、手で確認:", " ".join(left))
 
 
 if __name__ == "__main__":

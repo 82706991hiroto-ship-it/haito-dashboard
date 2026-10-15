@@ -37,6 +37,12 @@ jobs:
         env:
           EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
         run: python3 tools/edinet/splits_scan.py --days "${{ inputs.days || '45' }}" --write
+      - name: 拾った株式分割を出典の本文で読み直し、当社の分割と確かめられないものは外す
+        if: github.event_name != 'push'
+        continue-on-error: true
+        env:
+          EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+        run: python3 tools/edinet/splits_scan.py --verify --drop
       - name: 記念配当・特別配当を有報の注記から探す
         if: github.event_name != 'push'
         continue-on-error: true
