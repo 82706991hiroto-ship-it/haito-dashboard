@@ -1941,7 +1941,7 @@
     Promise.all(ds.map(function (d) {
       return fetch("../ir-check/fin/" + d + ".json").then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) { if (j) FIN[d] = j; }, function () {});
-    })).then(function () { renderTable(); renderDecisionPanels(); });
+    })).then(function () { if (recheckSplitHints()) save(); renderTable(); renderDecisionPanels(); });
   }
   // 毎週の点検(チェックシートの checks.json)で数字の食い違いが見つかった銘柄。該当銘柄に「数字を要確認」と出す
   var DATA_CHECKS = null;
@@ -2172,7 +2172,7 @@
     // 会社予想(取り込んだとき)
     // 株式分割の疑い(確かめ待ち): 株価も同じ割合で下がっていれば減配としない。配当だけで疑ったときは、減配のまま理由に添える
     var sh = fdiv > 0 && last > 0 && fdiv < last * 0.97 ? splitHintFor(code) : null;
-    if (sh && sh.by === "price") good.push("予想配当の下げは株式分割(1株→" + sh.n + "株)の可能性。確かめて登録してください");
+    if (sh && sh.by !== "div") good.push("予想配当の下げは株式分割(1株→" + sh.n + "株)の可能性。確かめて登録してください");
     else if (fdiv > 0 && last > 0 && fdiv < last * 0.97) add(4, "減配予想", "会社予想が減配(前期" + fmtPerShare(last) + "→予想" + fmtPerShare(fdiv) + ")" +
       (sh ? "。株式分割(1株→" + sh.n + "株)なら減配ではありません" : ""));
     var d = fdiv > 0 ? fdiv : last;
@@ -2292,7 +2292,7 @@
   // 会社予想の配当が、直近の実績より下がっているか(有報の点検とは別に、予想配当を直接見る)
   function forecastCut(code, fcDiv) {
     var last = (ordinaryDivs(code) || dividendsFor(code) || [])[0], sh = splitHintFor(code);
-    return fcDiv > 0 && last > 0 && fcDiv < last * 0.97 && !(sh && sh.by === "price");
+    return fcDiv > 0 && last > 0 && fcDiv < last * 0.97 && !(sh && sh.by !== "div");
   }
   function nextBuyList() {
     var budget = num(state.sim.monthlyInvest) || 30000, g = state.guides || {}, target = goalYieldOf(state.goals);
@@ -2503,6 +2503,7 @@
         var g = (x.growth >= 0 ? "+" : "") + (x.growth * 100).toFixed(1) + "%";
         var why = x.by === "price"
           ? "予想配当 " + fmtPerShare(x.fdiv) + "・株価 " + fmtYen(x.p) + " が、前期 " + fmtPerShare(x.last) + "・前回の株価 " + fmtYen(x.pp) + " の約" + frac + "です。"
+          : x.by === "eps" ? "予想配当 " + fmtPerShare(x.fdiv) + " が前期 " + fmtPerShare(x.last) + " の約" + frac + "で、予想1株利益も前期の約" + frac + "です。"
           : "予想配当 " + fmtPerShare(x.fdiv) + " が前期 " + fmtPerShare(x.last) + " の約" + frac + "です。株価では確かめられないので、本当の減配のこともあります。";
         return '<div class="se-split" data-code="' + escapeHtml(c) + '"><div class="se-sub"><b>' + escapeHtml(c + " " + shortStockName(h.name || c)) + '</b> ' + escapeHtml(why) +
           '1株→' + x.n + '株の分割なら、実質 ' + g + 'の' + (x.growth >= 0.005 ? "増配" : x.growth <= -0.005 ? "減配" : "据え置き") + 'です。</div><div class="se-btns">' +
@@ -8464,7 +8465,7 @@
   function applyQuoteTo(h, q, stamp) {
     noteSplitHint(h, q, stamp);
     if (q.price > 0) { h.price = q.price; h.priceDate = stamp; }
-    if (q.fdiv > 0) { h.div = q.fdiv; h.fdivDate = stamp; }
+    if (q.fdiv > 0) { h.div = q.fdiv; h.fdivDate = stamp; h.feps = q.feps != null && !isNaN(q.feps) ? q.feps : undefined; }
     h.quoteDate = isoDay(stamp);
   }
   // チェックシートで新しく取り込んだ株価・予想配当を、同じコードの保有銘柄に反映する(取り込み1回につき1度だけ)
@@ -8478,7 +8479,7 @@
       if (!q || !q.d || !(q.p > 0 || q.f > 0)) return;
       if (h.quoteDate && isoDay(q.d) <= isoDay(h.quoteDate)) return;
       if (h.priceDate && isoDay(q.d) < isoDay(h.priceDate)) return;  // 明細で後から入れた株価の方が新しい
-      applyQuoteTo(h, { price: q.p, fdiv: q.f }, q.d.replace(/-/g, "/"));
+      applyQuoteTo(h, { price: q.p, fdiv: q.f, feps: q.e }, q.d.replace(/-/g, "/"));
       took.push(h.name || code);
     });
     if (took.length) {
@@ -8533,12 +8534,32 @@
     // 疑いが出たあとに貼り直したときは、いまの株価はもう分割後なので、最初に疑ったときの分割前の株価で比べる
     var h0 = h.splitHint && h.splitHint.pp ? h.splitHint : null;
     var pp = h0 ? h0.pp : num(h.price), ppDate = h0 ? h0.ppd || h0.at : h.priceDate;
-    var g = HS.guess({ last: last, fdiv: q.fdiv, price: q.price, prevPrice: pp, prevDate: ppDate });
+    var fr = FIN[code[0]] && FIN[code[0]][code], le = fr && fr.eps ? fr.eps[fr.eps.length - 1] : null;  // 前期の1株利益(分割前)
+    var g = HS.guess({ last: last, fdiv: q.fdiv, price: q.price, prevPrice: pp, prevDate: ppDate, feps: q.feps, lastEps: localSplitFactor(code) > 1 ? null : le });
     if (!g) { if (h.splitHint && !h.splitHint.no) delete h.splitHint; return; }
     if (h.splitHint && h.splitHint.no && h.splitHint.n === g.n) return;  // 「分割ではない」と答えたもの
     h.splitHint = { n: g.n, alts: g.alts, by: g.by, growth: Math.round(g.growth * 1000) / 1000, fdiv: q.fdiv, last: last,
                     p: q.price > 0 ? q.price : undefined, pp: pp > 0 ? pp : undefined, ppd: ppDate ? isoDay(ppDate) : undefined,
                     sh: h0 && h0.sh != null ? h0.sh : num(h.shares) > 0 ? num(h.shares) : undefined, at: isoDay(stamp) };
+  }
+  // 有報のデータ(FIN)を読み終えたあとに、取り込み済みの予想配当と予想1株利益だけで見直す
+  // (起動直後にチェックシートから受け取った予想は、1株利益と比べられないまま取り込まれるため)
+  function recheckSplitHints() {
+    var changed = false;
+    state.holdings.forEach(function (h) {
+      var code = codeOf(h);
+      if (!HS || isUS(h) || isFund(h) || h.splitHint || !(num(h.div) > 0) || !h.fdivDate || localSplitFactor(code) > 1) return;
+      var fr = FIN[code[0]] && FIN[code[0]][code], le = fr && fr.eps ? fr.eps[fr.eps.length - 1] : null;
+      var last = (ordinaryDivs(code) || [])[0];
+      var fe = h.feps;
+      if (fe == null) { try { var ip = (JSON.parse(localStorage.getItem("irPrices") || "{}") || {})[code]; fe = ip && ip.e; } catch (e) {} }
+      var g = HS.guess({ last: last, fdiv: num(h.div), feps: fe, lastEps: le });
+      if (!g || g.by !== "eps") return;
+      h.splitHint = { n: g.n, alts: g.alts, by: g.by, growth: Math.round(g.growth * 1000) / 1000, fdiv: num(h.div), last: last,
+                      sh: num(h.shares) > 0 ? num(h.shares) : undefined, at: isoDay(h.fdivDate) };
+      changed = true;
+    });
+    return changed;
   }
   // 確かめ待ちの分割の疑い(同じコードの保有のどれか)
   function splitHintFor(code) {
@@ -8548,7 +8569,7 @@
   }
   function registerSplit(code, n) {
     var hint = splitHintFor(code), rec = FIN[code[0]] && FIN[code[0]][code];
-    HS.add(code, { n: n, d: todayIso(), p: hint && hint.p, fy: rec && rec.fy, src: hint ? (hint.by === "price" ? "株価と予想配当" : "予想配当") : "" });
+    HS.add(code, { n: n, d: todayIso(), p: hint && hint.p, fy: rec && rec.fy, src: hint ? (hint.by === "price" ? "株価と予想配当" : hint.by === "eps" ? "予想配当と予想1株利益" : "予想配当") : "" });
     var note = applyLocalSplits();
     save(); renderAll();
     if (window.HaitoSync) window.HaitoSync.soon();

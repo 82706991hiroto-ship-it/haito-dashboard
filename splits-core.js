@@ -61,23 +61,31 @@
   }
 
   // 予想配当・株価から、株式分割を疑うか。
-  // o: { last: 前期の1株配当(分割前), fdiv: いまの予想配当, price: いまの株価, prevPrice: 前に入れた株価, prevDate: その日付 }
+  // o: { last: 前期の1株配当(分割前), fdiv: いまの予想配当, price: いまの株価, prevPrice: 前に入れた株価, prevDate: その日付,
+  //      feps: 予想1株利益, lastEps: 前期の1株利益(分割前) }
   // まず株価で比率を決める(分割では株価も同じ割合で下がる。増配・減配は配当だけが動く)。
-  // 株価で決まらないときだけ、配当の比率から候補を出す(本当の大きな減配と見分けられないので、確かめてもらう)
+  // 前の株価が無い・もう分割後の値のときは、1株利益も同じ割合で小さくなっているかで見る(利益は年ごとに動くので幅を広く)。
+  // どちらでも決まらないときだけ、配当の比率から候補を出す(本当の大きな減配と見分けられないので、確かめてもらう)
   function guess(o) {
     var last = Number(o.last), fdiv = Number(o.fdiv);
     if (!(last > 0) || !(fdiv > 0) || fdiv >= last * 0.75) return null;
+    function nearest(r, tol) {
+      var best = null;
+      RATIOS.forEach(function (n) { var d = Math.abs(r * n - 1); if (d <= tol && (!best || d < best.d)) best = { n: n, d: d }; });
+      return best && best.n;
+    }
+    function out(n, by) { return { n: n, alts: [], by: by, growth: fdiv * n / last - 1 }; }
+    var fe = Number(o.feps), le = Number(o.lastEps);
+    var epsN = fe > 0 && le > 0 && fe / le < 0.6 ? nearest(fe / le, 0.35) : null;
     var p = Number(o.price), pp = Number(o.prevPrice);
     var fresh = !o.prevDate || days(today(), String(o.prevDate).slice(0, 10).replace(/\//g, "-")) <= 400;
     if (p > 0 && pp > 0 && fresh) {
-      var pr = p / pp, best = null;
-      RATIOS.forEach(function (n) {
-        var d = Math.abs(pr * n - 1);
-        if (d <= 0.15 && (!best || d < best.d)) best = { n: n, d: d };
-      });
-      if (best) return { n: best.n, alts: [], by: "price", growth: fdiv * best.n / last - 1 };
-      if (pr > 0.75 && pr < 1.33) return null;  // 株価はほぼそのまま: 分割ではなく本当の減配
+      var pn = nearest(p / pp, 0.15);
+      if (pn) return out(pn, "price");
+      // 株価はほぼそのまま: 本当の減配か、前の株価がもう分割後の値。1株利益も同じ割合で小さければ分割とみる
+      if (p / pp > 0.75 && p / pp < 1.33) return epsN && fdiv * epsN / last >= 0.7 ? out(epsN, "eps") : null;
     }
+    if (epsN && fdiv * epsN / last >= 0.7) return out(epsN, "eps");
     var c = RATIOS.filter(function (n) { var g = fdiv * n / last; return g >= 0.85 && g <= 1.6; })
       .sort(function (a, b) { return Math.abs(fdiv * a / last - 1.1) - Math.abs(fdiv * b / last - 1.1); });
     if (!c.length) return null;
