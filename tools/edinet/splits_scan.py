@@ -204,9 +204,10 @@ def verify():
             rows.append((code, e, m.group(1)))
     print("EDINETの注記から拾った分割", len(rows), "件を読み直します", flush=True)
     with ThreadPoolExecutor(4) as ex:
-        res = list(ex.map(lambda t: find_splits(text_of(t[2])), rows))
+        texts = list(ex.map(lambda t: text_of(t[2]), rows))
+    res = [find_splits(t) for t in texts]
     bad = 0
-    for (code, e, doc), got in zip(rows, res):
+    for (code, e, doc), got, text in zip(rows, res, texts):
         fy = state.get(code) or ""
         cands = got.get("_all") or []
         earlier = [d for d, r in cands if r == float(e["比率"]) and d < e["効力発生日"] and d <= fy]
@@ -214,6 +215,14 @@ def verify():
         if earlier:
             bad += 1
         print("%s %s %s %s 1株→%s株 期末%s %s 候補%s" % (mark, code, e.get("名前"), e["効力発生日"], e["比率"], fy, doc, cands), flush=True)
+        if earlier:
+            # 判断の材料に、分割の書かれた文を出しておく(同じ文は1回だけ)
+            seen = set()
+            for m2 in re.finditer(r"[^。\n]{0,160}(?:株式分割|株式併合)[^。\n]{0,160}", text):
+                t = re.sub(r"\s+", " ", m2.group(0)).strip()
+                if re.search(r"\d{4}年\d{1,2}月\d{1,2}日", t) and t not in seen and len(seen) < 6:
+                    seen.add(t)
+                    print("    「" + t + "」", flush=True)
     print("疑わしいもの", bad, "件")
 
 
