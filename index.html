@@ -202,7 +202,8 @@
   .sim-readout { margin: 10px 0 4px; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
   .sim-readout b { color: var(--text); }
   .sim-chart { touch-action: pan-y; cursor: pointer; }
-  .track-body { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .trend-tabs { margin-bottom: 14px; }
+  #simPanel[data-tv="past"] .sim-future, #simPanel[data-tv="future"] .track-body { display: none; }
   .track-title { font-size: 13.5px; font-weight: 700; margin: 0 0 8px; }
   .track-title .hint { font-weight: 400; }
   .track-chart { height: 150px; touch-action: pan-y; cursor: pointer; }
@@ -7851,6 +7852,21 @@
   }
   // CSVが無い年(閉じた証券会社・ネオモバなど)は、年間取引報告書の配当の合計を手で入れられる
   var paidFormOpen = false;
+  // 「これまで」と「これから」は切り替えて1つずつ見せる(この端末で最後に見たほう)
+  var trendView = "future";
+  try { trendView = localStorage.getItem("haitoTrendView") === "past" ? "past" : "future"; } catch (e) {}
+  function setTrendView(v) {
+    trendView = v;
+    try { localStorage.setItem("haitoTrendView", v); } catch (e) {}
+    var panel = document.getElementById("simPanel");
+    if (!panel) return;
+    panel.dataset.tv = v;
+    Array.prototype.forEach.call(panel.querySelectorAll("#trendTabs .axis-tab"), function (b) { b.classList.toggle("active", b.dataset.tv === v); });
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("#trendTabs [data-tv]");
+    if (b) setTrendView(b.dataset.tv);
+  });
   function paidFormHtml() {
     var m = state.paidByYear || {}, ys = Object.keys(m).map(Number).sort();
     return '<details class="track-manual"' + (paidFormOpen ? " open" : "") + '><summary>年ごとの受取額を手で入れる</summary>' +
@@ -7867,7 +7883,7 @@
     if (!el) return;
     var ys = trackYears(agg), hasPaid = ys.some(function (x) { return x.kind === "paid"; });
     if (!(agg.totalDivPre > 0)) { el.innerHTML = ""; return; }
-    var head = '<p class="track-title">これまでの軌跡 <span class="hint">年ごとの配当(税引前)</span></p>';
+    var head = '<p class="track-title">年ごとに受け取った配当 <span class="hint">税引前</span></p>';
     if (ys.length < 2) {
       var log = state.annualLog || [], since = log.length ? log[0].ym.replace("-", "年") + "月" : "今月";
       el.innerHTML = head + '<p class="calendar-note">' + since + 'から、年間配当(予想)を毎月記録しています。来年から、ここに年ごとの棒が並びます。' +
@@ -8312,9 +8328,12 @@
       '  <h2><span class="chap">七</span>目標対比</h2>' +
       '  <div class="goal-actual" id="goalActual"></div>' +
       '</div>' +
-      '<div class="panel" data-view="home" id="simPanel">' +
-      '  <h2><span class="chap">八</span>将来見通し <span class="hint">前提を変えると試算が変わります</span></h2>' +
+      '<div class="panel" data-view="home" id="simPanel" data-tv="' + trendView + '">' +
+      '  <h2><span class="chap">八</span>配当の推移 <span class="hint">これまでは受け取った額、これからは試算</span></h2>' +
+      '  <div class="axis-tabs trend-tabs" id="trendTabs"><button class="axis-tab' + (trendView === "past" ? " active" : "") + '" data-tv="past">これまで</button>' +
+      '<button class="axis-tab' + (trendView === "future" ? " active" : "") + '" data-tv="future">これから(将来見通し)</button></div>' +
       '  <div id="trackBody" class="track-body"></div>' +
+      '  <div class="sim-future">' +
       '  <div class="grid-inputs sim-inputs">' +
       '    <label class="field">毎月の追加投資額(円)' +
       '      <input type="number" id="simMonthlyInvest" min="0" step="10000">' +
@@ -8330,6 +8349,7 @@
       SIM_BASES.map(function (y) { return '<button class="axis-tab" data-years="' + y + '">' + (y === 1 ? "直近1年" : y + "年平均") + '</button>'; }).join('') +
       '</div></div>' +
       '  <div id="simBody"></div>' +
+      '  </div>' +
       '</div>' +
       '<div class="panel" data-view="analysis">' +
       '  <h2><span class="chap">九</span>分散ガイドライン</h2>' +
@@ -9083,6 +9103,7 @@
   document.getElementById("heroSubstats").addEventListener("click", function (e) {
     var b = e.target.closest("[data-jump]");
     var t = b && document.getElementById(b.dataset.jump);
+    if (t && b.dataset.jump === "simPanel") setTrendView("future");  // 目標到達は「これから」で見る
     if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
