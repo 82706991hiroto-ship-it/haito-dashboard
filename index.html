@@ -356,6 +356,7 @@
   .watch-sim-rows { margin-top: 10px; font-size: 13px; }
   .watch-sim-rows .r { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px dashed var(--line); font-variant-numeric: tabular-nums; }
   .watch-sim-rows .r:first-child { border-top: none; }
+  .watch-sim-rows .r > span:last-child { white-space: nowrap; text-align: right; }
   .watch-sim-rows .ok { color: var(--good); font-weight: 700; }
   .watch-sim-rows .ng { color: var(--crit); font-weight: 700; }
   .watch-sim-rows .mid { color: var(--warn); font-weight: 700; }
@@ -4495,7 +4496,7 @@
       line(r.sector + "の比率(上限" + g.maxSectorPct + "%)", arrow(r.before.sectorPct, r.after.sectorPct),
         r.after.sectorPct <= g.maxSectorPct ? "ok" : "ng");
       var sensDiffBefore = Math.abs(r.before.sensPct - g.sensitiveTarget), sensDiffAfter = Math.abs(r.after.sensPct - g.sensitiveTarget);
-      line("景気敏感の比率・日本株(目標" + g.sensitiveTarget + "%)", arrow(r.before.sensPct, r.after.sensPct),
+      line("景気敏感・日本株(目標" + g.sensitiveTarget + "%)", arrow(r.before.sensPct, r.after.sensPct),
         sensDiffAfter <= 5 ? "ok" : sensDiffAfter < sensDiffBefore ? "mid" : "ng");
     }
     inp.addEventListener("input", paint);
