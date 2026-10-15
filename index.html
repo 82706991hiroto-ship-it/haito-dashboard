@@ -5193,19 +5193,21 @@
 
       var product = cell("product");
       // 米国株・外国株の行は、受け取った記録(これまでの軌跡)にだけ使う。権利確定月などの自動入力には使わない
-      var fx = /米国|外国/.test(product);
+      // 投資信託の分配金も同じく、受け取った記録にだけ使う(コードが無いので名前で見分ける)
+      var fund = /投資信託|投信/.test(product), fx = fund || /米国|外国/.test(product);
       if (product && !fx && product.indexOf("国内株") === -1) { skipped.product++; return; }
 
       var rawName = cell("name");
       var code = cell("code");
       if (fx) {
-        var tk = (code || rawName).match(/([A-Z][A-Z0-9.]{0,6})\s*$/), dm = cell("date").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+        var tk = fund ? (rawName ? [null, "投信:" + rawName.normalize("NFKC").replace(/\s+/g, "")] : null) : (code || rawName).match(/([A-Z][A-Z0-9.]{0,6})\s*$/);
+        var dm = cell("date").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
         var fq = parsePasteNum(cell("qty")), fg = parsePasteNum(cell("gross")), fn = parsePasteNum(cell("net"));
         if (!tk || !dm || (fg === "" && fn === "")) { skipped.other++; return; }
         var fNisa = /nisa|ニーサ/i.test(cell("account"));
         // 税引後の額しか無いときは、米国の税10%と国内の税(NISAは無し)を足し戻して税引前にする
-        var fgross = fg !== "" ? fg : fn / (0.9 * (fNisa ? 1 : 1 - TAX_RATE));
-        rows.push({ code: tk[1], name: rawName, fx: true, gross: fgross, qty: fq === "" ? null : fq, per: fq > 0 ? fgross / fq : null,
+        var fgross = fg !== "" ? fg : fn / ((fund ? 1 : 0.9) * (fNisa ? 1 : 1 - TAX_RATE));
+        rows.push({ code: tk[1], name: rawName, fx: true, fund: fund || undefined, gross: fgross, qty: fq === "" ? null : fq, per: fq > 0 ? fgross / fq : null,
                     py: dm[1] + "/" + ("0" + dm[2]).slice(-2), date: dm[1] + "-" + ("0" + dm[2]).slice(-2) + "-" + ("0" + dm[3]).slice(-2),
                     nisa: fNisa, estimated: fg === "" });
         return;
@@ -5410,7 +5412,7 @@
     if (suspect > 0) msg += " " + suspect + "銘柄は年度の途中で株式分割があったとみられ、配当額は入れていません。";
     if (unmatched > 0) msg += " " + unmatched + "銘柄は未登録のため見送りました。";
     var fxN = parsed.rows.length - domRows.length;
-    if (fxN > 0) msg += " 米国株など外国株の入金" + fxN + "件は、受け取った記録(これまでの軌跡)に入れました。";
+    if (fxN > 0) msg += " 米国株・投資信託の入金" + fxN + "件は、受け取った記録(これまでの軌跡)に入れました。";
     var sk = parsed.skipped.product + parsed.skipped.other;
     if (sk > 0) msg += " 読めない行を" + sk + "件読み飛ばしました。";
     statusEl.textContent = msg;
