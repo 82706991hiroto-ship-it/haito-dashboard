@@ -345,13 +345,18 @@
   }
   .watch-empty { font-size: 12.5px; color: var(--text-2); line-height: 1.8; margin: 12px 0 0; }
   .watch-list { list-style: none; margin: 10px 0 0; padding: 0; }
-  .watch-item { border-top: 1px solid var(--line); padding: 14px 0; }
-  .watch-top { display: flex; align-items: baseline; gap: 4px 8px; flex-wrap: wrap; }
-  .watch-name { font-weight: 700; font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .watch-sector { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
-  .watch-gap { flex-basis: 100%; font-size: 13px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .watch-gap.is-hit { color: var(--accent); }
-  .watch-gap.is-far { color: var(--text-2); }
+  .watch-item { border-top: 1px solid var(--line); }
+  .watch-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 76px 54px; gap: 8px; align-items: center; width: 100%; padding: 10px 2px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .watch-head { list-style: none; padding: 4px 2px; font-size: 10.5px; font-weight: 700; color: var(--muted); cursor: default; }
+  .watch-head span:not(:first-child) { text-align: right; }
+  .wr-name { min-width: 0; }
+  .wr-name b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wr-name small, .wr-num small { display: block; font-size: 10.5px; color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wr-num { text-align: right; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .wr-gap { text-align: right; font-size: 12.5px; font-weight: 700; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .wr-gap.is-hit { color: var(--accent); }
+  .watch-item.is-open > .watch-row { background: var(--field); border-radius: 10px; }
+  .watch-detail { padding: 4px 0 14px; }
   .watch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-top: 10px; }
   .watch-cell { background: var(--field); border-radius: 10px; padding: 8px 10px; }
   .watch-cell .k { font-size: 11px; color: var(--text-2); }
@@ -4499,6 +4504,7 @@
   // 「目標利回りになる株価」まであと何%下がればよいかで並べ、買ったときの分散の変化を試算する。
   var WATCH_DEFAULT_YIELD = 4.0;
   var watchSimOpen = {};
+  var watchOpen = {};
 
   function heldOf(code) {
     return state.holdings.filter(function (h) { return String(h.code || "").trim().toUpperCase() === code; });
@@ -4704,7 +4710,7 @@
                     : label + " はすでに候補にあります。チェックの結果を更新しました。" + tt);
   }
 
-  var WATCH_SHOW = 5, watchShowAll = false;
+  var WATCH_SHOW = 10, watchShowAll = false;
   var watchSortMode = (function () { try { var v = localStorage.getItem("haitoWatchSort"); return ["gap", "yield", "growth", "new", "code"].indexOf(v) === -1 ? "gap" : v; } catch (e) { return "gap"; } })();
   (function () {
     var sel = document.getElementById("watchSort");
@@ -4738,12 +4744,12 @@
     var hintEl = document.getElementById("watchSortHint");
     if (hintEl) hintEl.textContent = { gap: "目標利回りに近い順", yield: "今の利回りが高い順", growth: "増配率(5年)が高い順", new: "追加が新しい順", code: "コード順" }[watchSortMode];
     list.innerHTML = "";
-    // 候補が増えても下の株主優待まで遠くならないよう、目標利回りに近い順に5件だけ出す(追加した銘柄・試算中の銘柄は必ず出す)
+    // 候補が増えても下の株主優待まで遠くならないよう、並べた順に10件だけ出す(追加した銘柄・試算中の銘柄は必ず出す)
     var more = document.getElementById("watchMore");
     var hiddenN = 0;
     if (items.length > WATCH_SHOW && !watchShowAll) {
       var keep = items.slice(0, WATCH_SHOW);
-      items.slice(WATCH_SHOW).forEach(function (v) { if (v.w.code === justAddedWatch || watchSimOpen[v.w.id] !== undefined) keep.push(v); });
+      items.slice(WATCH_SHOW).forEach(function (v) { if (v.w.code === justAddedWatch || watchSimOpen[v.w.id] !== undefined || watchOpen[v.w.id]) keep.push(v); });
       hiddenN = items.length - keep.length;
       items = keep;
     }
@@ -4758,23 +4764,34 @@
       list.appendChild(p);
       return;
     }
+    var head = document.createElement("li");
+    head.className = "watch-row watch-head";
+    head.innerHTML = '<span>銘柄</span><span>今の利回り</span><span>目標の株価</span><span>あと</span>';
+    list.appendChild(head);
     items.forEach(function (v) {
-      var li = document.createElement("li");
-      li.className = "watch-item";
-
-      var top = document.createElement("div");
-      top.className = "watch-top";
-      var nm = document.createElement("span"); nm.className = "watch-name"; nm.textContent = "☆ " + v.w.code + " " + v.name;
-      var sc = document.createElement("span"); sc.className = "watch-sector";
+      var card = document.createElement("li");
+      card.className = "watch-item";
+      var isOpen = !!watchOpen[v.w.id] || watchSimOpen[v.w.id] !== undefined || justAddedWatch === v.w.code;
+      if (isOpen) card.classList.add("is-open");
+      // 1銘柄1行。押すと詳細(株価・目標利回りの入力、試算など)が開く
+      var row = document.createElement("button");
+      row.type = "button"; row.className = "watch-row";
+      row.setAttribute("aria-expanded", String(isOpen));
+      var cut = !heldOf(v.w.code).length && forecastCut(v.w.code, v.fcast);
       var stk = dividendStreak(v.w.code);
-      sc.textContent = v.sector + (stk ? " ・ " + stk.text : "");
-      var gap = document.createElement("span"); gap.className = "watch-gap";
-      if (v.gapPct === null) { gap.textContent = v.price > 0 ? "" : "株価を入力"; gap.classList.add("is-far"); }
-      else if (v.gapPct >= 0) { gap.textContent = "目標利回りに到達"; gap.classList.add("is-hit"); }
-      else { gap.textContent = "あと " + fmtPct(-v.gapPct) + " 下落で到達"; gap.classList.add("is-far"); }
-      top.appendChild(nm); top.appendChild(sc); top.appendChild(gap);
-      li.appendChild(top);
-      if (!heldOf(v.w.code).length && forecastCut(v.w.code, v.fcast)) {
+      var gapTxt = v.gapPct === null ? (v.price > 0 ? "—" : "株価なし") : v.gapPct >= 0 ? "到達" : "−" + fmtPct(-v.gapPct);
+      row.innerHTML = '<span class="wr-name"><b>' + escapeHtml((cut ? "⚠ " : "") + v.w.code + " " + v.name) + '</b><small>' + escapeHtml(v.sector + (stk ? " ・ " + stk.text : "") + (v.heldShares > 0 ? " ・ 保有中" : "")) + '</small></span>' +
+        '<span class="wr-num">' + (v.yieldNow !== null ? fmtPct(v.yieldNow, 2) : "—") + '<small>目標 ' + (v.w.targetYield != null ? v.w.targetYield + "%" : "—") + '</small></span>' +
+        '<span class="wr-num">' + (v.targetPrice ? fmtYen(v.targetPrice) : "—") + '<small>' + (v.price > 0 ? "今 " + fmtYen(v.price) : "") + '</small></span>' +
+        '<span class="wr-gap' + (v.gapPct !== null && v.gapPct >= 0 ? " is-hit" : "") + '">' + gapTxt + '</span>';
+      row.addEventListener("click", function () {
+        if (isOpen) { delete watchOpen[v.w.id]; delete watchSimOpen[v.w.id]; } else watchOpen[v.w.id] = true;
+        renderWatchList();
+      });
+      card.appendChild(row);
+      var li = document.createElement("div");
+      li.className = "watch-detail";
+      if (cut) {
         var cutTag = document.createElement("div"); cutTag.className = "risk-line lv1"; cutTag.textContent = "⚠ 会社予想が減配(前期より下がる予想)";
         li.appendChild(cutTag);
       }
@@ -4847,11 +4864,12 @@
         li.appendChild(sim);
         renderWatchSim(sim, v);
       }
+      if (isOpen) card.appendChild(li);
       if (justAddedWatch === v.w.code) {
-        li.classList.add("is-new");
-        setTimeout(function () { li.scrollIntoView({ block: "center", behavior: "smooth" }); }, 250);
+        card.classList.add("is-new");
+        setTimeout(function () { card.scrollIntoView({ block: "center", behavior: "smooth" }); }, 250);
       }
-      list.appendChild(li);
+      list.appendChild(card);
     });
     justAddedWatch = null;
   }
