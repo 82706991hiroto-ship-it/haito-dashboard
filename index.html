@@ -1031,6 +1031,15 @@
   }
   .hero-substats .stat-jump .label { color: var(--accent); }
   .hero-substats .stat-jump .value { font-size: 20px; }
+  .tax-box { margin-top: 14px; padding: 14px; background: var(--field); border-radius: 12px; font-size: 13px; }
+  .tax-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .tax-table th, .tax-table td { padding: 7px 4px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .tax-table thead th { font-size: 11px; color: var(--muted); font-weight: 700; }
+  .tax-table tbody th { text-align: left; font-weight: 700; }
+  .tax-table tbody th small { display: block; font-size: 10px; color: var(--muted); font-weight: 400; }
+  .tax-table tr.sum th, .tax-table tr.sum td { border-bottom: 0; }
+  .tax-month { margin: 10px 0 6px; }
+  .tax-notes { margin: 0; padding-left: 18px; color: var(--text-2); font-size: 11.5px; line-height: 1.6; }
   #simPanel { scroll-margin-top: 72px; }
 
   /* 節目: 年間配当の金額で全員共通。越えるごとに一番上が一段華やかになる */
@@ -1245,6 +1254,7 @@
       <button type="button" class="ghost" id="nextGoalBtn">次の目標を設定</button>
     </div>
     <div class="hero-substats" id="heroSubstats"></div>
+    <div class="tax-box" id="taxBox" hidden></div>
     <div class="hero-actions"><button class="btn" id="reportBtn" type="button">月の配当レポートを画像にする</button></div>
   </section>
 
@@ -7203,7 +7213,7 @@
     var yieldPre = agg.totalAcq > 0 ? (agg.totalDivPre / agg.totalAcq) * 100 : 0;
     var subs = [
       { label: "利回り", value: agg.totalAcq > 0 ? fmtPct(yieldPre, 2) : "—" },
-      { label: "税引後", value: fmtYen(agg.totalDivPost) },
+      { label: "税引後", value: fmtYen(agg.totalDivPost), tax: true },
       { label: "銘柄", value: agg.stockCount + "" },
       { label: "業種", value: agg.sectorCount + "" }
     ];
@@ -7215,11 +7225,48 @@
     var simNote = (mInv > 0 ? "毎月" + manYen(mInv) + "積立" : bInv > 0 ? "" : "追加投資なし") + (bInv > 0 ? (mInv > 0 ? "・" : "") + "ボーナス年" + manYen(bInv) : "") + (num(state.sim.newYield) > 0 ? "・利回り" + state.sim.newYield + "%" : "") + (state.sim.reinvest ? "・配当再投資" : "");
     if (sim) subs.push({ label: "目標到達", note: simNote, value: sim.reached === null ? SIM_MAX_YEARS + "年超" : "約" + sim.reached + "年後(" + (new Date().getFullYear() + sim.reached) + "年)", jump: "simPanel" });
     document.getElementById("heroSubstats").innerHTML = subs.map(function (s) {
+      if (s.tax) return '<button type="button" class="stat stat-jump" data-tax="1" aria-controls="taxBox"><div class="label">' + s.label + ' ›</div><div class="value">' + s.value + '</div><div class="note">口座別の税金を見る</div></button>';
       return s.jump
         ? '<button type="button" class="stat stat-jump" data-jump="' + s.jump + '"><div class="label">' + s.label + ' ›</div><div class="value">' + s.value + '</div>' + (s.note ? '<div class="note">' + s.note + '</div>' : "") + '</button>'
         : '<div class="stat"><div class="label">' + s.label + '</div><div class="value">' + s.value + '</div></div>';
     }).join("");
+    renderTaxBox(agg);
     renderMilestones(annual);
+  }
+
+  // 税引前・税金・手元に残る額を、NISAと特定口座に分けて見せる。
+  // 国内株・投資信託: 特定口座は20.315%、NISAは0。米国株: どちらの口座でも米国で10%、特定口座はさらに日本で20.315%
+  function taxSplit(agg) {
+    function z() { return { pre: 0, us: 0, jp: 0, post: 0, n: 0, usN: 0 }; }
+    var t = { nisa: z(), toku: z() };
+    agg.rows.forEach(function (r) {
+      if (!(r.divPre > 0)) return;
+      var b = isTaxFree(r.account) ? t.nisa : t.toku;
+      var us = isUS(r) ? r.divPre * US_WITHHOLD : 0;
+      b.pre += r.divPre; b.us += us; b.post += r.divPost; b.jp += r.divPre - us - r.divPost; b.n++;
+      if (us > 0) b.usN++;
+    });
+    return t;
+  }
+  function renderTaxBox(agg) {
+    var box = document.getElementById("taxBox");
+    if (!box) return;
+    var t = taxSplit(agg);
+    var all = { pre: t.nisa.pre + t.toku.pre, us: t.nisa.us + t.toku.us, jp: t.nisa.jp + t.toku.jp, post: t.nisa.post + t.toku.post };
+    function row(label, b, cls) {
+      return '<tr' + (cls ? ' class="' + cls + '"' : "") + '><th>' + label + '</th><td>' + fmtYen(b.pre) + '</td><td>' + (b.us + b.jp > 0 ? "−" + fmtYen(b.us + b.jp) : "¥0") + '</td><td><b>' + fmtYen(b.post) + '</b></td></tr>';
+    }
+    var notes = [];
+    if (t.toku.pre > 0) notes.push("特定口座: 配当の20.315%(所得税15.315%・住民税5%)が引かれてから入金されます。");
+    if (t.nisa.pre > 0) notes.push("NISA: 日本の税金はかかりません。ただし国内株は受取方法が「株式数比例配分方式」のときだけ非課税です(銀行や郵便局で受け取る方式だと20.315%引かれます)。");
+    if (t.nisa.usN > 0) notes.push("米国株はNISAでも米国の税10%が引かれます(" + fmtYen(t.nisa.us) + "/年)。NISAでは確定申告でも取り戻せません。");
+    if (t.toku.usN > 0) notes.push("特定口座の米国株は米国10%+日本20.315%の二重課税です。確定申告の外国税額控除で米国の分(" + fmtYen(t.toku.us) + "/年)の一部を取り戻せることがあります。");
+    box.innerHTML = '<table class="tax-table"><thead><tr><th></th><th>税引前</th><th>税金</th><th>手元に残る</th></tr></thead><tbody>' +
+      (t.nisa.pre > 0 ? row("NISA<small>" + t.nisa.n + "銘柄</small>", t.nisa) : "") +
+      (t.toku.pre > 0 ? row("特定口座<small>" + t.toku.n + "銘柄</small>", t.toku) : "") +
+      row("合計", all, "sum") + '</tbody></table>' +
+      '<p class="tax-month">手元に残るのは月あたり <b>' + fmtYen(all.post / 12) + '</b>' + (all.us > 0 ? '(税金のうち米国の税 ' + fmtYen(all.us) + ')' : "") + '</p>' +
+      '<ul class="tax-notes">' + notes.map(function (x) { return "<li>" + x + "</li>"; }).join("") + '<li>口座は保有銘柄の「口座」の欄で決まります。違っていたら直してください。</li></ul>';
   }
 
   document.getElementById("nextGoalBtn").addEventListener("click", function () {
@@ -9295,6 +9342,8 @@
   function reloadFromStorage() { state = loadState(); syncAllUsd(); renderAll(); }
 
   document.getElementById("heroSubstats").addEventListener("click", function (e) {
+    var tx = e.target.closest("[data-tax]");
+    if (tx) { var box = document.getElementById("taxBox"); box.hidden = !box.hidden; tx.setAttribute("aria-expanded", String(!box.hidden)); return; }
     var b = e.target.closest("[data-jump]");
     var t = b && document.getElementById(b.dataset.jump);
     if (t && b.dataset.jump === "simPanel") setTrendView("future");  // 目標到達は「これから」で見る
