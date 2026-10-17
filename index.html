@@ -1239,7 +1239,7 @@
     .sum-name { grid-column: 1; grid-row: 1; }
     .sum-yield { grid-column: 2; grid-row: 1 / span 2; align-self: center; text-align: right; line-height: 1.15; }
     .sum-yield b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
-    .sum-yield small { font-size: 10px; color: var(--muted); }
+    .sum-yield small { display: block; font-size: 10px; color: var(--muted); }
     .sum-yield .muted { color: var(--muted); font-weight: 500; }
     .sum-meta em { font-style: normal; font-weight: 700; }
     .sum-meta em.up { color: var(--accent); } .sum-meta em.down { color: var(--crit); }
@@ -3478,7 +3478,9 @@
       ? '<span class="acct-label">└ ' + escapeHtml(h.account || "特定") + '</span> ' + (h.fundTotal ? "" : isFund(h) ? escapeHtml((h.units ? Number(h.units).toLocaleString() : "") + "口") : escapeHtml(num(h.shares).toLocaleString() + "株"))
       : (isUS(h) ? '<span class="us-badge">米</span>' : isFund(h) ? '<span class="us-badge fund-badge">投</span>' : "") + escapeHtml((h.code ? h.code + " " : "") + String(h.name || "銘柄を入力").normalize("NFKC"));
     return '<span class="sum-name">' + nameHtml + '</span>' +
-      '<span class="sum-yield">' + (yv !== null ? '<b' + (stale ? ' class="stale"' : "") + '>' + yv.toFixed(2) + '%</b><small' + (stale || (fst && fst.kind === "stale") ? ' class="stale"' : "") + '>' + yl + '</small>' : '<b class="muted">―</b><small>利回り</small>') + '</span>' +
+      '<span class="sum-yield">' + (yv !== null ? '<b' + (stale ? ' class="stale"' : "") + '>' + yv.toFixed(2) + '%</b><small' + (stale || (fst && fst.kind === "stale") ? ' class="stale"' : "") + '>' + yl + '</small>' : '<b class="muted">―</b><small>利回り</small>') +
+        // 株価の利回りを出しているときは、取得単価に対する利回り(簿価利回り)も添える
+        (yNow !== null && yBook !== null && yBook > 0 ? '<small class="sum-book">取得 ' + yBook.toFixed(2) + '%</small>' : "") + '</span>' +
       // 一覧は「年いくら」と「増配・減配」だけに絞る(株数・連続増配は開いたとき・詳細で)
       '<span class="sum-meta">' +
       "年" + fmtYen(c.divPre) +
@@ -7583,8 +7585,16 @@
     }
 
     var yieldPre = agg.totalAcq > 0 ? (agg.totalDivPre / agg.totalAcq) * 100 : 0;
+    // 時価の利回り: 株価の入っている銘柄だけで、配当 ÷ 評価額。株価の無い銘柄が多い(取得額の半分以上)ときは出さない
+    var mv = 0, mvDiv = 0, mvAcq = 0;
+    agg.rows.forEach(function (r) {
+      var p = num(r.price);
+      if (p > 0 && num(r.shares) > 0) { mv += num(r.shares) * p; mvDiv += r.divPre; mvAcq += r.acquisition; }
+    });
+    var mktYield = mv > 0 && agg.totalAcq > 0 && mvAcq >= agg.totalAcq * 0.5 ? mvDiv / mv * 100 : null;
     var subs = [
-      { label: "利回り", value: agg.totalAcq > 0 ? fmtPct(yieldPre, 2) : "—" },
+      { label: "利回り(取得)", value: agg.totalAcq > 0 ? fmtPct(yieldPre, 2) : "—" },
+      { label: "利回り(時価)", value: mktYield !== null ? fmtPct(mktYield, 2) : "—" },
       { label: "税引後", value: fmtYen(agg.totalDivPost), tax: true },
       { label: "銘柄", value: agg.stockCount + "" },
       { label: "業種", value: agg.sectorCount + "" }
