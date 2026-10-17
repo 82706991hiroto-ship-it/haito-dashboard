@@ -4681,9 +4681,23 @@
 
   // チェックシートの「買い増し候補へ」から来たとき(?watch=コード&price=株価)、候補に入れて候補タブを開く
   var justAddedWatch = null;
+  function showBackToCheck(code) {
+    var info = CODE_INFO_MAP[code];
+    document.getElementById("backToCheck").innerHTML = "チェックシートに戻る<small>" + escapeHtml(code + (info ? " " + String(info[0]).normalize("NFKC") : "")) + " の採点</small>";
+    document.getElementById("backToCheckBox").hidden = false;
+  }
   function takeWatchFromUrl() {
     var q;
     try { q = new URLSearchParams(location.search); } catch (e) { return; }
+    // チェックシートで候補に入れたあとの「候補を見る」: 入れる処理は済んでいるので、候補を開いて戻り道だけ出す
+    var backCode = String(q.get("back") || "").normalize("NFKC").trim().toUpperCase();
+    if (backCode) {
+      try { history.replaceState(null, "", location.pathname + "#extras"); } catch (e) {}
+      document.body.dataset.tab = "extras";
+      showBackToCheck(backCode);
+      justAddedWatch = backCode;
+      return;
+    }
     var code = String(q.get("watch") || "").normalize("NFKC").trim().toUpperCase();
     if (!code) return;
     try { history.replaceState(null, "", location.pathname + "#extras"); } catch (e) {}
@@ -4705,9 +4719,7 @@
     var target = num(q.get("target"));
     if (target > 0 && target <= 30) w.targetYield = target;
     save();
-    var back = document.getElementById("backToCheck");
-    back.innerHTML = "チェックシートに戻る<small>" + escapeHtml(code + " " + String(info[0]).normalize("NFKC")) + " の採点</small>";
-    document.getElementById("backToCheckBox").hidden = false;
+    showBackToCheck(code);
     justAddedWatch = code;
     var label = code + " " + String(info[0]).normalize("NFKC");
     var tt = target > 0 && target <= 30 ? "目標利回りは" + target + "%です。" : "";
