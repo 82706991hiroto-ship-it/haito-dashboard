@@ -2716,7 +2716,7 @@
   }
 
   function renderTable() {
-    if (!state.isSample) syncSamePrices();
+    if (!state.isSample) syncSameStock();
     renderFxBar();
     renderStaleNote();
     renderForecastBox();
@@ -3106,6 +3106,7 @@
       input.value = h.usd[field] == null ? "" : h.usd[field];
       input.addEventListener("input", function () {
         h.usd[field] = input.value;
+        if (field !== "cost") shareStockFields(h, ["usd." + field]);
         syncUsd(h); save(); updateRowComputedCells(h.id); renderDashboard();
       });
       td.appendChild(input);
@@ -3133,6 +3134,15 @@
     input.addEventListener("input", function () {
       h[field] = type === "number" ? input.value : input.value;
       if (field === "div" && h.divSrc) { delete h.divSrc; delete h.divNote; }
+      // 1株配当・前年配当・銘柄名は銘柄で決まるので、同じ銘柄のほかの口座の行にも入れる
+      if (field === "div" || field === "prevDiv" || field === "name") {
+        shareStockFields(h, field === "div" ? ["div", "divCheckedAt"] : [field]);
+        siblingsOf(h).forEach(function (x) {
+          var other = document.querySelector('#holdingsBody tr[data-id="' + x.id + '"] input[data-field="' + field + '"]');
+          if (other && other !== input) other.value = input.value;
+          updateRowComputedCells(x.id);
+        });
+      }
       save();
       updateRowComputedCells(h.id);
       renderDashboard();
@@ -3153,7 +3163,7 @@
     });
     if (!h.sector) { h.sector = UNCLASSIFIED; }
     sel.addEventListener("change", function () {
-      h.sector = sel.value; save(); renderDashboard();
+      h.sector = sel.value; shareStockFields(h, ["sector"]); save(); renderDashboard();
     });
     td.appendChild(sel);
     return td;
@@ -3230,6 +3240,7 @@
     dlg.onclose = function () {
       if (dlg.returnValue !== "ok" || !monthsTarget) { monthsTarget = null; return; }
       monthsTarget.months = picked.length > 0 ? picked : undefined;
+      shareStockFields(monthsTarget, ["months"]);
       monthsTarget = null;
       save(); renderTable(); renderDashboard();
     };
@@ -3240,7 +3251,7 @@
     document.getElementById("monthsDialog").close("ok");
   });
   document.getElementById("monthsClearBtn").addEventListener("click", function () {
-    if (monthsTarget) monthsTarget.months = undefined;
+    if (monthsTarget) { monthsTarget.months = undefined; shareStockFields(monthsTarget, ["months"]); }
     var t = monthsTarget;
     monthsTarget = null;
     document.getElementById("monthsDialog").close("cleared");
@@ -8645,23 +8656,78 @@
     }
   }
 
-  // 同じ銘柄を何口座かで持っているとき、株価は日付の新しいほうにそろえる
-  // (口座ごとに別のCSV・別の日に入れると、同じ株なのに今の利回りや評価額が口座で違ってしまうため)
-  function syncSamePrices() {
-    var by = {}, changed = false;
+  // ---------- 同じ銘柄を何口座かで持っているとき ----------
+  // 保有銘柄は「銘柄×口座」で1行ずつ持つので、株価・予想配当など銘柄で決まる値も行ごとに入っている。
+  // 口座ごとに別のCSV・別の日に入れたり、1つの行だけ書き換えたりすると、同じ株なのに値が食い違うので、そろえる
+  function siblingsOf(h) {
+    var k = holdingGroupKey(h);
+    if (k.indexOf("id:") === 0) return [];
+    return state.holdings.filter(function (x) { return x !== h && holdingGroupKey(x) === k; });
+  }
+  // 書き換えた行の値を、同じ銘柄のほかの行にも入れる("usd.div" のようにドルの欄も指定できる)
+  function shareStockFields(h, fields) {
+    siblingsOf(h).forEach(function (x) {
+      fields.forEach(function (f) {
+        if (f.indexOf("usd.") === 0) {
+          var k = f.slice(4);
+          x.usd = x.usd || {}; x.usd[k] = h.usd ? h.usd[k] : undefined;
+          syncUsd(x);
+        } else if (h[f] === undefined) delete x[f];
+        else x[f] = Array.isArray(h[f]) ? h[f].slice() : h[f];
+      });
+    });
+  }
+  function divDateOf(h) { return [isoDay(h.divCheckedAt || ""), isoDay(h.fdivDate || ""), isoDay(h.quoteDate || "")].sort().pop() || ""; }
+  // 開いたとき・表を描くときに、食い違っている値をそろえる
+  //  株価: 日付の新しいほう
+  //  1株配当: 入れた日付の新しいほう。日付が分からなければ、内蔵の直近実績と違うほう(会社予想を入れた行)
+  //  前年配当・権利確定月・業種: 入っている行の値
+  function syncSameStock() {
+    var groups = {}, changed = false;
     state.holdings.forEach(function (h) {
-      if (isUS(h) || !(num(h.price) > 0)) return;
       var k = holdingGroupKey(h);
       if (k.indexOf("id:") === 0) return;
-      var d = isoDay(h.priceDate || "");
-      if (!by[k] || d > by[k].d) by[k] = { d: d, p: num(h.price), pd: h.priceDate };
+      (groups[k] = groups[k] || []).push(h);
     });
-    state.holdings.forEach(function (h) {
-      if (isUS(h)) return;
-      var b = by[holdingGroupKey(h)];
-      if (!b || (num(h.price) === b.p && isoDay(h.priceDate || "") === b.d)) return;
-      if (num(h.price) > 0 && isoDay(h.priceDate || "") >= b.d) return;
-      h.price = b.p; h.priceDate = b.pd; changed = true;
+    Object.keys(groups).forEach(function (k) {
+      var mem = groups[k];
+      if (mem.length < 2) return;
+      var us = isUS(mem[0]);
+      function setAll(f, v, srcH) { mem.forEach(function (x) { if (JSON.stringify(x[f]) !== JSON.stringify(v)) { x[f] = Array.isArray(v) ? v.slice() : v; changed = true; } }); }
+      // 株価
+      if (!us) {
+        var best = null;
+        mem.forEach(function (h) { if (num(h.price) > 0 && (!best || isoDay(h.priceDate || "") > isoDay(best.priceDate || ""))) best = h; });
+        if (best) mem.forEach(function (h) {
+          if (h === best || (num(h.price) === num(best.price) && isoDay(h.priceDate || "") === isoDay(best.priceDate || ""))) return;
+          h.price = best.price; h.priceDate = best.priceDate; changed = true;
+        });
+      }
+      // 1株配当
+      var divs = mem.map(function (h) { return us ? String((h.usd || {}).div == null ? "" : h.usd.div) : String(h.div == null ? "" : h.div); });
+      if (divs.some(function (d) { return d !== divs[0]; })) {
+        var dated = mem.filter(function (h) { return divDateOf(h); }).sort(function (a, b) { return divDateOf(a) < divDateOf(b) ? 1 : -1; });
+        var pick = dated[0] && (dated.length < 2 || divDateOf(dated[0]) > divDateOf(dated[1])) ? dated[0] : null;
+        if (!pick && !us) {
+          var actual = dividendsFor(String(mem[0].code || "").trim().toUpperCase());
+          var notActual = mem.filter(function (h) { return num(h.div) > 0 && !(actual && round2(num(h.div)) === round2(actual[0])); });
+          var vals = notActual.map(function (h) { return round2(num(h.div)); }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+          if (vals.length === 1) pick = notActual[0];
+        }
+        if (pick) {
+          if (us) mem.forEach(function (h) { if (h !== pick) { h.usd = h.usd || {}; h.usd.div = pick.usd.div; syncUsd(h); changed = true; } });
+          else { setAll("div", pick.div); ["fdivDate", "feps", "divCheckedAt"].forEach(function (f) { if (pick[f] !== undefined) setAll(f, pick[f]); }); }
+        }
+      }
+      // 前年配当・権利確定月・業種: 入っている行が1種類なら、空の行にも入れる
+      [["prevDiv", function (v) { return v !== "" && v != null; }], ["months", function (v) { return Array.isArray(v) && v.length > 0; }],
+       ["sector", function (v) { return v && v !== UNCLASSIFIED; }]].forEach(function (pair) {
+        if (us && pair[0] === "prevDiv") return;
+        var f = pair[0], ok = pair[1];
+        var have = mem.filter(function (h) { return ok(h[f]); });
+        var uniq = have.map(function (h) { return JSON.stringify(h[f]); }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+        if (uniq.length === 1 && have.length < mem.length) mem.forEach(function (h) { if (!ok(h[f])) { h[f] = JSON.parse(uniq[0]); changed = true; } });
+      });
     });
     if (changed) save();
   }
@@ -8686,20 +8752,25 @@
   // 期間内の書き換えを銘柄ごとに「最初の値 → 最後の値」にまとめ、今の株数で年間の増減額を出す
   function divLogSummary(since, until) {
     var log = Array.isArray(state.divLog) ? state.divLog : [];
-    var byHolding = {};
+    // 同じ銘柄を何口座かで持っていれば1つにまとめ、株数は口座の合計で増減額を出す
+    var byStock = {}, first = {};
     log.forEach(function (e) {
       if (e.date < since || e.date > until) return;
-      (byHolding[e.hid] = byHolding[e.hid] || []).push(e);
+      var h = state.holdings.filter(function (x) { return x.id === e.hid; })[0];
+      if (!h || h.excluded) return;
+      var k = holdingGroupKey(h);
+      (byStock[k] = byStock[k] || []).push(e);
+      if (!first[k]) first[k] = h;
     });
     var items = [];
-    Object.keys(byHolding).forEach(function (hid) {
-      var h = state.holdings.filter(function (x) { return x.id === hid; })[0];
-      if (!h || h.excluded) return;
-      var list = byHolding[hid].sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    Object.keys(byStock).forEach(function (k) {
+      var h = first[k];
+      var list = byStock[k].sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
       var from = list[0].from, to = list[list.length - 1].to;
       if (from === to) return;
+      var shares = [h].concat(siblingsOf(h)).filter(function (x) { return !x.excluded; }).reduce(function (a, x) { return a + num(x.shares); }, 0);
       items.push({ h: h, from: from, to: to, date: list[list.length - 1].date, entries: list,
-                   diff: (to - from) * num(h.shares) });
+                   diff: (to - from) * shares });
     });
     items.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
     return {
@@ -9793,7 +9864,7 @@
     if (!state.isSample) fillFromBuiltin();
     if (!state.isSample) revertRevokedSplits();
     if (!state.isSample) repairImportDivOverwrites();
-    syncSamePrices();
+    syncSameStock();
     if (!state.isSample) applyLocalSplits();
     if (!state.isSample) takeQuotesFromCheck();
     if (!state.isSample) applyHoldingSplits();
