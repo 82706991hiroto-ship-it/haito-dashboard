@@ -3947,9 +3947,13 @@
 
       var autoDivs = dividendsFor(code) || [];
       var div = colMap.div !== undefined ? parsePasteNum(row[colMap.div]) : "";
-      if (div === "" && autoDivs.length > 0) div = autoDivs[0];
+      // 配当の列が無い取り込み元(証券会社の保有一覧など)は内蔵の直近実績で補う。補った値には印をつけ、
+      // すでに入れてある配当(会社予想など)を上書きしない
+      var divAuto = false, prevAuto = false;
+      if (div === "" && autoDivs.length > 0) { div = autoDivs[0]; divAuto = true; }
       var prevDiv = autoDivs.length > 1 ? autoDivs[1] : undefined;
-      if (colMap.prevDiv !== undefined && parsePasteNum(row[colMap.prevDiv]) !== "") prevDiv = parsePasteNum(row[colMap.prevDiv]);
+      if (prevDiv !== undefined) prevAuto = true;
+      if (colMap.prevDiv !== undefined && parsePasteNum(row[colMap.prevDiv]) !== "") { prevDiv = parsePasteNum(row[colMap.prevDiv]); prevAuto = false; }
 
       results.push({
         code: code,
@@ -3958,8 +3962,8 @@
         account: account, accountGuess: !(accountFromText(accountRaw) || sectionAccount),
         shares: colMap.shares !== undefined ? parsePasteNum(row[colMap.shares]) : "",
         cost: colMap.cost !== undefined ? parsePasteNum(row[colMap.cost]) : "",
-        div: div,
-        prevDiv: prevDiv,
+        div: div, divAuto: divAuto || undefined,
+        prevDiv: prevDiv, prevDivAuto: prevAuto || undefined,
         price: colMap.price !== undefined ? parsePasteNum(row[colMap.price]) : "",
         priceDate: colMap.price !== undefined ? (priceDate || todayStamp()) : undefined
       });
@@ -4261,12 +4265,14 @@
         var kSplit = splitRatioBetween(existing, r);
         existing.name = r.name; existing.sector = r.sector;
         // 配当が分からない取り込み元(配当の列も内蔵データも無い)では、入力済みの配当を消さない
-        if (r.div !== "" && r.div != null) { recordDivChange(existing, existing.div, r.div); existing.div = r.div; }
+        // 内蔵の直近実績で補っただけの値は、入力済みの配当(会社予想など)を上書きしない(減配の記録も残さない)
+        var keepDiv = r.divAuto && num(existing.div) > 0;
+        if (r.div !== "" && r.div != null && !keepDiv) { recordDivChange(existing, existing.div, r.div); existing.div = r.div; }
         existing.shares = r.shares; existing.cost = r.cost;
         if (r.months) existing.months = r.months;
         if (r.price !== undefined && r.price !== "") { existing.price = r.price; existing.priceDate = r.priceDate; }
         // 前年配当を持たない取り込み元(貼り付け・CSV)では既存の入力値を消さない
-        if (r.prevDiv !== undefined) existing.prevDiv = r.prevDiv;
+        if (r.prevDiv !== undefined && !(r.prevDivAuto && existing.prevDiv !== "" && existing.prevDiv != null)) existing.prevDiv = r.prevDiv;
         if (kSplit) fixDivForSplit(existing, kSplit, splitFound);
         markAccGuess(existing, r);
         updated++;
@@ -4541,16 +4547,16 @@
 
       // 配当が省略されたら、コードから取得済みの年度別配当で補う
       var autoDivs = dividendsFor(code) || [];
-      var div = at(2), prevDiv = at(3);
-      if (div === "" && autoDivs.length > 0) div = autoDivs[0];
-      if (prevDiv === "" && autoDivs.length > 1) prevDiv = autoDivs[1];
+      var div = at(2), prevDiv = at(3), divAuto = false, prevAuto = false;
+      if (div === "" && autoDivs.length > 0) { div = autoDivs[0]; divAuto = true; }
+      if (prevDiv === "" && autoDivs.length > 1) { prevDiv = autoDivs[1]; prevAuto = true; }
 
       results.push({
         code: code,
         name: nameFor(code) || code,
         sector: sectorFor(code, ""),
         account: lineAccount || "特定",
-        shares: at(0), cost: at(1), div: div, prevDiv: prevDiv
+        shares: at(0), cost: at(1), div: div, prevDiv: prevDiv, divAuto: divAuto || undefined, prevDivAuto: prevAuto || undefined
       });
     });
     return { results: results, skipped: skipped };
@@ -8595,6 +8601,36 @@
     return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
   }
 
+  // 一度だけの修復: 配当の列が無い保有一覧CSVを取り込んだとき、内蔵の直近実績で補った値が
+  // 入力済みの会社予想を上書きし、「減配」として記録されていた(2026年10月に直した)。
+  // 記録の「後」が内蔵の直近実績と同じで、今もその値のままの銘柄は、上書き前の値に戻して記録を消す。
+  // 1年以内に株式分割のある銘柄は、前の値が分割前の可能性があるので戻さずに知らせる
+  function repairImportDivOverwrites() {
+    if (state.divRepair1) return;
+    state.divRepair1 = todayIso();
+    var log = Array.isArray(state.divLog) ? state.divLog : [], fixed = [], check = [];
+    var yearAgo = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+    log.slice().forEach(function (e) {
+      var h = state.holdings.find(function (x) { return x.id === e.hid; });
+      if (!h || isUS(h) || isFund(h)) return;
+      var actual = dividendsFor(String(h.code || "").trim().toUpperCase());
+      if (!actual || !(e.from > e.to) || round2(num(h.div)) !== round2(e.to) || round2(actual[0]) !== round2(e.to)) return;
+      var nm = String(h.name || h.code).normalize("NFKC");
+      var sp = (SPLIT_MAP[String(h.code).toUpperCase()] || []).some(function (x) { return x[0] >= yearAgo; });
+      if (sp) { check.push(nm); return; }
+      h.div = e.from;
+      state.divLog.splice(state.divLog.indexOf(e), 1);
+      fixed.push(nm + " " + e.from + "円");
+    });
+    save();
+    if (fixed.length || check.length) {
+      setTimeout(function () {
+        showToast((fixed.length ? "取り込みで上書きされていた予想配当を戻しました: " + fixed.join("、") + "。" : "") +
+          (check.length ? check.join("、") + " は株式分割があったため戻していません。予想配当を確かめてください。" : ""));
+      }, 800);
+    }
+  }
+
   function recordDivChange(h, from, to) {
     var a = round2(num(from)), b = round2(num(to));
     if (!(a > 0) || !(b > 0) || a === b) return false;
@@ -9721,6 +9757,7 @@
     fixUnknownSectors();
     if (!state.isSample) fillFromBuiltin();
     if (!state.isSample) revertRevokedSplits();
+    if (!state.isSample) repairImportDivOverwrites();
     if (!state.isSample) applyLocalSplits();
     if (!state.isSample) takeQuotesFromCheck();
     if (!state.isSample) applyHoldingSplits();
