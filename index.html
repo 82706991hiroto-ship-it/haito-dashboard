@@ -374,6 +374,7 @@
   .watch-actions { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 10px; align-items: center; }
   .watch-actions > * { white-space: nowrap; }
   .watch-actions .btn { font-size: 12.5px; padding: 7px 14px; }
+  .watch-actions a.btn { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; background: var(--card, transparent); color: var(--text); font-weight: 700; text-decoration: none; }
   .watch-ir { font-size: 12px; color: var(--text-2); }
   .watch-check { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 8px 0 2px; font-size: 12px; color: var(--text-2); }
   .watch-check .chk { font-weight: 700; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; }
@@ -1608,18 +1609,19 @@
     <ul class="watch-list" id="watchList"></ul>
     <button type="button" class="btn watch-more" id="watchMore" hidden></button>
     <div class="watch-copy" id="watchCopyBox" hidden>
-      <div class="watch-copy-btns">
-        <button type="button" class="btn primary" id="watchSheetBtn">スプレッドシート用にコピー</button>
-        <button type="button" class="btn" id="watchPriceBtn">表の株価を貼って更新</button>
-      </div>
+      <p class="hint">候補の行を開いて「Yahoo!で開く」を押すと、Yahoo!ファイナンスの銘柄ページが開き、目標の株価がコピーされます。そこでポートフォリオに追加したり、株価アラートに貼り付けたりできます(証券会社のアプリのアラートでも同じ数字が使えます)。</p>
       <details class="paste-import watch-sheet-how">
-        <summary>株価の見張りと通知をGoogleスプレッドシートで自動にする(設定のしかた)</summary>
+        <summary>おまけ: Googleスプレッドシートで株価を見張る</summary>
         <div class="paste-import-body">
+          <div class="watch-copy-btns">
+            <button type="button" class="btn" id="watchSheetBtn">スプレッドシート用にコピー</button>
+            <button type="button" class="btn" id="watchPriceBtn">表の株価を貼って更新</button>
+          </div>
           <p class="hint">自分のGoogleアカウントのスプレッドシートで、Googleの株価(GOOGLEFINANCE・数分遅れ)を使って候補を見張り、目標の株価以下になったら自分にメールが届きます。表も通知も自分のアカウントの中だけで動きます。</p>
           <ol class="sheet-steps">
             <li>Googleスプレッドシートで新しい表を作る(1枚目のシートを使います)。</li>
-            <li>上の「スプレッドシート用にコピー」を押し、表の<b>A1</b>を選んで貼り付ける。株価(B列)と判定(C列)が自動で入ります。</li>
-            <li>メニューの「拡張機能」→「Apps Script」を開き、中身を消して、下の「通知のスクリプトをコピー」で写したものを貼って保存する。</li>
+            <li>「スプレッドシート用にコピー」を押し、表の<b>A1</b>を選んで貼り付ける。株価(B列)と判定(C列)が自動で入ります。</li>
+            <li>メニューの「拡張機能」→「Apps Script」を開き(iPhoneはSafariで表を開き「デスクトップ用Webサイトを表示」にする)、中身を消して、下の「通知のスクリプトをコピー」で写したものを貼って保存する。</li>
             <li>上の関数の選び欄で <b>setup</b> を選んで「実行」。Googleの許可の画面が出たら自分のアカウントで許可する(1回だけ)。</li>
           </ol>
           <p class="hint">これで1時間ごとに表を見て、届いた銘柄だけをメールで知らせます(同じ銘柄は、目標より3%以上戻ってからまた下がったときに再び知らせます)。候補や目標利回りを変えたら、もう一度コピーしてA1に貼り直すだけです。表のA列とB列(コードと株価)を選んでコピーし、「表の株価を貼って更新」に貼れば、HAITOの候補の株価もまとめて新しくなります。</p>
@@ -4911,20 +4913,18 @@
       ir.href = "https://irbank.net/" + encodeURIComponent(v.w.code) + "/dividend";
       ir.target = "_blank"; ir.rel = "noopener noreferrer";
       ir.textContent = "配当の推移(IR BANK)";
-      // 株価アラートの入力欄にそのまま貼れるよう、目標の株価を数字だけでコピーする
-      var cpBtn = null;
-      if (v.targetPrice > 0) {
-        cpBtn = document.createElement("button");
-        cpBtn.type = "button"; cpBtn.className = "btn";
-        var tpNum = String(Math.floor(v.targetPrice));
-        cpBtn.textContent = "目標の株価 " + Number(tpNum).toLocaleString("ja-JP") + " をコピー";
-        cpBtn.addEventListener("click", function () {
-          function done() { showToast(tpNum + " をコピーしました。証券会社のアプリで " + v.w.code + " を開き、株価アラートに貼ってください。"); }
-          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(tpNum).then(done, function () { window.prompt("コピーしてください", tpNum); });
-          else window.prompt("コピーしてください", tpNum);
-        });
-      }
-      act.appendChild(simBtn); if (cpBtn) act.appendChild(cpBtn); act.appendChild(ir); act.appendChild(del);
+      // Yahoo!ファイナンスの銘柄ページを開く(ポートフォリオへの追加・株価アラートはそこで)。
+      // 開くと同時に目標の株価を数字だけでコピーするので、アラートの金額欄にそのまま貼れる
+      var cpBtn = document.createElement("a");
+      cpBtn.className = "btn";
+      cpBtn.href = "https://finance.yahoo.co.jp/quote/" + encodeURIComponent(v.w.code) + ".T";
+      cpBtn.target = "_blank"; cpBtn.rel = "noopener noreferrer";
+      var tpNum = v.targetPrice > 0 ? String(Math.floor(v.targetPrice)) : "";
+      cpBtn.textContent = "Yahoo!で開く ↗" + (tpNum ? "(目標の株価 " + Number(tpNum).toLocaleString("ja-JP") + " をコピー)" : "");
+      cpBtn.addEventListener("click", function () {
+        if (tpNum && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(tpNum).catch(function () {});
+      });
+      act.appendChild(simBtn); act.appendChild(cpBtn); act.appendChild(ir); act.appendChild(del);
       li.appendChild(act);
 
       if (open) {
