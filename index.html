@@ -928,15 +928,19 @@
     background: var(--accent-soft); color: var(--accent);
     display: flex; align-items: center; justify-content: center; font-size: 13px;
   }
-  /* チェックシートの「買い増し候補へ」から来たときの戻り道(ホーム画面のアプリには戻るボタンが無い) */
+  /* チェックシートの「候補を開く」から来たときの戻り道。どこまでスクロールしても押せるよう、タブバーの上に浮かせる */
   .back-to-check {
-    display: flex; align-items: center; gap: 8px; margin: 14px 0; padding: 12px 16px;
-    background: var(--accent-soft); color: var(--text); border-radius: var(--radius);
-    font-size: 13.5px; font-weight: 700; text-decoration: none;
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(72px + env(safe-area-inset-bottom, 0px)); z-index: 41;
+    width: min(560px, calc(100% - 32px)); display: flex; align-items: center;
+    background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   }
   .back-to-check[hidden] { display: none; }
-  .back-to-check::before { content: "‹"; font-size: 20px; line-height: 1; color: var(--accent); }
-  .back-to-check small { font-weight: 500; color: var(--text-2); margin-left: auto; }
+  .back-to-check a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 11px 4px 11px 16px;
+    color: var(--text); font-size: 13.5px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+  .back-to-check a::before { content: "‹"; font-size: 20px; line-height: 1; color: var(--accent); }
+  .back-to-check small { font-weight: 500; color: var(--text-2); margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .back-to-check button { background: none; border: 0; color: var(--text-2); font-size: 18px; padding: 8px 14px; cursor: pointer; }
   .sample-banner {
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
     background: var(--warn-soft); border-radius: var(--radius);
@@ -1218,7 +1222,7 @@
     </div>
     <div class="dateline" id="dateline"></div>
   </header>
-  <a class="back-to-check" id="backToCheck" href="../ir-check/#check" hidden></a>
+  <div class="back-to-check" id="backToCheckBox" hidden><a id="backToCheck" href="../ir-check/#check"></a><button type="button" id="backToCheckClose" aria-label="閉じる">×</button></div>
 
   <section class="onboard" id="onboard" hidden>
     <h2>まだ銘柄が登録されていません</h2>
@@ -4703,13 +4707,15 @@
     save();
     var back = document.getElementById("backToCheck");
     back.innerHTML = "チェックシートに戻る<small>" + escapeHtml(code + " " + String(info[0]).normalize("NFKC")) + " の採点</small>";
-    back.hidden = false;
+    document.getElementById("backToCheckBox").hidden = false;
     justAddedWatch = code;
     var label = code + " " + String(info[0]).normalize("NFKC");
     var tt = target > 0 && target <= 30 ? "目標利回りは" + target + "%です。" : "";
     showToast(isNew ? "チェックシートから " + label + " を買い増し候補に入れました。" + tt
                     : label + " はすでに候補にあります。チェックの結果を更新しました。" + tt);
   }
+
+  document.getElementById("backToCheckClose").addEventListener("click", function () { document.getElementById("backToCheckBox").hidden = true; });
 
   var WATCH_SHOW = 10, watchShowAll = false;
   var watchSortMode = (function () { try { var v = localStorage.getItem("haitoWatchSort"); return ["gap", "sector", "yield", "growth", "new", "code"].indexOf(v) === -1 ? "gap" : v; } catch (e) { return "gap"; } })();
