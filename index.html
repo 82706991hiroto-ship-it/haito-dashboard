@@ -4560,42 +4560,37 @@
     e.target.value = "";
     if (!files.length) return;
     var status = document.getElementById("csvImportStatus");
-    if (files.length === 1) {
-      // 1つのときは今までどおり(投信の詳細画面のCSVなども読める)
-      var f1 = files[0], r1 = new FileReader();
-      r1.onload = function () { applyParsedHoldings(decodeCsvBuffer(r1.result), status, csvStampOf(f1)); };
-      r1.onerror = function () { status.textContent = "ファイルの読み込みに失敗しました。"; };
-      r1.readAsArrayBuffer(f1);
-      return;
-    }
-    var all = [], skipped = 0, fx, failed = [], read = 0;
-    Promise.all(files.map(function (file) {
-      return new Promise(function (resolve) {
-        var reader = new FileReader();
-        reader.onload = function () {
-          var text = decodeCsvBuffer(reader.result);
-          var detail = parseRakutenFundDetail(text);
-          if (detail) { applyFundDetail(detail, status); read++; resolve(); return; }
-          var lines = String(text || "").split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
-          var quick = lines.length > 0 && lines.every(function (l) { return l.indexOf("\t") === -1 && /^([0-9][0-9A-Za-z]{2,4}|[A-Za-z][A-Za-z0-9.\-]{0,6})[ ,、]+[0-9]/.test(l); });
-          var parsed = quick ? parseQuickEntry(text) : parseHoldingsPaste(text, csvStampOf(file));
-          if (parsed.results.length) { all = all.concat(parsed.results); read++; } else failed.push(file.name);
-          skipped += num(parsed.skipped);
-          if (parsed.fx && !fx) fx = parsed.fx;
-          resolve();
-        };
-        reader.onerror = function () { failed.push(file.name); resolve(); };
-        reader.readAsArrayBuffer(file);
+    // 配当金のお知らせPDF・受取履歴のCSVをこちらで選んだときは、受け取った配当の記録として読む
+    var divFiles = [], divStatus = document.getElementById("divHistStatus");
+    var all = [], skipped = 0, fx, failed = [], read = 0, csvs = files.filter(function (f) { return !isPdfFile(f); });
+    files.filter(isPdfFile).forEach(function (f) { divFiles.push(f); });
+    Promise.all(csvs.map(function (file) {
+      return readFileText(file).then(function (text) {
+        if (text == null) { failed.push(file.name); return; }
+        var detail = parseRakutenFundDetail(text);
+        if (detail) { applyFundDetail(detail, status); read++; return; }
+        var lines = String(text || "").split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+        var quick = lines.length > 0 && lines.every(function (l) { return l.indexOf("\t") === -1 && /^([0-9][0-9A-Za-z]{2,4}|[A-Za-z][A-Za-z0-9.\-]{0,6})[ ,、]+[0-9]/.test(l); });
+        var parsed = quick ? parseQuickEntry(text) : parseHoldingsPaste(text, csvStampOf(file));
+        if (parsed.results.length) { all = all.concat(parsed.results); read++; }
+        else {
+          var dh = parseDividendHistory(text);
+          if (dh.headerFound && dh.rows.length) divFiles.push(file); else failed.push(file.name);
+        }
+        skipped += num(parsed.skipped);
+        if (parsed.fx && !fx) fx = parsed.fx;
       });
     })).then(function () {
+      var divNote = divFiles.length ? "配当金のお知らせPDF・受取履歴のCSV(" + divFiles.length + "件)は、受け取った配当の記録として読みました(「配当の受取履歴」の欄に結果)。" : "";
+      if (divFiles.length) importDividendFiles(divFiles, divStatus);
       if (!all.length) {
-        status.textContent = "読み込める行が見つかりませんでした" + (failed.length ? "(" + failed.join("、") + ")" : "") + "。対応形式か確認してください。";
+        status.textContent = divNote || ("読み込める行が見つかりませんでした" + (failed.length ? "(" + failed.join("、") + ")" : "") + "。対応形式か確認してください。");
         return;
       }
       var before = all.length;
       var rows = combineImportRows(all);
-      status.textContent = read + "つのファイルを読みました" + (before > rows.length ? "(同じ銘柄・口座の " + (before - rows.length) + "行は株数を足して1行に)" : "") +
-        (failed.length ? "。読めなかったファイル: " + failed.join("、") : "") + "。";
+      status.textContent = (read > 1 ? read + "つのファイルを読みました" : "読み込みました") + (before > rows.length ? "(同じ銘柄・口座の " + (before - rows.length) + "行は株数を足して1行に)" : "") +
+        (failed.length ? "。読めなかったファイル: " + failed.join("、") : "") + "。" + divNote;
       openImportConfirm({ results: rows, skipped: skipped, fx: fx }, status);
     });
   });
@@ -5694,9 +5689,9 @@
   }
   // 配当金のお知らせPDF(pdf-dividends.js)。受け取った記録として payouts に足す(権利確定月などの自動入力には使わない)
   function importDividendPdfs(files, status) {
-    if (!window.HaitoPdfDividends) { status.textContent = "PDFを読む部品を読み込めませんでした。"; return; }
+    if (!window.HaitoPdfDividends) { status.textContent = "PDFを読む部品を読み込めませんでした。"; return Promise.resolve(); }
     status.textContent = "PDFを読んでいます…(" + files.length + "件)";
-    window.HaitoPdfDividends.readAll(files).then(function (r) {
+    return window.HaitoPdfDividends.readAll(files).then(function (r) {
       var before = (state.payouts || []).length;
       mergePayouts(r.rows.map(function (x) {
         return { code: x.code, ym: x.ym, date: x.date, gross: x.gross, qty: x.qty, per: x.per || (x.qty > 0 ? round2(x.gross / x.qty) : null), nisa: false, fx: x.fx || undefined, src: "pdf" };
@@ -5710,18 +5705,33 @@
         (r.failed.length ? " 読めなかったファイル: " + r.failed.slice(0, 5).join("、") + (r.failed.length > 5 ? " ほか" + (r.failed.length - 5) + "件" : "") + "(配当金のお知らせ以外のPDFかもしれません)" : "");
     }, function () { status.textContent = "PDFを読めませんでした。通信が切れていないか確かめて、もう一度試してください。"; });
   }
+  function isPdfFile(f) { return /\.pdf$/i.test(f.name) || f.type === "application/pdf"; }
+  function readFileText(f) {
+    return new Promise(function (resolve) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(decodeCsvBuffer(reader.result)); };
+      reader.onerror = function () { resolve(null); };
+      reader.readAsArrayBuffer(f);
+    });
+  }
+  // 受取履歴のCSV(何社分でも)と配当金のお知らせPDFを、まとめて選んでも全部読む
+  function importDividendFiles(files, status) {
+    var pdfs = files.filter(isPdfFile), csvs = files.filter(function (f) { return !isPdfFile(f); });
+    var msgs = [];
+    var chain = pdfs.length ? importDividendPdfs(pdfs, status).then(function () { msgs.push(status.textContent); }) : Promise.resolve();
+    csvs.forEach(function (f) {
+      chain = chain.then(function () { return readFileText(f); }).then(function (text) {
+        var tmp = { textContent: "" };
+        if (text == null) tmp.textContent = "ファイルの読み込みに失敗しました。"; else applyDividendHistory(text, tmp);
+        msgs.push((csvs.length + pdfs.length > 1 ? f.name + ": " : "") + tmp.textContent);
+      });
+    });
+    return chain.then(function () { status.textContent = msgs.join(" / "); });
+  }
   document.getElementById("divHistCsvFile").addEventListener("change", function (e) {
     var all = Array.prototype.slice.call(e.target.files || []);
-    var pdfs = all.filter(function (f) { return /\.pdf$/i.test(f.name) || f.type === "application/pdf"; });
-    var status = document.getElementById("divHistStatus");
-    if (pdfs.length) { importDividendPdfs(pdfs, status); e.target.value = ""; return; }
-    var file = all[0];
-    if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function () { applyDividendHistory(decodeCsvBuffer(reader.result), status); };
-    reader.onerror = function () { status.textContent = "ファイルの読み込みに失敗しました。"; };
-    reader.readAsArrayBuffer(file);
     e.target.value = "";
+    if (all.length) importDividendFiles(all, document.getElementById("divHistStatus"));
   });
   document.getElementById("divHistPasteBtn").addEventListener("click", function () {
     var area = document.getElementById("divHistArea");
