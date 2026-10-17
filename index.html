@@ -4890,7 +4890,20 @@
       ir.href = "https://irbank.net/" + encodeURIComponent(v.w.code) + "/dividend";
       ir.target = "_blank"; ir.rel = "noopener noreferrer";
       ir.textContent = "配当の推移(IR BANK)";
-      act.appendChild(simBtn); act.appendChild(ir); act.appendChild(del);
+      // 株価アラートの入力欄にそのまま貼れるよう、目標の株価を数字だけでコピーする
+      var cpBtn = null;
+      if (v.targetPrice > 0) {
+        cpBtn = document.createElement("button");
+        cpBtn.type = "button"; cpBtn.className = "btn";
+        var tpNum = String(Math.floor(v.targetPrice));
+        cpBtn.textContent = "目標の株価 " + Number(tpNum).toLocaleString("ja-JP") + " をコピー";
+        cpBtn.addEventListener("click", function () {
+          function done() { showToast(tpNum + " をコピーしました。証券会社のアプリで " + v.w.code + " を開き、株価アラートに貼ってください。"); }
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(tpNum).then(done, function () { window.prompt("コピーしてください", tpNum); });
+          else window.prompt("コピーしてください", tpNum);
+        });
+      }
+      act.appendChild(simBtn); if (cpBtn) act.appendChild(cpBtn); act.appendChild(ir); act.appendChild(del);
       li.appendChild(act);
 
       if (open) {
