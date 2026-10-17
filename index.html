@@ -2771,6 +2771,7 @@
       delBtn.textContent = "削除";
       delBtn.title = "削除";
       delBtn.addEventListener("click", function () {
+        if (!confirm((h.name || h.code || "この銘柄") + "(" + (h.account || "特定") + ")を保有銘柄から消しますか?")) return;
         state.holdings = state.holdings.filter(function (x) { return x.id !== h.id; });
         save(); renderTable(); renderDashboard();
       });
@@ -4215,6 +4216,19 @@
     if (r.accChosen) return false;
     return r.market === "fund" && r.total ? !r.account : !!r.accountGuess;
   }
+  // 配当が無いと分かる銘柄か。分からないもの(データが無い米国株など)は false
+  function importNoDividend(r) {
+    if (r.market === "fund") {
+      if (!FUND_DIVS || r.total) return false;
+      var f = fundDivOf({ market: "fund", sector: FUND_SECTOR, name: r.name });
+      return !!f && !(f.v > 0);
+    }
+    if (r.market === "us") return r.usdDiv !== "" && r.usdDiv != null && num(r.usdDiv) === 0;
+    if (r.div !== "" && r.div != null) return num(r.div) === 0;
+    if (!CODE_INFO_MAP[r.code]) return false;
+    var d = dividendsFor(r.code);
+    return !d || !(d[0] > 0);
+  }
   function importQtyText(r) {
     if (r.market === "fund") return r.total ? "評価額 " + fmtYen(num(r.value)) : num(r.units).toLocaleString("ja-JP") + "口";
     return num(r.shares) > 0 ? num(r.shares).toLocaleString("ja-JP") + "株" : "株数なし";
@@ -4267,11 +4281,16 @@
     list.innerHTML = "";
     var nCheck = 0, nGuess = 0;
     st.rows.forEach(function (row) {
+      // 配当の無い銘柄(無配の株・分配しない投信)は、新しく入れるものだけ最初からチェックを外す。押せば取り込める
+      row.noDiv = !importTarget(row.r) && importNoDividend(row.r);
+      if (row.noDiv && !row.touched) row.on = false;
+    });
+    st.rows.forEach(function (row) {
       var r = row.r, ex = importTarget(r), div = importDivInfo(r, ex), guess = importAccGuessed(r);
       if (guess) nGuess++;
-      if (row.on && (guess || !div.ok)) nCheck++;
+      if (row.on && (guess || (!div.ok && !row.noDiv))) nCheck++;
       var li = document.createElement("li");
-      li.className = (row.on ? "" : "is-off") + (row.on && (guess || !div.ok) ? " needs-check" : "");
+      li.className = (row.on ? "" : "is-off") + (row.on && (guess || (!div.ok && !row.noDiv)) ? " needs-check" : "");
       var kind = r.market === "fund" ? "投信" : r.market === "us" ? "米国株" : "日本株";
       li.innerHTML = '<div class="imp-head"><input type="checkbox" aria-label="取り込む"' + (row.on ? " checked" : "") + '>' +
         '<span class="imp-kind">' + kind + '</span>' +
@@ -4280,7 +4299,8 @@
         '<div class="imp-body"><div class="imp-acc"><span>' + escapeHtml(importQtyText(r)) + '</span><span>口座</span></div>' +
         (r.accFromHeld && !r.accChosen ? '<div class="imp-ok">口座が書かれていなかったので、今持っている口座(' + escapeHtml(r.account) + ')に合わせました</div>' : "") +
         (guess ? '<div class="imp-warn">口座が書かれていなかったので「' + escapeHtml(importAccount(r)) + '」にしています。違っていれば選び直してください</div>' : "") +
-        '<div class="' + (div.ok ? "imp-ok" : "imp-warn") + '">' + escapeHtml(div.t) + '</div></div>';
+        (row.noDiv ? '<div class="imp-ok">配当の無い銘柄なので外しています(取り込むならチェックを入れてください)</div>'
+                   : '<div class="' + (div.ok ? "imp-ok" : "imp-warn") + '">' + escapeHtml(div.t) + '</div>') + '</div>';
       var sel = document.createElement("select");
       sel.setAttribute("aria-label", "口座");
       ACCOUNTS.forEach(function (a) { var o = document.createElement("option"); o.value = a; o.textContent = a; sel.appendChild(o); });
@@ -4290,7 +4310,7 @@
         renderImportConfirm();
       });
       li.querySelector(".imp-acc").appendChild(sel);
-      li.querySelector("input").addEventListener("change", function (e) { row.on = e.target.checked; renderImportConfirm(); });
+      li.querySelector("input").addEventListener("change", function (e) { row.on = e.target.checked; row.touched = true; renderImportConfirm(); });
       list.appendChild(li);
     });
     var on = st.rows.filter(function (x) { return x.on; }).length;
