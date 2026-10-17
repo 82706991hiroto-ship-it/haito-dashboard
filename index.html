@@ -2716,6 +2716,7 @@
   }
 
   function renderTable() {
+    if (!state.isSample) syncSamePrices();
     renderFxBar();
     renderStaleNote();
     renderForecastBox();
@@ -2858,7 +2859,10 @@
     var b = document.createElement("button");
     b.type = "button";
     b.setAttribute("aria-expanded", openGroups[gk] ? "true" : "false");
-    b.innerHTML = summaryHtml(mem[0], { divPre: sum.divPre }, { accounts: accts });
+    // まとめた行の利回りは口座を合わせた値: 取得は合計の配当 ÷ 合計の取得額(平均取得単価)、今の利回りは同じ株価
+    var acqSum = mem.reduce(function (a, h) { return a + num(h.shares) * num(h.cost); }, 0);
+    var gh = Object.assign({}, mem[0], sum.shares > 0 && acqSum > 0 ? { shares: sum.shares, cost: acqSum / sum.shares } : {});
+    b.innerHTML = summaryHtml(gh, { divPre: sum.divPre }, { accounts: accts });
     b.addEventListener("click", function () {
       var open = !openGroups[gk];
       if (open) openGroups[gk] = true; else delete openGroups[gk];
@@ -8641,6 +8645,27 @@
     }
   }
 
+  // 同じ銘柄を何口座かで持っているとき、株価は日付の新しいほうにそろえる
+  // (口座ごとに別のCSV・別の日に入れると、同じ株なのに今の利回りや評価額が口座で違ってしまうため)
+  function syncSamePrices() {
+    var by = {}, changed = false;
+    state.holdings.forEach(function (h) {
+      if (isUS(h) || !(num(h.price) > 0)) return;
+      var k = holdingGroupKey(h);
+      if (k.indexOf("id:") === 0) return;
+      var d = isoDay(h.priceDate || "");
+      if (!by[k] || d > by[k].d) by[k] = { d: d, p: num(h.price), pd: h.priceDate };
+    });
+    state.holdings.forEach(function (h) {
+      if (isUS(h)) return;
+      var b = by[holdingGroupKey(h)];
+      if (!b || (num(h.price) === b.p && isoDay(h.priceDate || "") === b.d)) return;
+      if (num(h.price) > 0 && isoDay(h.priceDate || "") >= b.d) return;
+      h.price = b.p; h.priceDate = b.pd; changed = true;
+    });
+    if (changed) save();
+  }
+
   function recordDivChange(h, from, to) {
     var a = round2(num(from)), b = round2(num(to));
     if (!(a > 0) || !(b > 0) || a === b) return false;
@@ -9768,6 +9793,7 @@
     if (!state.isSample) fillFromBuiltin();
     if (!state.isSample) revertRevokedSplits();
     if (!state.isSample) repairImportDivOverwrites();
+    syncSamePrices();
     if (!state.isSample) applyLocalSplits();
     if (!state.isSample) takeQuotesFromCheck();
     if (!state.isSample) applyHoldingSplits();
