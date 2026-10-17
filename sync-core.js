@@ -120,42 +120,92 @@
     });
   }
 
-  // 足していくだけの記録(受け取った配当・年ごとの記録・手で入れた年の受取額・保存した評価)は、
-  // どちらの端末の中身が勝っても消えないよう、負けた側にしか無いものを勝った側へ足す
+  // 2台が同時に変わっていたとき(衝突)に、負けた側にしか無いものを消さないための足し合わせ。
+  // id のある一覧(保有銘柄・買い増し候補・優待・配当の書き換え記録・保存した評価など)は、
+  // 前回の同期の時点にあった id を覚えておき(meta.ids)、
+  //   片方にしか無い & 前回は無かった → 新しく足されたもの → 残す
+  //   片方にしか無い & 前回はあった   → もう一方で消されたもの → 消す
+  // とする。両方にあるものは勝った側の中身を使う。
+  var LISTS = [
+    { name: "holdings", get: function (d) { return d.state && d.state.holdings; }, set: function (d, v) { d.state.holdings = v; }, key: function (x) { return x.id; } },
+    { name: "watch", get: function (d) { return d.state && d.state.watch; }, set: function (d, v) { d.state.watch = v; }, key: function (x) { return x.id; } },
+    { name: "perks", get: function (d) { return d.state && d.state.perks; }, set: function (d, v) { d.state.perks = v; }, key: function (x) { return x.id; } },
+    { name: "divLog", get: function (d) { return d.state && d.state.divLog; }, set: function (d, v) { d.state.divLog = v; }, key: function (x) { return x.id; } },
+    { name: "goalHistory", get: function (d) { return d.state && d.state.goalHistory; }, set: function (d, v) { d.state.goalHistory = v; }, key: function (x) { return x.at + "|" + x.yen; } },
+    { name: "annualLog", get: function (d) { return d.state && d.state.annualLog; }, set: function (d, v) { d.state.annualLog = v.sort(function (a, b) { return a.ym < b.ym ? -1 : 1; }); }, key: function (x) { return x.ym; } },
+    { name: "saved", get: function (d) { return d.irCheck && d.irCheck.saved; }, set: function (d, v) { d.irCheck = d.irCheck || {}; d.irCheck.saved = v; }, key: function (x) { return x.id || (x.code + "|" + x.date); } }
+  ];
+  // キーで引く表(年ごとの受取額・節目・株価・株式分割の登録・決算発表日)
+  var MAPS = [
+    { name: "paidByYear", get: function (d) { return d.state && d.state.paidByYear; }, set: function (d, v) { d.state.paidByYear = v; } },
+    { name: "milestones", get: function (d) { return d.state && d.state.milestones; }, set: function (d, v) { d.state.milestones = v; } },
+    { name: "earnings", get: function (d) { return d.state && d.state.earnings; }, set: function (d, v) { d.state.earnings = v; } },
+    { name: "irPrices", get: function (d) { return d.irPrices; }, set: function (d, v) { d.irPrices = v; },
+      // 両方にある株価は、入れた日付の新しいほう
+      pick: function (w, l) { return l && w && String(l.d || "") > String(w.d || "") ? l : w; } },
+    { name: "splits", get: function (d) { return d.splits; }, set: function (d, v) { d.splits = v; } }
+  ];
   function payoutKey(x) { return x.code + "|" + (x.date || x.ym) + "|" + Math.round(Number(x.gross) || 0); }
-  function unionBy(win, lose, key) {
-    if (!Array.isArray(lose) || !lose.length) return win;
-    var out = Array.isArray(win) ? win.slice() : [], seen = {};
-    out.forEach(function (x) { if (x) seen[key(x)] = true; });
-    lose.forEach(function (x) { if (x && !seen[key(x)]) { seen[key(x)] = true; out.push(x); } });
+  // 前回の同期の時点の中身にあった id とキーの一覧
+  function snapshotIds(plain) {
+    var d; try { d = JSON.parse(plain); } catch (e) { return null; }
+    var out = {};
+    LISTS.forEach(function (L) { var v = L.get(d); out[L.name] = Array.isArray(v) ? v.filter(Boolean).map(L.key) : []; });
+    MAPS.forEach(function (M) { var v = M.get(d); out[M.name] = v && typeof v === "object" ? Object.keys(v) : []; });
     return out;
   }
-  function mergeKeep(winPlain, losePlain) {
+  function mergeKeep(winPlain, losePlain, last) {
     var w, l;
     try { w = JSON.parse(winPlain); l = JSON.parse(losePlain); } catch (e) { return winPlain; }
-    var ws = w.state || (w.state = {}), ls = l.state || {};
+    if (!w.state) w.state = {};
+    function had(name, k) { return !!(last && last[name] && last[name].indexOf(k) !== -1); }
+    LISTS.forEach(function (L) {
+      var lv = L.get(l);
+      if (!Array.isArray(lv)) return;
+      // 前回の id が分からない(古い版で同期していた)ときは、足していくだけの記録だけ足し合わせる
+      if (!last && L.name !== "annualLog" && L.name !== "goalHistory") return;
+      var wv = L.get(w), inL = {}, seen = {};
+      lv.forEach(function (x) { if (x) inL[L.key(x)] = true; });
+      // 負けた側で消されたもの(前回はあって、負けた側に無い)は勝った側からも消す
+      var out = (Array.isArray(wv) ? wv : []).filter(function (x) { return x && (inL[L.key(x)] || !had(L.name, L.key(x))); });
+      out.forEach(function (x) { seen[L.key(x)] = true; });
+      // 負けた側で新しく足されたもの(前回は無かった)は残す
+      lv.forEach(function (x) {
+        if (!x) return;
+        var k = L.key(x);
+        if (seen[k] || had(L.name, k)) return;
+        seen[k] = true; out.push(x);
+      });
+      L.set(w, out);
+    });
+    MAPS.forEach(function (M) {
+      var lv = M.get(l);
+      if (!lv || typeof lv !== "object") return;
+      if (!last && M.name !== "paidByYear" && M.name !== "milestones") return;
+      var wv = M.get(w), out = {};
+      Object.keys(wv && typeof wv === "object" ? wv : {}).forEach(function (k) {
+        if (k in lv || !had(M.name, k)) out[k] = M.pick ? M.pick(wv[k], lv[k]) : wv[k];
+      });
+      Object.keys(lv).forEach(function (k) { if (!(k in out) && !had(M.name, k)) out[k] = lv[k]; });
+      M.set(w, out);
+    });
+    // 受け取った配当: 取り込みと同じ見分け方で足す(消す操作は無いので、いつも足し合わせる)。
+    // 日付の無い古い記録は、同じ銘柄・年月・金額の日付つきの記録があれば足さない。
+    // 受取履歴CSVから戻した額(est)は、同じ入金のお知らせPDFの記録(数量が同じで日付が3日以内)があれば足さない
+    var ws = w.state, ls = l.state || {};
     if (Array.isArray(ls.payouts) && ls.payouts.length) {
-      // 取り込みと同じ見分け方: 日付の無い古い記録は、同じ銘柄・年月・金額の日付つきの記録があれば足さない。
-      // 受取履歴CSVから戻した額(est)は、同じ入金のお知らせPDFの記録(数量が同じで日付が3日以内)があれば足さない
-      var mine = Array.isArray(ws.payouts) ? ws.payouts.slice() : [], seen = {}, ymSeen = {};
-      mine.forEach(function (x) { seen[payoutKey(x)] = true; ymSeen[x.code + "|" + x.ym + "|" + Math.round(Number(x.gross) || 0)] = true; });
+      var mine = Array.isArray(ws.payouts) ? ws.payouts.slice() : [], seenP = {}, ymSeen = {};
+      mine.forEach(function (x) { seenP[payoutKey(x)] = true; ymSeen[x.code + "|" + x.ym + "|" + Math.round(Number(x.gross) || 0)] = true; });
       ls.payouts.forEach(function (x) {
-        if (!x || !x.code || !x.ym || seen[payoutKey(x)]) return;
+        if (!x || !x.code || !x.ym || seenP[payoutKey(x)]) return;
         if (!x.date && ymSeen[x.code + "|" + x.ym + "|" + Math.round(Number(x.gross) || 0)]) return;
         if (x.est && x.date && mine.some(function (y) {
           return !y.est && y.date && y.code === x.code && (y.qty == null || x.qty == null || y.qty === x.qty) &&
             Math.abs(new Date(y.date) - new Date(x.date)) <= 3 * 86400000;
         })) return;
-        seen[payoutKey(x)] = true; mine.push(x);
+        seenP[payoutKey(x)] = true; mine.push(x);
       });
       ws.payouts = mine.sort(function (a, b) { return a.ym < b.ym ? -1 : a.ym > b.ym ? 1 : 0; });
-    }
-    var logs = unionBy(ws.annualLog, ls.annualLog, function (x) { return x.ym; });
-    if (logs) ws.annualLog = logs.sort(function (a, b) { return a.ym < b.ym ? -1 : 1; });
-    if (ls.paidByYear && typeof ls.paidByYear === "object") ws.paidByYear = Object.assign({}, ls.paidByYear, ws.paidByYear || {});
-    if (l.irCheck && Array.isArray(l.irCheck.saved)) {
-      if (!w.irCheck) w.irCheck = {};
-      w.irCheck.saved = unionBy(w.irCheck.saved, l.irCheck.saved, function (x) { return (x.code || "") + "|" + (x.date || "") + "|" + (x.name || ""); });
     }
     return JSON.stringify(w);
   }
@@ -174,12 +224,12 @@
     if (dirty && !m.editT) m.editT = m.t || 0; // いつ変わったか分からない差分は、前の同期の時点のものとみる
     return fetchVault(c).then(function (remote) {
       if (remote && remote.rev !== m.rev && (!dirty || remote.t >= m.editT)) {
-        var merged = dirty ? mergeKeep(remote.data, mine) : remote.data;
+        var merged = dirty ? mergeKeep(remote.data, mine, m.ids) : remote.data;
         applyPlain(merged);
         // この端末にしか無かった記録を足したときは、次の回にほかの端末へ送る
-        var extra = dirty && merged !== mergeKeep(remote.data, "{}");
-        setMeta(extra ? { rev: remote.rev, t: remote.t, hash: "", editT: remote.t + 1, at: Date.now() }
-                      : { rev: remote.rev, t: remote.t, hash: hash(payload()), at: Date.now() });
+        var extra = dirty && merged !== mergeKeep(remote.data, "{}", m.ids);
+        setMeta(extra ? { rev: remote.rev, t: remote.t, hash: "", editT: remote.t + 1, at: Date.now(), ids: snapshotIds(remote.data) }
+                      : { rev: remote.rev, t: remote.t, hash: hash(payload()), at: Date.now(), ids: snapshotIds(remote.data) });
         if (extra) again = Math.max(again, 1);
         if (dirty) hooks.toast("ほかの端末でより新しく編集された内容に合わせました");
         else if (manual) hooks.toast("ほかの端末の内容を取り込みました");
@@ -187,15 +237,15 @@
       }
       // 相手も変わっているのにこちらを送るときは、相手にしか無い記録を足してから送る
       if (remote && remote.rev !== m.rev && dirty) {
-        var mergedMine = mergeKeep(mine, remote.data);
+        var mergedMine = mergeKeep(mine, remote.data, m.ids);
         if (mergedMine !== mine) { applyPlain(mergedMine); mine = payload(); h = hash(mine); }
       }
-      if (!dirty && remote) { setMeta(Object.assign(meta(), { at: Date.now() })); if (manual) hooks.toast("最新の状態です"); return; }
+      if (!dirty && remote) { setMeta(Object.assign(meta(), { at: Date.now(), ids: meta().ids || snapshotIds(remote.data) })); if (manual) hooks.toast("最新の状態です"); return; }
       var t = Math.max(m.editT || Date.now(), remote ? remote.t + 1 : 0);
       return putVault(c, mine, t, remote ? remote.rev : null).then(function (rev) {
         if (!rev) { again = Math.max(again, manual ? 2 : 1); return; } // 書き込みが重なった→もう一度
         // 通信中に重ねて編集されていたら、その編集時刻(lh/editT)は残して次の回に送る
-        var m3 = meta(), next = { rev: rev, t: t, hash: h, at: Date.now() };
+        var m3 = meta(), next = { rev: rev, t: t, hash: h, at: Date.now(), ids: snapshotIds(mine) };
         if (m3.lh && m3.lh !== h) { next.lh = m3.lh; next.editT = m3.editT; }
         setMeta(next);
         if (manual) hooks.toast("ほかの端末へ送りました");
@@ -226,7 +276,7 @@
     return putVault(c, payload(), Date.now(), null).then(function (rev) {
       if (!rev) throw new Error("exists");
       set(CODE_KEY, c);
-      setMeta({ rev: rev, t: Date.now(), hash: hash(payload()), at: Date.now() });
+      setMeta({ rev: rev, t: Date.now(), hash: hash(payload()), at: Date.now(), ids: snapshotIds(payload()) });
       S.error = "";
       return c;
     });
@@ -236,7 +286,7 @@
   function adopt(c, remote) {
     set(CODE_KEY, norm(c));
     applyPlain(remote.data);
-    setMeta({ rev: remote.rev, t: remote.t, hash: hash(payload()), at: Date.now() });
+    setMeta({ rev: remote.rev, t: remote.t, hash: hash(payload()), at: Date.now(), ids: snapshotIds(remote.data) });
     S.error = "";
   }
   function off() { set(CODE_KEY, null); set(META_KEY, null); keyCache = null; S.error = ""; }
