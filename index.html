@@ -359,6 +359,9 @@
   .watch-detail { padding: 4px 0 14px; }
   .watch-copy { margin-top: 14px; }
   .watch-copy .hint { font-size: 11.5px; color: var(--text-2); margin: 8px 0 0; line-height: 1.6; }
+  .watch-copy-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sheet-steps { margin: 8px 0 0; padding-left: 1.3em; font-size: 12.5px; line-height: 1.75; }
+  .watch-copy .linkish { margin-top: 10px; background: none; border: 0; padding: 4px 0; font: inherit; font-size: 12px; color: var(--text-2); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
   .watch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-top: 10px; }
   .watch-cell { background: var(--field); border-radius: 10px; padding: 8px 10px; }
   .watch-cell .k { font-size: 11px; color: var(--text-2); }
@@ -1605,8 +1608,26 @@
     <ul class="watch-list" id="watchList"></ul>
     <button type="button" class="btn watch-more" id="watchMore" hidden></button>
     <div class="watch-copy" id="watchCopyBox" hidden>
-      <button type="button" class="btn" id="watchCopyBtn">目標の株価を一覧でコピー</button>
-      <p class="hint">証券会社のアプリ(SBI・楽天など)の「株価アラート」に目標の株価を入れておくと、下がったときに通知が来ます。届いたらここで株価を入れ直して、減配予想などを確かめてから買いましょう。</p>
+      <div class="watch-copy-btns">
+        <button type="button" class="btn primary" id="watchSheetBtn">スプレッドシート用にコピー</button>
+        <button type="button" class="btn" id="watchPriceBtn">表の株価を貼って更新</button>
+      </div>
+      <details class="paste-import watch-sheet-how">
+        <summary>株価の見張りと通知をGoogleスプレッドシートで自動にする(設定のしかた)</summary>
+        <div class="paste-import-body">
+          <p class="hint">自分のGoogleアカウントのスプレッドシートで、Googleの株価(GOOGLEFINANCE・数分遅れ)を使って候補を見張り、目標の株価以下になったら自分にメールが届きます。表も通知も自分のアカウントの中だけで動きます。</p>
+          <ol class="sheet-steps">
+            <li>Googleスプレッドシートで新しい表を作る(1枚目のシートを使います)。</li>
+            <li>上の「スプレッドシート用にコピー」を押し、表の<b>A1</b>を選んで貼り付ける。株価(B列)と判定(C列)が自動で入ります。</li>
+            <li>メニューの「拡張機能」→「Apps Script」を開き、中身を消して、下の「通知のスクリプトをコピー」で写したものを貼って保存する。</li>
+            <li>上の関数の選び欄で <b>setup</b> を選んで「実行」。Googleの許可の画面が出たら自分のアカウントで許可する(1回だけ)。</li>
+          </ol>
+          <p class="hint">これで1時間ごとに表を見て、届いた銘柄だけをメールで知らせます(同じ銘柄は、目標より3%以上戻ってからまた下がったときに再び知らせます)。候補や目標利回りを変えたら、もう一度コピーしてA1に貼り直すだけです。表のA列とB列(コードと株価)を選んでコピーし、「表の株価を貼って更新」に貼れば、HAITOの候補の株価もまとめて新しくなります。</p>
+          <button type="button" class="btn" id="watchScriptBtn">通知のスクリプトをコピー</button>
+          <p class="hint">GOOGLEFINANCEで株価が出ない銘柄(英字入りのコードなど)はB列が空になり、通知されません。</p>
+        </div>
+      </details>
+      <button type="button" class="linkish" id="watchCopyBtn">目標の株価を文章でコピー(証券アプリの株価アラート用)</button>
     </div>
   </section>
 
@@ -4791,7 +4812,7 @@
       more.hidden = !(hiddenN > 0 || (watchShowAll && items.length > WATCH_SHOW));
       more.textContent = hiddenN > 0 ? "残り" + hiddenN + "件を表示" : WATCH_SHOW + "件だけの表示にもどす";
     }
-    document.getElementById("watchCopyBox").hidden = !items.some(function (v) { return v.targetPrice > 0; });
+    document.getElementById("watchCopyBox").hidden = !items.length;
     if (items.length === 0) {
       var p = document.createElement("p");
       p.className = "watch-empty";
@@ -4931,6 +4952,67 @@
         return v.w.code + " " + v.name + " " + Math.floor(v.targetPrice).toLocaleString("ja-JP") + "円以下(目標利回り" + v.w.targetYield + "%・1株配当" + fmtPerShare(v.div) + ")";
       }).join("\n");
   }
+  function copyOut(text, msg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { showToast(msg); }, function () { window.prompt("コピーしてください", text); });
+    else window.prompt("コピーしてください", text);
+  }
+  // Googleスプレッドシートの A1 に貼る表(タブ区切り)。B列の株価は GOOGLEFINANCE で表の中で取る(このアプリは株価を取りに行かない)。
+  // A:B を写して「表の株価を貼って更新」に貼れば、候補の株価をまとめて入れ直せる
+  function watchSheetText() {
+    var rows = [["コード", "今の株価", "判定", "目標の株価", "銘柄", "目標利回り(%)", "1株配当", "今の利回り"].join("\t")];
+    (Array.isArray(state.watch) ? state.watch : []).map(watchView)
+      .sort(function (a, b) { return String(a.w.code) < String(b.w.code) ? -1 : 1; })
+      .forEach(function (v, i) {
+        var r = i + 2;
+        rows.push([
+          v.w.code,
+          '=IFERROR(GOOGLEFINANCE("TYO:"&A' + r + ',"price"),"")',
+          '=IF(OR(B' + r + '="",D' + r + '=""),"",IF(B' + r + '<=D' + r + ',"到達","あと"&TEXT(1-D' + r + '/B' + r + ',"0.0%")))',
+          v.targetPrice > 0 ? Math.floor(v.targetPrice) : "",
+          v.name,
+          v.w.targetYield != null ? v.w.targetYield : "",
+          v.div > 0 ? v.div : "",
+          '=IF(OR(B' + r + '="",G' + r + '=""),"",TEXT(G' + r + '/B' + r + ',"0.00%"))'
+        ].join("\t"));
+      });
+    return rows.join("\n");
+  }
+  var WATCH_SHEET_SCRIPT = [
+    "// HAITO 買い増し候補の見張り。1時間ごとに1枚目のシートを見て、目標の株価以下になった銘柄を自分にメールで知らせる",
+    "// 列: A コード / B 今の株価(GOOGLEFINANCE) / D 目標の株価 / E 銘柄",
+    "function checkHaito() {",
+    "  var rows = SpreadsheetApp.getActive().getSheets()[0].getDataRange().getValues();",
+    "  var props = PropertiesService.getScriptProperties();",
+    "  var hits = [];",
+    "  for (var i = 1; i < rows.length; i++) {",
+    "    var code = String(rows[i][0]).trim(), price = Number(rows[i][1]), target = Number(rows[i][3]);",
+    "    if (!code || !(price > 0) || !(target > 0)) continue;",
+    "    var key = code + '@' + target;",
+    "    if (price <= target) {",
+    "      if (!props.getProperty(key)) { hits.push(code + ' ' + rows[i][4] + '  株価 ' + price + '円(目標 ' + target + '円以下)'); props.setProperty(key, '1'); }",
+    "    } else if (price > target * 1.03) {",
+    "      props.deleteProperty(key);  // 目標より3%以上戻ったら、次に下がったときにまた知らせる",
+    "    }",
+    "  }",
+    "  if (hits.length) MailApp.sendEmail(Session.getEffectiveUser().getEmail(), '買い増し候補が目標の株価に届きました',",
+    "    hits.join('\\n') + '\\n\\n減配の予想などをHAITOで確かめてから買いましょう。');",
+    "}",
+    "// 最初に1回だけ実行する: 1時間ごとの見張りを登録する",
+    "function setup() {",
+    "  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });",
+    "  ScriptApp.newTrigger('checkHaito').timeBased().everyHours(1).create();",
+    "  checkHaito();",
+    "}"
+  ].join("\n");
+  document.getElementById("watchSheetBtn").addEventListener("click", function () {
+    var n = (state.watch || []).length;
+    if (!n) { showToast("候補がありません。"); return; }
+    copyOut(watchSheetText(), n + "銘柄の表をコピーしました。スプレッドシートのA1に貼り付けてください。");
+  });
+  document.getElementById("watchScriptBtn").addEventListener("click", function () {
+    copyOut(WATCH_SHEET_SCRIPT, "通知のスクリプトをコピーしました。Apps Script に貼って保存し、setup を実行してください。");
+  });
+  document.getElementById("watchPriceBtn").addEventListener("click", function () { openPriceUpdate(); });
   document.getElementById("watchCopyBtn").addEventListener("click", function () {
     var text = watchAlertText();
     if (!text) { showToast("目標の株価が出ている候補がありません。"); return; }
