@@ -1504,9 +1504,9 @@
         <textarea id="yahooPasteArea" rows="5" placeholder="ここに貼り付け(1行に1銘柄で「8306 100 1500」のように打つこともできます)"></textarea>
         <div class="toolbar">
           <button class="btn primary" id="yahooImportBtn">貼り付け内容を読み込む</button>
-          <button class="btn" id="csvImportBtn">CSVファイルを選ぶ</button>
+          <button class="btn" id="csvImportBtn">CSVファイルを選ぶ(複数可)</button>
           <button class="btn" id="csvTemplateBtn" type="button">自分の表用のCSVひな形</button>
-          <input type="file" id="csvImportFile" style="display:none">
+          <input type="file" id="csvImportFile" multiple style="display:none">
         </div>
         <p class="paste-status" id="yahooImportStatus"></p>
         <p class="paste-status" id="csvImportStatus"></p>
@@ -4511,27 +4511,93 @@
   document.getElementById("csvImportBtn").addEventListener("click", function () {
     document.getElementById("csvImportFile").click();
   });
-  document.getElementById("csvImportFile").addEventListener("change", function (e) {
-    var file = e.target.files[0];
-    if (!file) return;
-    var status = document.getElementById("csvImportStatus");
-    var reader = new FileReader();
-    var stamp = (function () {
-      var m = String(file.name || "").match(/(20\d{2})(\d{2})(\d{2})/);
-      if (m) return m[1] + "/" + m[2] + "/" + m[3];
-      if (file.lastModified) {
-        var d = new Date(file.lastModified);
-        return d.getFullYear() + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + ("0" + d.getDate()).slice(-2);
+  // 何社かの証券会社のCSV(SBIと楽天など)をまとめて選べる。1つの確認画面に並べて取り込む。
+  // 同じ銘柄・同じ口座区分が複数のファイルにあれば(2社の特定口座で同じ株など)、株数を足して平均取得単価にする
+  function csvStampOf(file) {
+    var m = String(file.name || "").match(/(20\d{2})(\d{2})(\d{2})/);
+    if (m) return m[1] + "/" + m[2] + "/" + m[3];
+    if (file.lastModified) {
+      var d = new Date(file.lastModified);
+      return d.getFullYear() + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + ("0" + d.getDate()).slice(-2);
+    }
+    return "";
+  }
+  function combineImportRows(list) {
+    var out = [], at = {};
+    function key(r) {
+      if (r.market === "fund") return "fund|" + (r.total ? "t|" : "u|") + fundNorm(r.name) + "|" + (r.account || "");
+      return (r.market || "jp") + "|" + r.code + "|" + (r.account || "");
+    }
+    function wavg(a, qa, b, qb) { return qa + qb > 0 && a !== "" && b !== "" ? Math.round((num(a) * qa + num(b) * qb) / (qa + qb) * 100) / 100 : (a !== "" ? a : b); }
+    list.forEach(function (r) {
+      var k = key(r), x = at[k];
+      if (!x) { at[k] = r; out.push(r); return; }
+      if (r.market === "fund" && r.total) {
+        x.value = num(x.value) + num(r.value);
+        x.cost = x.cost !== "" && r.cost !== "" ? num(x.cost) + num(r.cost) : "";
+      } else if (r.market === "fund") {
+        var ua = num(x.units), ub = num(r.units);
+        x.cost = wavg(x.cost, ua, r.cost, ub); x.units = ua + ub;
+      } else if (r.market === "us") {
+        var sa = num(x.shares), sb = num(r.shares);
+        x.usdCost = wavg(x.usdCost, sa, r.usdCost, sb); x.shares = sa + sb;
+      } else {
+        var na = num(x.shares), nb = num(r.shares);
+        x.cost = wavg(x.cost, na, r.cost, nb); x.shares = na + nb;
       }
-      return "";
-    })();
-    reader.onload = function () {
-      var text = decodeCsvBuffer(reader.result);
-      applyParsedHoldings(text, status, stamp);
-    };
-    reader.onerror = function () { status.textContent = "ファイルの読み込みに失敗しました。"; };
-    reader.readAsArrayBuffer(file);
+      // 株価は日付の新しいほう
+      if (r.priceDate && (!x.priceDate || r.priceDate > x.priceDate)) {
+        if (r.price !== undefined && r.price !== "") x.price = r.price;
+        if (r.usdPrice !== undefined && r.usdPrice !== "") x.usdPrice = r.usdPrice;
+        x.priceDate = r.priceDate;
+      }
+      x.mergedFiles = (x.mergedFiles || 1) + 1;
+    });
+    return out;
+  }
+  document.getElementById("csvImportFile").addEventListener("change", function (e) {
+    var files = Array.prototype.slice.call(e.target.files || []);
     e.target.value = "";
+    if (!files.length) return;
+    var status = document.getElementById("csvImportStatus");
+    if (files.length === 1) {
+      // 1つのときは今までどおり(投信の詳細画面のCSVなども読める)
+      var f1 = files[0], r1 = new FileReader();
+      r1.onload = function () { applyParsedHoldings(decodeCsvBuffer(r1.result), status, csvStampOf(f1)); };
+      r1.onerror = function () { status.textContent = "ファイルの読み込みに失敗しました。"; };
+      r1.readAsArrayBuffer(f1);
+      return;
+    }
+    var all = [], skipped = 0, fx, failed = [], read = 0;
+    Promise.all(files.map(function (file) {
+      return new Promise(function (resolve) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          var text = decodeCsvBuffer(reader.result);
+          var detail = parseRakutenFundDetail(text);
+          if (detail) { applyFundDetail(detail, status); read++; resolve(); return; }
+          var lines = String(text || "").split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+          var quick = lines.length > 0 && lines.every(function (l) { return l.indexOf("\t") === -1 && /^([0-9][0-9A-Za-z]{2,4}|[A-Za-z][A-Za-z0-9.\-]{0,6})[ ,、]+[0-9]/.test(l); });
+          var parsed = quick ? parseQuickEntry(text) : parseHoldingsPaste(text, csvStampOf(file));
+          if (parsed.results.length) { all = all.concat(parsed.results); read++; } else failed.push(file.name);
+          skipped += num(parsed.skipped);
+          if (parsed.fx && !fx) fx = parsed.fx;
+          resolve();
+        };
+        reader.onerror = function () { failed.push(file.name); resolve(); };
+        reader.readAsArrayBuffer(file);
+      });
+    })).then(function () {
+      if (!all.length) {
+        status.textContent = "読み込める行が見つかりませんでした" + (failed.length ? "(" + failed.join("、") + ")" : "") + "。対応形式か確認してください。";
+        return;
+      }
+      var before = all.length;
+      var rows = combineImportRows(all);
+      status.textContent = read + "つのファイルを読みました" + (before > rows.length ? "(同じ銘柄・口座の " + (before - rows.length) + "行は株数を足して1行に)" : "") +
+        (failed.length ? "。読めなかったファイル: " + failed.join("、") : "") + "。";
+      openImportConfirm({ results: rows, skipped: skipped, fx: fx }, status);
+    });
   });
 
   // ---------- 買い増し候補(監視銘柄と目標利回り) ----------
