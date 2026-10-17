@@ -1584,6 +1584,7 @@
     <label class="watch-sort">並べ替え
       <select id="watchSort" aria-label="買い増し候補の並べ替え">
         <option value="gap">目標利回りに近い順</option>
+        <option value="sector">持っている割合が少ない業種順</option>
         <option value="yield">今の利回りが高い順</option>
         <option value="growth">増配率(5年)が高い順</option>
         <option value="new">追加が新しい順</option>
@@ -4711,7 +4712,7 @@
   }
 
   var WATCH_SHOW = 10, watchShowAll = false;
-  var watchSortMode = (function () { try { var v = localStorage.getItem("haitoWatchSort"); return ["gap", "yield", "growth", "new", "code"].indexOf(v) === -1 ? "gap" : v; } catch (e) { return "gap"; } })();
+  var watchSortMode = (function () { try { var v = localStorage.getItem("haitoWatchSort"); return ["gap", "sector", "yield", "growth", "new", "code"].indexOf(v) === -1 ? "gap" : v; } catch (e) { return "gap"; } })();
   (function () {
     var sel = document.getElementById("watchSort");
     sel.value = watchSortMode;
@@ -4730,8 +4731,13 @@
     var list = document.getElementById("watchList");
     if (!list) return;
     var items = (Array.isArray(state.watch) ? state.watch : []).map(watchView);
+    // 業種ごとの、今の年間配当(国内株)に占める割合。持っていない業種は0%
+    var secAgg = aggregate("jp"), secPct = {};
+    secAgg.bySector.forEach(function (x) { secPct[x.label] = secAgg.totalDivPre > 0 ? x.value / secAgg.totalDivPre * 100 : 0; });
+    items.forEach(function (x) { x.secPct = x.sector ? (secPct[x.sector] || 0) : null; });
     // 値が無いものは、どの並べ方でも最後にする
     var sortKey = { gap: function (x) { return x.gapPct === null ? null : -x.gapPct; },
+      sector: function (x) { return x.secPct; },
       yield: function (x) { return x.yieldNow === null ? null : -x.yieldNow; },
       growth: function (x) { var g = cagr(ordinaryDivs(x.w.code), 5); return g === null ? null : -g; },
       new: function (x) { return x.w.addedAt ? -new Date(x.w.addedAt).getTime() : null; },
@@ -4739,10 +4745,14 @@
     items.sort(function (a, b) {
       var ka = sortKey(a), kb = sortKey(b);
       if (ka === null || kb === null) return (ka === null) - (kb === null);
+      if (ka === kb && watchSortMode === "sector") {  // 同じ業種どうしは目標利回りに近い順
+        var ga = a.gapPct === null ? -1e9 : a.gapPct, gb = b.gapPct === null ? -1e9 : b.gapPct;
+        return gb - ga;
+      }
       return ka < kb ? -1 : ka > kb ? 1 : 0;
     });
     var hintEl = document.getElementById("watchSortHint");
-    if (hintEl) hintEl.textContent = { gap: "目標利回りに近い順", yield: "今の利回りが高い順", growth: "増配率(5年)が高い順", new: "追加が新しい順", code: "コード順" }[watchSortMode];
+    if (hintEl) hintEl.textContent = { gap: "目標利回りに近い順", sector: "持っている割合が少ない業種順", yield: "今の利回りが高い順", growth: "増配率(5年)が高い順", new: "追加が新しい順", code: "コード順" }[watchSortMode];
     list.innerHTML = "";
     // 候補が増えても下の株主優待まで遠くならないよう、並べた順に10件だけ出す(追加した銘柄・試算中の銘柄は必ず出す)
     var more = document.getElementById("watchMore");
@@ -4780,7 +4790,7 @@
       var cut = !heldOf(v.w.code).length && forecastCut(v.w.code, v.fcast);
       var stk = dividendStreak(v.w.code);
       var gapTxt = v.gapPct === null ? (v.price > 0 ? "—" : "株価なし") : v.gapPct >= 0 ? "到達" : "−" + fmtPct(-v.gapPct);
-      row.innerHTML = '<span class="wr-name"><b>' + escapeHtml((cut ? "⚠ " : "") + v.w.code + " " + v.name) + '</b><small>' + escapeHtml(v.sector + (stk ? " ・ " + stk.text : "") + (v.heldShares > 0 ? " ・ 保有中" : "")) + '</small></span>' +
+      row.innerHTML = '<span class="wr-name"><b>' + escapeHtml((cut ? "⚠ " : "") + v.w.code + " " + v.name) + '</b><small>' + escapeHtml(v.sector + (watchSortMode === "sector" && v.secPct !== null ? " " + (v.secPct > 0 ? fmtPct(v.secPct) : "未保有") : "") + (stk ? " ・ " + stk.text : "") + (v.heldShares > 0 ? " ・ 保有中" : "")) + '</small></span>' +
         '<span class="wr-num">' + (v.yieldNow !== null ? fmtPct(v.yieldNow, 2) : "—") + '<small>目標 ' + (v.w.targetYield != null ? v.w.targetYield + "%" : "—") + '</small></span>' +
         '<span class="wr-num">' + (v.targetPrice ? fmtYen(v.targetPrice) : "—") + '<small>' + (v.price > 0 ? "今 " + fmtYen(v.price) : "") + '</small></span>' +
         '<span class="wr-gap' + (v.gapPct !== null && v.gapPct >= 0 ? " is-hit" : "") + '">' + gapTxt + '</span>';
