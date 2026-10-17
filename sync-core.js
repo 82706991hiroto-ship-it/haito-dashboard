@@ -18,6 +18,9 @@
 
   var hooks = { onApplied: function () {}, onStatus: function () {}, toast: function () {}, onExternal: function () {} };
   var timer = null, busy = false, again = 0, retry = null, keyCache = null, started = false;
+  // 開いてから最初の同期が終わるまでは、画面を描くついでの自動の保存(内蔵データの補完・記録の追記など)を
+  // 「いま編集した」と数えない。数えると、しばらく使っていなかった端末の古い中身が、ほかの端末の新しい中身を上書きしてしまう
+  var firstDone = false;
   var S = { error: "" };
 
   function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -117,6 +120,46 @@
     });
   }
 
+  // 足していくだけの記録(受け取った配当・年ごとの記録・手で入れた年の受取額・保存した評価)は、
+  // どちらの端末の中身が勝っても消えないよう、負けた側にしか無いものを勝った側へ足す
+  function payoutKey(x) { return x.code + "|" + (x.date || x.ym) + "|" + Math.round(Number(x.gross) || 0); }
+  function unionBy(win, lose, key) {
+    if (!Array.isArray(lose) || !lose.length) return win;
+    var out = Array.isArray(win) ? win.slice() : [], seen = {};
+    out.forEach(function (x) { if (x) seen[key(x)] = true; });
+    lose.forEach(function (x) { if (x && !seen[key(x)]) { seen[key(x)] = true; out.push(x); } });
+    return out;
+  }
+  function mergeKeep(winPlain, losePlain) {
+    var w, l;
+    try { w = JSON.parse(winPlain); l = JSON.parse(losePlain); } catch (e) { return winPlain; }
+    var ws = w.state || (w.state = {}), ls = l.state || {};
+    if (Array.isArray(ls.payouts) && ls.payouts.length) {
+      // 取り込みと同じ見分け方: 日付の無い古い記録は、同じ銘柄・年月・金額の日付つきの記録があれば足さない。
+      // 受取履歴CSVから戻した額(est)は、同じ入金のお知らせPDFの記録(数量が同じで日付が3日以内)があれば足さない
+      var mine = Array.isArray(ws.payouts) ? ws.payouts.slice() : [], seen = {}, ymSeen = {};
+      mine.forEach(function (x) { seen[payoutKey(x)] = true; ymSeen[x.code + "|" + x.ym + "|" + Math.round(Number(x.gross) || 0)] = true; });
+      ls.payouts.forEach(function (x) {
+        if (!x || !x.code || !x.ym || seen[payoutKey(x)]) return;
+        if (!x.date && ymSeen[x.code + "|" + x.ym + "|" + Math.round(Number(x.gross) || 0)]) return;
+        if (x.est && x.date && mine.some(function (y) {
+          return !y.est && y.date && y.code === x.code && (y.qty == null || x.qty == null || y.qty === x.qty) &&
+            Math.abs(new Date(y.date) - new Date(x.date)) <= 3 * 86400000;
+        })) return;
+        seen[payoutKey(x)] = true; mine.push(x);
+      });
+      ws.payouts = mine.sort(function (a, b) { return a.ym < b.ym ? -1 : a.ym > b.ym ? 1 : 0; });
+    }
+    var logs = unionBy(ws.annualLog, ls.annualLog, function (x) { return x.ym; });
+    if (logs) ws.annualLog = logs.sort(function (a, b) { return a.ym < b.ym ? -1 : 1; });
+    if (ls.paidByYear && typeof ls.paidByYear === "object") ws.paidByYear = Object.assign({}, ls.paidByYear, ws.paidByYear || {});
+    if (l.irCheck && Array.isArray(l.irCheck.saved)) {
+      if (!w.irCheck) w.irCheck = {};
+      w.irCheck.saved = unionBy(w.irCheck.saved, l.irCheck.saved, function (x) { return (x.code || "") + "|" + (x.date || "") + "|" + (x.name || ""); });
+    }
+    return JSON.stringify(w);
+  }
+
   // 1回の同期: 相手の方が新しく編集されていれば取り込み、こちらが新しければ送る
   function syncNow(manual) {
     if (!on()) return Promise.resolve();
@@ -128,14 +171,24 @@
     var c = code(), m = meta();
     var mine = payload(), h = hash(mine);
     var dirty = m.hash !== h;
-    if (dirty && !m.editT) m.editT = Date.now(); // 閉じている間にもう一方のアプリで変えた分など
+    if (dirty && !m.editT) m.editT = m.t || 0; // いつ変わったか分からない差分は、前の同期の時点のものとみる
     return fetchVault(c).then(function (remote) {
       if (remote && remote.rev !== m.rev && (!dirty || remote.t >= m.editT)) {
-        applyPlain(remote.data);
-        setMeta({ rev: remote.rev, t: remote.t, hash: hash(payload()), at: Date.now() });
+        var merged = dirty ? mergeKeep(remote.data, mine) : remote.data;
+        applyPlain(merged);
+        // この端末にしか無かった記録を足したときは、次の回にほかの端末へ送る
+        var extra = dirty && merged !== mergeKeep(remote.data, "{}");
+        setMeta(extra ? { rev: remote.rev, t: remote.t, hash: "", editT: remote.t + 1, at: Date.now() }
+                      : { rev: remote.rev, t: remote.t, hash: hash(payload()), at: Date.now() });
+        if (extra) again = Math.max(again, 1);
         if (dirty) hooks.toast("ほかの端末でより新しく編集された内容に合わせました");
         else if (manual) hooks.toast("ほかの端末の内容を取り込みました");
         return;
+      }
+      // 相手も変わっているのにこちらを送るときは、相手にしか無い記録を足してから送る
+      if (remote && remote.rev !== m.rev && dirty) {
+        var mergedMine = mergeKeep(mine, remote.data);
+        if (mergedMine !== mine) { applyPlain(mergedMine); mine = payload(); h = hash(mine); }
       }
       if (!dirty && remote) { setMeta(Object.assign(meta(), { at: Date.now() })); if (manual) hooks.toast("最新の状態です"); return; }
       var t = Math.max(m.editT || Date.now(), remote ? remote.t + 1 : 0);
@@ -151,14 +204,14 @@
       S.error = e && e.message === "decrypt" ? "同期コードが合いません" : "つながりません";
       if (S.error === "つながりません") retry = setTimeout(function () { syncNow(false); }, 20000);
     }).then(function () {
-      busy = false; hooks.onStatus();
+      busy = false; firstDone = true; hooks.onStatus();
       if (again) { var m2 = again === 2; again = 0; syncNow(m2); }
     });
   }
   // 中身が本当に変わったときだけ編集時刻を残す(描画のついでの保存は数えない)
   function noteEdit() {
     var m = meta(), h = hash(payload());
-    if (h !== m.hash && h !== m.lh) { m.lh = h; m.editT = Date.now(); setMeta(m); }
+    if (h !== m.hash && h !== m.lh) { m.lh = h; m.editT = firstDone ? Date.now() : (m.editT || m.t || 0); setMeta(m); }
   }
   function soon() {
     if (!on()) return;
