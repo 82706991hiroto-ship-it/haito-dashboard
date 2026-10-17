@@ -1171,6 +1171,52 @@
   .nowrap { white-space: nowrap; }
   .gain-up { color: var(--accent); font-weight: 700; } .gain-down { color: var(--crit); font-weight: 700; }
   #holdingsTable th small { font-weight: 400; font-size: 10px; color: var(--muted); }
+  #holdingsTable tr.dv-head, #holdingsTable td.dv { display: none; }
+  @media (min-width: 701px) {
+    /* パソコン: 1銘柄1行の読む表。押すとその行の中に入力欄が開く(スマホと同じ考え方) */
+    #holdingsTable, #holdingsTable thead, #holdingsTable tbody { display: block; }
+    #holdingsTable thead tr:not(.dv-head) { display: none; }
+    #holdingsTable tr.dv-head, #holdingsTable tbody tr {
+      display: grid; align-items: center; column-gap: 12px;
+      grid-template-columns: minmax(200px, 2.4fr) 76px 70px 86px 108px 112px 84px 92px 118px;
+    }
+    #holdingsTable tr.dv-head th { padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; }
+    #holdingsTable tr.dv-head th.num, #holdingsTable td.dv.num { text-align: right; }
+    #holdingsTable tbody tr { border-bottom: 1px solid var(--line); }
+    #holdingsTable tbody tr > td { display: none; }
+    #holdingsTable tbody tr > td.dv { display: block; padding: 10px 6px; border: 0; cursor: pointer; font-variant-numeric: tabular-nums; font-size: 13px; min-width: 0; }
+    #holdingsTable tbody tr:not(.open):hover > td.dv { background: var(--field); }
+    #holdingsTable tbody tr.open { background: var(--field); border-radius: 12px; border-bottom-color: transparent; margin: 4px 0; padding-bottom: 12px; }
+    #holdingsTable td.dv small { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #holdingsTable td.dv-name .dv-open { display: block; width: 100%; background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+    #holdingsTable td.dv-name b { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #holdingsTable td.dv-name .dv-member { font-weight: 500; color: var(--text-2); padding-left: 10px; }
+    #holdingsTable td.dv-yield b { font-size: 14px; }
+    #holdingsTable .acc-chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); white-space: nowrap; }
+    #holdingsTable .acc-chip.is-nisa { color: var(--accent); border-color: var(--accent); }
+    #holdingsTable td.dv-months { font-size: 12px; color: var(--text-2); }
+    #holdingsTable tr.is-excluded td.dv { opacity: .5; }
+    /* 開いた行: 上に銘柄名、その下に入力欄を3列、いちばん下にボタン。数字の欄は閉じたときの表で見る */
+    #holdingsTable tbody tr.open { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 16px; padding: 4px 8px 12px; }
+    #holdingsTable tbody tr.open > td.dv { display: none; }
+    #holdingsTable tbody tr.open > td.dv.dv-name { display: block; grid-column: 1 / -1; order: -1; }
+    #holdingsTable tbody tr.open > td.dv.dv-name .dv-open { position: relative; padding-right: 64px; }
+    #holdingsTable tbody tr.open > td.dv.dv-name .dv-open::after { content: "閉じる ✕"; position: absolute; right: 0; top: 2px; font-size: 12px; color: var(--text-2); }
+    #holdingsTable tbody tr.open > td[data-label]:not(.dv):not(.yield-cell):not(.c-div):not(.c-acq) {
+      display: flex; flex-direction: column; gap: 4px; padding: 6px 4px; border: 0; }
+    #holdingsTable tbody tr.open > td[data-label="配当動向"] { display: none !important; }
+    #holdingsTable tbody tr.open > td[data-label]::before { content: attr(data-label); font-size: 11px; color: var(--text-2); }
+    #holdingsTable tbody tr.open > td input, #holdingsTable tbody tr.open > td select { width: 100%; background: var(--card); }
+    #holdingsTable tbody tr.open > td.row-actions { display: flex !important; grid-column: 1 / -1; flex-direction: row; justify-content: flex-end; gap: 8px; padding: 10px 4px 0; border: 0; }
+    #holdingsTable tbody tr.open > td.row-actions::before { content: none; }
+    #holdingsTable tbody tr.open > td.row-actions button { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 7px 16px; font-size: 13px; }
+    /* 何社かの口座でまとめた銘柄の見出し・空の表示は横いっぱい */
+    #holdingsTable tbody tr.group-row > td.group-desk { display: block; grid-column: 1 / -1; padding: 12px 6px 4px; border: 0; }
+    #holdingsTable tbody tr.group-row { border-bottom: 0; }
+    #holdingsTable tbody tr.in-group.g-hidden { display: grid; }
+    #holdingsTable tbody tr:has(.empty-note) > td { display: block; grid-column: 1 / -1; }
+    body[data-tab="holdings"] .app { max-width: 1280px; }
+  }
   body:not([data-tab="home"]) header.top p, body:not([data-tab="home"]) header.top .dateline { display: none; }
   @media (max-width: 700px) {
     /* 保有銘柄: 1銘柄1行。押すと入力欄が開く */
@@ -1326,6 +1372,11 @@
             <th>株数</th><th>取得単価(円)</th><th>配当/株(税引前)</th>
             <th>前年配当/株</th><th>配当動向</th><th>権利確定月</th>
             <th>年間配当金<br><small>構成比</small></th><th>利回り<br><small>PER</small></th><th>評価額・損益<br><small>取得額</small></th><th></th>
+          </tr>
+          <tr class="dv-head">
+            <th>銘柄</th><th>口座</th><th class="num">株数</th><th class="num">取得単価</th>
+            <th class="num">年間配当<br><small>構成比</small></th><th class="num">利回り<br><small>取得・PER</small></th>
+            <th>配当動向</th><th>権利月</th><th class="num">評価額・損益<br><small>取得額</small></th>
           </tr>
         </thead>
         <tbody id="holdingsBody"></tbody>
@@ -2783,6 +2834,7 @@
         if (!openGroups[gk]) tr.classList.add("g-hidden");
       }
       tr.appendChild(makeSummaryCell(h, c, tr, !!gk));
+      deskCells(h, c, totalDiv, !!gk).forEach(function (td) { tr.appendChild(td); });
       tbody.appendChild(tr);
     }
   }
@@ -3460,6 +3512,57 @@
   }
   function escapeHtml(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
+  // ---------- パソコンの一覧: 入力欄の無い読む表。行を押すと、その行の中に入力欄(編集)が開く ----------
+  function deskCells(h, c, totalDiv, member) {
+    function td(cls, html) { var t = document.createElement("td"); t.className = "dv " + cls; t.innerHTML = html; return t; }
+    var fund = isFund(h), us = isUS(h);
+    var badge = us ? '<span class="us-badge">米</span>' : fund ? '<span class="us-badge fund-badge">投</span>' : "";
+    var name = member
+      ? '<b class="dv-member">└ ' + escapeHtml(h.account || "特定") + '</b>'
+      : '<b>' + badge + escapeHtml(String(h.name || (h.code ? "" : "銘柄を入力")).normalize("NFKC")) + '</b>' +
+        '<small>' + escapeHtml([h.code, fund ? "" : h.sector].filter(Boolean).join(" ・ ")) + '</small>' + riskBadge(holdingRisk(h));
+    var acc = h.account || "特定";
+    var qty = fund ? (h.fundTotal ? "—" : (h.units ? Number(h.units).toLocaleString("ja-JP") + "口" : "—")) : (num(h.shares) > 0 ? num(h.shares).toLocaleString("ja-JP") : "—");
+    var cost = num(h.cost) > 0 ? (us && num(h.usdCost) > 0 ? "$" + num(h.usdCost).toLocaleString("en-US") : fmtYen(num(h.cost))) : "—";
+    var yNow = currentYieldOf(h), yBook = bookYieldOf(h), per = perOf(h);
+    var yHtml = (yNow !== null ? '<b>' + yNow.toFixed(2) + '%</b>' : '<b class="muted">―</b>') +
+      '<small>取得 ' + (yBook !== null && yBook > 0 ? yBook.toFixed(2) + "%" : "―") + (per ? " ・ PER " + (per.deficit ? "―" : per.v.toFixed(1)) : "") + '</small>';
+    var g = growthOf(h);
+    var tHtml = '<span class="trend ' + trendClass(c.trend) + '">' + trendText(c.trend) + '</span>' +
+      (g !== null && g !== 0 ? '<small>' + (g > 0 ? "+" : "−") + Math.abs(g).toFixed(1) + '%</small>' : "");
+    var months = (h.months || []).length ? h.months.map(function (m) { return m + "月"; }).join("・") : "—";
+    return [
+      td("dv-name", '<button type="button" class="dv-open" aria-expanded="' + (openRows[h.id] ? "true" : "false") + '">' + name + '</button>'),
+      td("dv-acc", '<span class="acc-chip' + (isTaxFree(acc) ? " is-nisa" : "") + '">' + escapeHtml(acc.replace("新NISA", "NISA")) + '</span>'),
+      td("num", qty),
+      td("num", cost),
+      td("num dv-div", divCellHtml(h, c, totalDiv)),
+      td("num dv-yield", yHtml),
+      td("dv-trend", tHtml),
+      td("dv-months", months),
+      td("num dv-acq", acqCellHtml(h, c))
+    ];
+  }
+  // 読む表の部分を押すと開閉。入力欄・ボタンを押したときは閉じない
+  document.getElementById("holdingsBody").addEventListener("click", function (e) {
+    var cell = e.target.closest("td.dv");
+    if (!cell || e.target.closest("a")) return;
+    var tr = cell.parentNode, id = tr.dataset.id;
+    if (!id) return;
+    var open = !tr.classList.contains("open");
+    tr.classList.toggle("open", open);
+    if (open) openRows[id] = true; else { delete openRows[id]; refreshDeskCells(id); }
+    var b = tr.querySelector(".dv-open"); if (b) b.setAttribute("aria-expanded", String(open));
+  });
+  function refreshDeskCells(id) {
+    var h = state.holdings.find(function (x) { return x.id === id; });
+    var tr = document.querySelector('#holdingsBody tr[data-id="' + id + '"]');
+    if (!h || !tr) return;
+    var old = tr.querySelectorAll("td.dv");
+    var cells = deskCells(h, computeRow(h), totalDivPreOf(), tr.classList.contains("in-group"));
+    Array.prototype.forEach.call(old, function (o, i) { if (cells[i]) tr.replaceChild(cells[i], o); });
+  }
+
   function updateRowComputedCells(id) {
     var h = state.holdings.find(function (x) { return x.id === id; });
     if (!h) return;
@@ -3480,6 +3583,7 @@
     if (cAcq) cAcq.innerHTML = acqCellHtml(h, c);
     var sumBtn = tr.querySelector(".sum button");
     if (sumBtn) sumBtn.innerHTML = summaryHtml(h, c);
+    refreshDeskCells(id);
   }
 
   document.getElementById("addRowBtn").addEventListener("click", function () {
