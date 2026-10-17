@@ -126,9 +126,23 @@
   //   片方にしか無い & 前回は無かった → 新しく足されたもの → 残す
   //   片方にしか無い & 前回はあった   → もう一方で消されたもの → 消す
   // とする。両方にあるものは勝った側の中身を使う。
+  // 同じ銘柄が両方にあるときも、株価・予想配当は入れた日付の新しいほうを使う(古い端末で株価を更新した場合など)
+  function day(v) { return String(v || "").replace(/-/g, "/").slice(0, 10); }
+  function newerQuote(w, l) {
+    if (!w || !l) return w;
+    var out = w;
+    if (l.price > 0 && day(l.priceDate) > day(w.priceDate)) { out = Object.assign({}, out, { price: l.price, priceDate: l.priceDate }); }
+    if (day(l.fdivDate) > day(w.fdivDate) && (l.div > 0 || l.fdiv > 0)) {
+      out = Object.assign({}, out, { fdivDate: l.fdivDate, feps: l.feps });
+      if (l.div > 0 && "div" in l) out.div = l.div;
+      if (l.fdiv > 0) out.fdiv = l.fdiv;
+    }
+    if (day(l.quoteDate) > day(w.quoteDate)) out = Object.assign({}, out, { quoteDate: l.quoteDate });
+    return out;
+  }
   var LISTS = [
-    { name: "holdings", get: function (d) { return d.state && d.state.holdings; }, set: function (d, v) { d.state.holdings = v; }, key: function (x) { return x.id; } },
-    { name: "watch", get: function (d) { return d.state && d.state.watch; }, set: function (d, v) { d.state.watch = v; }, key: function (x) { return x.id; } },
+    { name: "holdings", get: function (d) { return d.state && d.state.holdings; }, set: function (d, v) { d.state.holdings = v; }, key: function (x) { return x.id; }, pick: newerQuote },
+    { name: "watch", get: function (d) { return d.state && d.state.watch; }, set: function (d, v) { d.state.watch = v; }, key: function (x) { return x.id; }, pick: newerQuote },
     { name: "perks", get: function (d) { return d.state && d.state.perks; }, set: function (d, v) { d.state.perks = v; }, key: function (x) { return x.id; } },
     { name: "divLog", get: function (d) { return d.state && d.state.divLog; }, set: function (d, v) { d.state.divLog = v; }, key: function (x) { return x.id; } },
     { name: "goalHistory", get: function (d) { return d.state && d.state.goalHistory; }, set: function (d, v) { d.state.goalHistory = v; }, key: function (x) { return x.at + "|" + x.yen; } },
@@ -163,11 +177,20 @@
       var lv = L.get(l);
       if (!Array.isArray(lv)) return;
       // 前回の id が分からない(古い版で同期していた)ときは、足していくだけの記録だけ足し合わせる
-      if (!last && L.name !== "annualLog" && L.name !== "goalHistory") return;
+      if (!last && L.name !== "annualLog" && L.name !== "goalHistory") {
+        // そのときも、両方にある銘柄の株価は新しいほうにする
+        if (L.pick && Array.isArray(L.get(w))) {
+          var byK = {};
+          lv.forEach(function (x) { if (x) byK[L.key(x)] = x; });
+          L.set(w, L.get(w).map(function (x) { return x ? L.pick(x, byK[L.key(x)]) : x; }));
+        }
+        return;
+      }
       var wv = L.get(w), inL = {}, seen = {};
-      lv.forEach(function (x) { if (x) inL[L.key(x)] = true; });
+      lv.forEach(function (x) { if (x) inL[L.key(x)] = x; });
       // 負けた側で消されたもの(前回はあって、負けた側に無い)は勝った側からも消す
       var out = (Array.isArray(wv) ? wv : []).filter(function (x) { return x && (inL[L.key(x)] || !had(L.name, L.key(x))); });
+      if (L.pick) out = out.map(function (x) { return L.pick(x, inL[L.key(x)]); });
       out.forEach(function (x) { seen[L.key(x)] = true; });
       // 負けた側で新しく足されたもの(前回は無かった)は残す
       lv.forEach(function (x) {
@@ -216,7 +239,8 @@
     // 通信中に編集や「今すぐ同期」が重なったら、終わってからもう一度回す
     if (busy) { again = Math.max(again, manual ? 2 : 1); return Promise.resolve(); }
     clearTimeout(retry);
-    if (!navigator.onLine) { S.error = "オフライン"; hooks.onStatus(); return Promise.resolve(); }
+    // オフラインで開いたときも、ここから先の変更は利用者の編集として数える(起動時の自動の保存はもう済んでいる)
+    if (!navigator.onLine) { firstDone = true; S.error = "オフライン"; hooks.onStatus(); return Promise.resolve(); }
     busy = true;
     var c = code(), m = meta();
     var mine = payload(), h = hash(mine);
