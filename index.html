@@ -1911,7 +1911,15 @@
   // 年間配当/株が内蔵の直近実績と同じなら、その1期前と比べる(直近の決算の増減)。
   // 違う値(決算で書き換えた今期予想など)なら、直近実績と比べる(今期の増減)。
   function prevDivOf(h) {
-    if (h.prevDiv !== "" && h.prevDiv != null) return { v: num(h.prevDiv), auto: false };
+    if (h.prevDiv !== "" && h.prevDiv != null) {
+      // 入れてある前年配当が、記念・特別配当を含む年の実績と同じなら、普通配当で比べる(CDSの記念配当など)
+      var pc = String(h.code || "").trim().toUpperCase(), pv0 = num(h.prevDiv);
+      var act = dividendsFor(pc), ord = ordinaryDivs(pc);
+      if (act && ord) for (var i = 0; i < Math.min(act.length, ord.length, 4); i++) {
+        if (Math.abs(act[i] - pv0) < 0.011 && ord[i] < act[i] - 0.011) return { v: ord[i], auto: false, special: round2(act[i] - ord[i]) };
+      }
+      return { v: pv0, auto: false };
+    }
     var d = num(h.div);
     var code = String(h.code || "").trim().toUpperCase();
     var series = ordinaryDivs(code), actual = dividendsFor(code);
@@ -5770,6 +5778,35 @@
 
   function round2(n) { return Math.round(n * 100) / 100; }
 
+  // 受取履歴から足し上げた1株配当は、税引後の受取額から税引前を戻した概算のことがあり、端数がずれる(62円が61.8円など)。
+  // 内蔵データ(有価証券報告書)の直近3期の実績のどれかと3%以内なら、その実績の値にそろえる
+  function snapToOfficial(code, v) {
+    var d = dividendsFor(String(code || "").trim().toUpperCase());
+    if (!d || !(num(v) > 0)) return v;
+    var best = null;
+    d.slice(0, 3).forEach(function (x) { if (x > 0 && Math.abs(v / x - 1) <= 0.03 && (best === null || Math.abs(v - x) < Math.abs(v - best))) best = x; });
+    return best !== null ? best : v;
+  }
+  // 開いたときに、前に取り込んで端数がずれたままの前年配当・1株配当を直す。
+  // 前年配当は実績なので実績にそろえる。1株配当は会社予想を取り込んだもの(fdivDate)・手で直したもの(divCheckedAt)はそのまま
+  function snapHistoryDivs() {
+    var fixed = [];
+    (state.holdings || []).forEach(function (h) {
+      if (isUS(h) || isFund(h)) return;
+      var code = String(h.code || "").trim().toUpperCase(), did = false;
+      if (h.prevDiv !== "" && h.prevDiv != null && num(h.prevDiv) > 0) {
+        var p2 = snapToOfficial(code, round2(num(h.prevDiv)));
+        if (p2 !== round2(num(h.prevDiv))) { h.prevDiv = p2; did = true; }
+      }
+      if (!h.fdivDate && !h.divCheckedAt && num(h.div) > 0) {
+        var d2 = snapToOfficial(code, round2(num(h.div)));
+        if (d2 !== round2(num(h.div))) { h.div = d2; did = true; }
+      }
+      if (did) fixed.push(String(h.name || code).normalize("NFKC"));
+    });
+    if (fixed.length) save();
+  }
+
   function applyDividendHistory(text, statusEl) {
     var parsed = parseDividendHistory(text);
     if (!parsed.headerFound) {
@@ -5800,12 +5837,12 @@
         if (a.splitInside) return;
         // 今期の配当は予想を手で入れていることがあるので、空欄のときだけ補う。
         if (a.complete.length >= 1 && (h.div === "" || h.div == null)) {
-          h.div = round2(a.years[a.complete[0]].sum);
+          h.div = snapToOfficial(code, round2(a.years[a.complete[0]].sum));
           divSet++;
         }
         // 前年配当は確定した実績なので上書きする。
         if (a.complete.length >= 2) {
-          h.prevDiv = round2(a.years[a.complete[1]].sum);
+          h.prevDiv = snapToOfficial(code, round2(a.years[a.complete[1]].sum));
           prevSet++;
         }
       });
@@ -9942,6 +9979,7 @@
     if (!state.isSample) takeQuotesFromCheck();
     if (!state.isSample) applyHoldingSplits();
     if (!state.isSample) fixPreSplitDivs();
+    if (!state.isSample) snapHistoryDivs();
     renderSplitList();
     bindGoalInputs();
     renderTable();
