@@ -7420,8 +7420,9 @@
     var body = document.getElementById("actualBody");
     if (!panel || !body) return;
 
-    // 外国株の入金(お知らせPDFから)は、今の保有の予想と比べる「答え合わせ」には入れない(受取履歴CSVと同じく国内株だけ)
-    var payouts = (Array.isArray(state.payouts) ? state.payouts : []).filter(function (r) { return !r.fx; });
+    // 比べる「今の保有での年間予想」は米国株・投資信託も含むので、受け取った額も外国株・投信を含めて数える
+    // (配当の推移の「これまで」と同じ数え方)
+    var payouts = Array.isArray(state.payouts) ? state.payouts : [];
     panel.hidden = payouts.length === 0;
     if (payouts.length === 0) { body.innerHTML = ""; return; }
 
@@ -7459,6 +7460,9 @@
       forecast > 0 ? (diff >= 0 ? "+" : "−") + fmtPct(Math.abs(diffPct)) : "", "is-gap");
     body.appendChild(lead);
 
+    // 年ごとの棒は配当の推移と同じ: 年間取引報告書などから手で入れた年はその額(CSV・PDFの無い口座の分を含む)
+    var manual = state.isSample ? {} : state.paidByYear || {}, thisYear = now.getFullYear();
+    Object.keys(manual).forEach(function (y) { if (num(manual[y]) > 0 && Number(y) < thisYear) byYear[Number(y)] = num(manual[y]); });
     var years = Object.keys(byYear).map(Number).sort(function (a, b) { return a - b; });
     if (years.length > 0) {
       var maxVal = Math.max.apply(null, years.map(function (y) { return byYear[y]; }));
@@ -7478,7 +7482,7 @@
         slot.appendChild(bar);
         var lab = document.createElement("div");
         lab.className = "cal-month";
-        lab.textContent = y + "年";
+        lab.textContent = y + "年" + (y === thisYear ? "(途中)" : num(manual[y]) > 0 ? "(手入力)" : "");
         col.appendChild(val); col.appendChild(slot); col.appendChild(lab);
         chart.appendChild(col);
       });
@@ -7488,7 +7492,8 @@
     var note = document.createElement("p");
     note.className = "actual-note";
     note.textContent = "入金日をもとにした暦年の集計です。期の途中で買った銘柄は満額を受け取っていないため、"
-      + "実績は予想を下回るのがふつうです。外国株と投資信託は含みません。"
+      + "実績は予想を下回るのがふつうです。外国株・投資信託も含みます。今年の棒は今日までに受け取った分です"
+      + "(配当の推移の今年の棒は、今の保有での1年分の予想)。"
       + (years.length > 0 && years[0] === years[years.length - 1] ? " 1年分しかないため、推移はまだ比べられません。" : "");
     body.appendChild(note);
   }
