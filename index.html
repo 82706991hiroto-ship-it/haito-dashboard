@@ -1442,6 +1442,9 @@
         <a id="detailYahoo" target="_blank" rel="noopener noreferrer" class="btn">株価・予想を見る ↗</a>
         <button type="button" class="btn" id="detailPaste">📋 貼り付け</button>
       </div>
+      <label class="field" id="detailDivField">1株配当(年間・税引前・円)
+        <input type="number" id="detailDiv" min="0" step="any" inputmode="decimal" placeholder="今期の会社予想">
+      </label>
       <p class="hint quote-status" id="detailQuoteStatus"></p>
       <p class="hint" id="detailYield"></p>
       <div class="perk-box" id="detailPerkBox">
@@ -3348,6 +3351,21 @@
       }
       priceOnInput();
     };
+    // 1株配当(今期の会社予想)。同じ銘柄のほかの口座の行にも入れ、変えたら増配・減配の記録を残す
+    var divIn = document.getElementById("detailDiv");
+    document.getElementById("detailDivField").hidden = isUS(h);
+    divIn.value = h.div == null ? "" : h.div;
+    var divBefore = h.div;
+    divIn.oninput = function () {
+      h.div = divIn.value;
+      if (h.divSrc) { delete h.divSrc; delete h.divNote; }
+      shareStockFields(h, ["div"]);
+      save(); paintYield(); renderTable(); renderDashboard();
+    };
+    divIn.onchange = function () {
+      if (recordDivChange(h, divBefore, h.div)) { shareStockFields(h, ["divCheckedAt"]); save(); renderDashboard(); renderReviewList(); }
+      divBefore = h.div;
+    };
     bind(perk, "perk", true);
     bind(payout, "payout", true);
     bind(memo, "memo", false);
@@ -3370,6 +3388,7 @@
       applyQuoteTo(h, q, todayStamp());
       storeQuote(qCode, q);
       price.value = h.price == null ? "" : h.price;
+      divIn.value = h.div == null ? "" : h.div;
       var parts = [];
       if (q.price > 0) parts.push("株価 " + q.price.toLocaleString("ja-JP") + "円");
       if (q.fdiv > 0) parts.push("予想配当 " + q.fdiv + "円(配当/株に入れました)");
