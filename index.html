@@ -9726,6 +9726,39 @@
   }
 
 
+  // 分割の前の1株配当が残っている保有を直す(開くたびに確かめる。直したら何もしない)。
+  // applyHoldingSplits は分割1回につき1度だけ見るので、そのあとで入った値(前年配当に移した分割前の今期の配当など)や、
+  // 前期と比べる値の取り違えで直しそこねたものが残る(東京海上 1株→15株で、前年配当が分割前のまま −90% と出ていた)。
+  // 内蔵データ(分割後に割り戻し済み)の直近2期のどちらかの、比率倍の近く(0.6〜1.6倍)にある値だけを分割前とみて割る
+  function fixPreSplitDivs() {
+    var today = todayIso(), twoYears = new Date(Date.now() - 730 * 86400000).toISOString().slice(0, 10), fixed = [];
+    (state.holdings || []).forEach(function (h) {
+      if (isUS(h) || isFund(h)) return;
+      var code = String(h.code || "").trim().toUpperCase();
+      var divs = dividendsFor(code);
+      if (!divs || !(divs[0] > 0)) return;
+      var refs = [divs[0], divs[1]].filter(function (v) { return v > 0; });
+      var n = (SPLIT_MAP[code] || []).filter(function (sp) { return sp[0] <= today && sp[0] >= twoYears && Number(sp[1]) >= 2; })
+        .reduce(function (m, sp) { return m * Number(sp[1]); }, 1);
+      if (!(n >= 2)) return;
+      function pre(v) {
+        v = num(v);
+        if (!(v > 0)) return false;
+        var post = refs.some(function (r) { return v / r > 0.5 && v / r < 2; });
+        return !post && refs.some(function (r) { var k = v / (r * n); return k > 0.6 && k < 1.6; });
+      }
+      var did = false;
+      if (pre(h.div)) { h.div = round2(num(h.div) / n); did = true; }
+      if (h.prevDiv !== "" && h.prevDiv != null && pre(h.prevDiv)) { h.prevDiv = round2(num(h.prevDiv) / n); did = true; }
+      if (did) fixed.push(String(h.name || code).normalize("NFKC"));
+    });
+    if (fixed.length) {
+      save();
+      var u = fixed.filter(function (x, i) { return fixed.indexOf(x) === i; });
+      setTimeout(function () { showToast("株式分割の前の1株配当が残っていたので、分割後の値に直しました: " + u.join("、")); }, 900);
+    }
+  }
+
   // ---------- ホーム画面に追加 ----------
   // iPhoneのSafariは7日間開かないサイトのデータを消すことがあるが、ホーム画面から開くアプリは対象外。
   // ただしiPhoneでは、ホーム画面のアプリとSafariは保存場所が別なので、控え(JSON)で移してもらう。
@@ -9903,6 +9936,7 @@
     if (!state.isSample) applyLocalSplits();
     if (!state.isSample) takeQuotesFromCheck();
     if (!state.isSample) applyHoldingSplits();
+    if (!state.isSample) fixPreSplitDivs();
     renderSplitList();
     bindGoalInputs();
     renderTable();
