@@ -353,6 +353,8 @@
   .wr-name b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wr-name small, .wr-num small { display: block; font-size: 10.5px; color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wr-num { text-align: right; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .wr-name small.wr-growth { color: var(--text-2); white-space: normal; }
+  .wr-name small.wr-growth span { white-space: nowrap; margin-right: 6px; }
   .wr-gap { text-align: right; font-size: 12.5px; font-weight: 700; color: var(--text-2); font-variant-numeric: tabular-nums; }
   .wr-gap.is-hit { color: var(--accent); }
   .watch-item.is-open > .watch-row { background: var(--field); border-radius: 10px; }
@@ -5045,8 +5047,12 @@
       row.setAttribute("aria-expanded", String(isOpen));
       var cut = !heldOf(v.w.code).length && forecastCut(v.w.code, v.fcast);
       var stk = dividendStreak(v.w.code);
+      var ods = ordinaryDivs(v.w.code), g5 = cagr(ods, 5), gN = g5 !== null ? 5 : 3, gv = g5 !== null ? g5 : cagr(ods, 3);
+      var growthNote = gv !== null ? "増配率" + (gv >= 0 ? "+" : "−") + Math.abs(gv * 100).toFixed(1) + "%" : "";
+      var streakNote = stk ? (stk.up > 0 ? stk.up + "期連続増配" : stk.kind === "down" ? "直近で減配" : stk.kind === "flat" ? "据え置き" : "") : "";
       var gapTxt = v.gapPct === null ? (v.price > 0 ? "—" : "株価なし") : v.gapPct >= 0 ? "到達" : "−" + fmtPct(-v.gapPct);
-      row.innerHTML = '<span class="wr-name"><b>' + escapeHtml((cut ? "⚠ " : "") + v.w.code + " " + v.name) + '</b><small>' + escapeHtml(v.sector + (watchSortMode === "sector" && v.secPct !== null ? " " + (v.secPct > 0 ? fmtPct(v.secPct) : "未保有") : "") + (stk ? " ・ " + stk.text : "") + (v.heldShares > 0 ? " ・ 保有中" : "")) + '</small></span>' +
+      row.innerHTML = '<span class="wr-name"><b>' + escapeHtml((cut ? "⚠ " : "") + v.w.code + " " + v.name) + '</b><small>' + escapeHtml(v.sector + (watchSortMode === "sector" && v.secPct !== null ? " " + (v.secPct > 0 ? fmtPct(v.secPct) : "未保有") : "") + (v.heldShares > 0 ? " ・ 保有中" : "")) + '</small>' +
+        (streakNote || growthNote ? '<small class="wr-growth" title="増配率は直近' + gN + '年の1株配当の伸び(年あたり)">' + [streakNote, growthNote].filter(Boolean).map(function (t) { return '<span>' + escapeHtml(t) + '</span>'; }).join(" ") + '</small>' : "") + '</span>' +
         '<span class="wr-num">' + (v.yieldNow !== null ? fmtPct(v.yieldNow, 2) : "—") + '<small>目標 ' + (v.w.targetYield != null ? v.w.targetYield + "%" : "—") + '</small></span>' +
         '<span class="wr-num">' + (v.targetPrice ? fmtYen(v.targetPrice) : "—") + '<small>' + (v.price > 0 ? "今 " + fmtYen(v.price) : "") + '</small></span>' +
         '<span class="wr-gap' + (v.gapPct !== null && v.gapPct >= 0 ? " is-hit" : "") + '">' + gapTxt + '</span>';
