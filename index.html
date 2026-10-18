@@ -617,13 +617,6 @@
   .legend .lpct { color: var(--text-2); text-align: right; font-variant-numeric: tabular-nums; }
 
   /* ---- 配当の答え合わせ ---- */
-  .actual-lead { display: flex; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 18px; }
-  .actual-card { background: var(--field); border-radius: var(--radius); padding: 13px 16px; flex: 1 1 165px; }
-  .actual-card .lbl { font-size: 11.5px; color: var(--text-2); }
-  .actual-card .val { font-size: 20px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .actual-card .sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
-  .actual-card.is-gap .val { color: var(--accent); }
-  .actual-note { font-size: 12px; color: var(--muted); line-height: 1.85; margin: 14px 0 0; }
 
   /* ---- 配当金カレンダー ---- */
   .calendar-lead { display: flex; flex-wrap: wrap; gap: 8px 10px; font-size: 12.5px; color: var(--text-2); margin-bottom: 16px; }
@@ -999,7 +992,7 @@
   .watch-more { display: block; width: 100%; margin-top: 10px; }
   .sibling .ico, .onboard-list .ico { border-radius: 50%; }
   .onboard { border-bottom: 1px solid var(--line); padding: 24px 0; }
-  .onboard-list li, .badge, .change-summary .stat, .actual-card, .missing-box, .backup-status, .watch-cell, .watch-sim,
+  .onboard-list li, .badge, .change-summary .stat, .missing-box, .backup-status, .watch-cell, .watch-sim,
   .perk-summary .stat, .buy-preview, .ledger, .calendar-lead span { border-radius: var(--radius); }
   button.btn { font-weight: 700; border-color: var(--line); }
   button.btn.primary:hover { opacity: 1; filter: brightness(1.08); }
@@ -7452,58 +7445,6 @@
   // ---------- 配当の答え合わせ ----------
   // 予想を配るだけのツールにはできない見方。実際に振り込まれた額と、
   // 今の保有から計算した年間予想を並べて、ずれを数字で見せる。
-  function renderActual(agg) {
-    var panel = document.getElementById("actualPanel");
-    var body = document.getElementById("actualBody");
-    if (!panel || !body) return;
-
-    // 比べる「今の保有での年間予想」は米国株・投資信託も含むので、受け取った額も外国株・投信を含めて数える
-    // (配当の推移の「これまで」と同じ数え方)
-    var payouts = Array.isArray(state.payouts) ? state.payouts : [];
-    panel.hidden = payouts.length === 0;
-    if (payouts.length === 0) { body.innerHTML = ""; return; }
-
-    var now = new Date();
-    var cutoff = new Date(now.getFullYear() - 1, now.getMonth(), 1);
-    var cutoffYm = cutoff.getFullYear() + "/" + ("0" + (cutoff.getMonth() + 1)).slice(-2);
-
-    var byYear = {}, last12 = 0, last12Codes = {};
-    payouts.forEach(function (r) {
-      var y = parseInt(r.ym.slice(0, 4), 10);
-      byYear[y] = (byYear[y] || 0) + r.gross;
-      if (r.ym > cutoffYm) { last12 += r.gross; last12Codes[r.code] = true; }
-    });
-
-    var forecast = agg.totalDivPre;
-    var diff = last12 - forecast;
-    var diffPct = forecast > 0 ? (diff / forecast) * 100 : 0;
-
-    body.innerHTML = "";
-
-    var lead = document.createElement("div");
-    lead.className = "actual-lead";
-    function card(label, value, sub, cls) {
-      var d = document.createElement("div");
-      d.className = "actual-card" + (cls ? " " + cls : "");
-      var l = document.createElement("div"); l.className = "lbl"; l.textContent = label;
-      var v = document.createElement("div"); v.className = "val"; v.textContent = value;
-      d.appendChild(l); d.appendChild(v);
-      if (sub) { var sb = document.createElement("div"); sb.className = "sub"; sb.textContent = sub; d.appendChild(sb); }
-      lead.appendChild(d);
-    }
-    card("直近1年で実際に受け取った額", fmtYen(last12), "税引前・" + Object.keys(last12Codes).length + "銘柄");
-    card("今の保有での年間予想", fmtYen(forecast), "税引前");
-    card("差", (diff >= 0 ? "+" : "−") + fmtYen(Math.abs(diff)),
-      forecast > 0 ? (diff >= 0 ? "+" : "−") + fmtPct(Math.abs(diffPct)) : "", "is-gap");
-    body.appendChild(lead);
-
-    var note = document.createElement("p");
-    note.className = "actual-note";
-    note.textContent = "直近12か月に受け取った額(税引前・外国株と投資信託を含む)と、今の保有での1年分の予想の比較です。"
-      + "期の途中で買った銘柄は満額を受け取っていないため、実績は予想を下回るのがふつうです。年ごとの受取額はホームの「配当の推移」の「これまで」で見られます。";
-    body.appendChild(note);
-  }
-
   function renderComposition(agg) {
     paintHeatPresets();
     // 米国株だけを見るときは業種が1つ(米国株・ETF)にまとまるので、業種別は銘柄別で描く
@@ -9039,10 +8980,6 @@
       '  <div class="heat-scale" id="heatScale"></div>' +
       '  <p class="heat-note" id="heatNote"></p>' +
       '</div>' +
-      '<div class="panel" id="actualPanel" data-view="analysis" hidden>' +
-      '  <h2><span class="chap">†</span>配当の答え合わせ <span class="hint">直近1年に受け取った額と今の予想の差</span></h2>' +
-      '  <div id="actualBody"></div>' +
-      '</div>' +
       '<div class="panel" data-view="analysis">' +
       '  <h2><span class="chap">五</span>増配・減配の状況 <span class="hint">※は前年配当が空欄のため内蔵データ(有価証券報告書)で比べた銘柄</span></h2>' +
       '  <div id="divLedger" class="ledger"></div>' +
@@ -9178,7 +9115,6 @@
     if (!hasUS) currentMarket = "all";
     var magg = currentMarket === "all" ? agg : aggregate(currentMarket);
     renderComposition(magg);
-    renderActual(agg);
     renderCalendar(agg);
     renderChangeSummary(magg);
     renderYields(magg);
