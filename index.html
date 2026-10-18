@@ -8796,8 +8796,9 @@
     Object.keys(byStock).forEach(function (k) {
       var h = first[k];
       var list = byStock[k].sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
-      var from = list[0].from, to = list[list.length - 1].to;
-      if (from === to) return;
+      // 「後」は記録の最後の値ではなく今の1株配当(貼り付けなど記録の残らない入れ方で直した分も反映する)
+      var from = list[0].from, to = !isUS(h) && num(h.div) > 0 ? round2(num(h.div)) : list[list.length - 1].to;
+      if (round2(from) === round2(to)) return;
       var shares = [h].concat(siblingsOf(h)).filter(function (x) { return !x.excluded; }).reduce(function (a, x) { return a + num(x.shares); }, 0);
       items.push({ h: h, from: from, to: to, date: list[list.length - 1].date, entries: list,
                    diff: (to - from) * shares });
@@ -9403,7 +9404,11 @@
   function applyQuoteTo(h, q, stamp) {
     noteSplitHint(h, q, stamp);
     if (q.price > 0) { h.price = q.price; h.priceDate = stamp; }
-    if (q.fdiv > 0) { h.div = q.fdiv; h.fdivDate = stamp; h.feps = q.feps != null && !isNaN(q.feps) ? q.feps : undefined; }
+    if (q.fdiv > 0) {
+      // 前の値も会社予想(取り込んだもの)なら、予想の修正として増配・減配を記録する
+      if (h.fdivDate) recordDivChange(h, h.div, q.fdiv);
+      h.div = q.fdiv; h.fdivDate = stamp; h.feps = q.feps != null && !isNaN(q.feps) ? q.feps : undefined;
+    }
     h.quoteDate = isoDay(stamp);
   }
   // チェックシートで新しく取り込んだ株価・予想配当を、同じコードの保有銘柄に反映する(取り込み1回につき1度だけ)
