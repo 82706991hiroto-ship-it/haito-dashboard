@@ -2661,14 +2661,14 @@
         }).join("") + '<div class="se-sub">発表のあとに予想配当を取り込み直すと、増配・減配が反映されます。</div></div></li>');
     }
     var since = isoOf(new Date(Date.now() - 60 * 86400000));
-    var log = (Array.isArray(state.divLog) ? state.divLog : []).filter(function (e) { return e.date >= since && num(e.from) > 0 && num(e.to) > 0 && num(e.from) !== num(e.to); });
-    if (log.length) {
-      log = log.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    // 同じ銘柄を何口座かで持っていても1件(最初の値→最後の値)にまとめる
+    var dls = divLogSummary(since, isoOf(new Date())).items;
+    if (dls.length) {
       parts.push('<li><span class="se-ico">📈</span><div><b>最近の配当の変化(60日)</b><div class="se-sub">' +
-        log.slice(0, 6).map(function (e) {
-          var up = num(e.to) > num(e.from);
-          return '<span class="' + (up ? "se-up" : "se-down") + '">' + escapeHtml(shortStockName(e.name || e.code)) + " " + (up ? "増配" : "減配") + " " +
-            fmtPerShare(num(e.from)) + "→" + fmtPerShare(num(e.to)) + '</span>';
+        dls.slice(0, 6).map(function (i) {
+          var up = num(i.to) > num(i.from);
+          return '<span class="' + (up ? "se-up" : "se-down") + '">' + escapeHtml(shortStockName(i.h.name || i.h.code)) + " " + (up ? "増配" : "減配") + " " +
+            fmtPerShare(num(i.from)) + "→" + fmtPerShare(num(i.to)) + '</span>';
         }).join("、") + '</div></div></li>');
     }
     var hi = [], seen = {};
@@ -8637,8 +8637,11 @@
   // 記録の「後」が内蔵の直近実績と同じで、今もその値のままの銘柄は、上書き前の値に戻して記録を消す。
   // 1年以内に株式分割のある銘柄は、前の値が分割前の可能性があるので戻さずに知らせる
   function repairImportDivOverwrites() {
-    if (state.divRepair1) return;
-    state.divRepair1 = todayIso();
+    // divRepair2: 株式分割のある銘柄も、取り込みで付いた「減配」の記録だけは消す(値は利用者に確かめてもらう)
+    if (state.divRepair2) return;
+    var again = !!state.divRepair1;
+    state.divRepair1 = state.divRepair1 || todayIso();
+    state.divRepair2 = todayIso();
     var log = Array.isArray(state.divLog) ? state.divLog : [], fixed = [], check = [];
     var yearAgo = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
     log.slice().forEach(function (e) {
@@ -8648,16 +8651,18 @@
       if (!actual || !(e.from > e.to) || round2(num(h.div)) !== round2(e.to) || round2(actual[0]) !== round2(e.to)) return;
       var nm = String(h.name || h.code).normalize("NFKC");
       var sp = (SPLIT_MAP[String(h.code).toUpperCase()] || []).some(function (x) { return x[0] >= yearAgo; });
-      if (sp) { check.push(nm); return; }
+      if (sp) { state.divLog.splice(state.divLog.indexOf(e), 1); check.push(nm); return; }
       h.div = e.from;
       state.divLog.splice(state.divLog.indexOf(e), 1);
       fixed.push(nm + " " + e.from + "円");
     });
     save();
+    function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
+    fixed = uniq(fixed); check = uniq(check);
     if (fixed.length || check.length) {
       setTimeout(function () {
         showToast((fixed.length ? "取り込みで上書きされていた予想配当を戻しました: " + fixed.join("、") + "。" : "") +
-          (check.length ? check.join("、") + " は株式分割があったため戻していません。予想配当を確かめてください。" : ""));
+          (check.length ? check.join("、") + " は株式分割があったため値は戻していません(取り込みで付いた「減配」の記録は消しました)。今の会社予想を確かめて入れ直してください。" : ""));
       }, 800);
     }
   }
