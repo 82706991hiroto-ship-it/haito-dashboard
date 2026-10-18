@@ -7497,41 +7497,10 @@
       forecast > 0 ? (diff >= 0 ? "+" : "−") + fmtPct(Math.abs(diffPct)) : "", "is-gap");
     body.appendChild(lead);
 
-    // 年ごとの棒は配当の推移と同じ: 年間取引報告書などから手で入れた年はその額(CSV・PDFの無い口座の分を含む)
-    var manual = state.isSample ? {} : state.paidByYear || {}, thisYear = now.getFullYear();
-    Object.keys(manual).forEach(function (y) { if (num(manual[y]) > 0 && Number(y) < thisYear) byYear[Number(y)] = num(manual[y]); });
-    var years = Object.keys(byYear).map(Number).sort(function (a, b) { return a - b; });
-    if (years.length > 0) {
-      var maxVal = Math.max.apply(null, years.map(function (y) { return byYear[y]; }));
-      var chart = document.createElement("div");
-      chart.className = "calendar-chart";
-      years.forEach(function (y) {
-        var col = document.createElement("div");
-        col.className = "cal-col";
-        var val = document.createElement("div");
-        val.className = "cal-value";
-        val.textContent = fmtYen(byYear[y]);
-        var slot = document.createElement("div");
-        slot.className = "cal-bar-slot";
-        var bar = document.createElement("div");
-        bar.className = "cal-bar";
-        bar.style.height = Math.max(2, (byYear[y] / maxVal) * 100) + "%";
-        slot.appendChild(bar);
-        var lab = document.createElement("div");
-        lab.className = "cal-month";
-        lab.textContent = y + "年" + (y === thisYear ? "(途中)" : num(manual[y]) > 0 ? "(手入力)" : "");
-        col.appendChild(val); col.appendChild(slot); col.appendChild(lab);
-        chart.appendChild(col);
-      });
-      body.appendChild(chart);
-    }
-
     var note = document.createElement("p");
     note.className = "actual-note";
-    note.textContent = "入金日をもとにした暦年の集計です。期の途中で買った銘柄は満額を受け取っていないため、"
-      + "実績は予想を下回るのがふつうです。外国株・投資信託も含みます。今年の棒は今日までに受け取った分です"
-      + "(配当の推移の今年の棒は、今の保有での1年分の予想)。"
-      + (years.length > 0 && years[0] === years[years.length - 1] ? " 1年分しかないため、推移はまだ比べられません。" : "");
+    note.textContent = "直近12か月に受け取った額(税引前・外国株と投資信託を含む)と、今の保有での1年分の予想の比較です。"
+      + "期の途中で買った銘柄は満額を受け取っていないため、実績は予想を下回るのがふつうです。年ごとの受取額はホームの「配当の推移」の「これまで」で見られます。";
     body.appendChild(note);
   }
 
@@ -9071,7 +9040,7 @@
       '  <p class="heat-note" id="heatNote"></p>' +
       '</div>' +
       '<div class="panel" id="actualPanel" data-view="analysis" hidden>' +
-      '  <h2><span class="chap">†</span>配当の答え合わせ <span class="hint">証券会社の受取履歴を読み込むと出ます</span></h2>' +
+      '  <h2><span class="chap">†</span>配当の答え合わせ <span class="hint">直近1年に受け取った額と今の予想の差</span></h2>' +
       '  <div id="actualBody"></div>' +
       '</div>' +
       '<div class="panel" data-view="analysis">' +
