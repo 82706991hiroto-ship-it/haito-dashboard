@@ -19,6 +19,9 @@ import fetch_history as fh  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.path.join(ROOT, "data", "irregular-periods.json")
+# 期間は12か月でも配当が一部だけの期(持株会社を作った年に中間配当を前の会社が払った、など)。書類一覧では見つからないので手で書く。
+# div があれば、その期は外さずに年間の額(有報の注記にある前の会社の分を足したもの)に置き換えて比べる
+MANUAL = os.path.join(ROOT, "data", "irregular-manual.json")
 STATE = os.path.join(ROOT, "tools", "edinet", "state.json")
 # 12か月(365日)からこれだけ外れたら変則の期とみる(うるう年・週末締めの会社のずれは吸収する)
 SHORT_DAYS, LONG_DAYS = 340, 390
@@ -94,7 +97,7 @@ def merge(data, rows):
             n = span_days(s, e)
             if n < SHORT_DAYS or n > LONG_DAYS:
                 irr[e] = {"start": s, "end": e, "days": n, "months": round(n / 30.44, 1)}
-            else:
+            elif not (irr.get(e) or {}).get("manual"):
                 irr.pop(e, None)
         if irr:
             data[code] = {"periods": ends, "irregular": sorted(irr.values(), key=lambda x: x["end"], reverse=True)}
@@ -103,12 +106,27 @@ def merge(data, rows):
     return data
 
 
+def apply_manual(data):
+    """手で書いた期(irregular-manual.json)を足す。書類一覧の点検で消されないよう manual の印を付ける"""
+    man = json.load(open(MANUAL, encoding="utf-8")) if os.path.exists(MANUAL) else {}
+    for code, rows in man.items():
+        e = data.setdefault(code, {"periods": [], "irregular": []})
+        irr = {x["end"]: x for x in e["irregular"]}
+        for r in rows:
+            irr[r["end"]] = dict(irr.get(r["end"]) or {"end": r["end"], "months": 12}, manual=True, note=r.get("note", ""))
+            if r.get("div") is not None:
+                irr[r["end"]]["div"] = r["div"]
+        e["periods"] = sorted(set(e["periods"]) | set(irr), reverse=True)
+        e["irregular"] = sorted(irr.values(), key=lambda x: x["end"], reverse=True)
+    return data
+
+
 def month_index(d):
     return int(d[:4]) * 12 + int(d[5:7])
 
 
 def irreg_map(data, state, info):
-    """変則の期が、内蔵の1株配当(新しい順)の何番目かを出す。
+    """変則の期が、内蔵の1株配当(新しい順)の何番目かを出す(年間の額がわかる期は [何番目, 額])。
     書類一覧で見えた期はその並びで数え、それより新しい期(一覧のあとに内蔵データへ入った期)は12か月ずつ数える。"""
     out = {}
     for code, e in data.items():
@@ -124,15 +142,15 @@ def irreg_map(data, state, info):
             if x["end"] > fy or x["end"] not in ends:
                 continue
             i = newer + ends.index(x["end"])
-            if 0 <= i < len(v[3]):
-                idx.append(i)
+            if 0 <= i < len(v[3]) and i not in [y[0] if isinstance(y, list) else y for y in idx]:
+                idx.append([i, x["div"]] if x.get("div") is not None else i)
         if idx:
-            out[code] = sorted(set(idx))
+            out[code] = sorted(idx, key=lambda y: y[0] if isinstance(y, list) else y)
     return out
 
 
 def write_irreg_map(html, info, state):
-    data = json.load(open(OUT, encoding="utf-8")) if os.path.exists(OUT) else {}
+    data = apply_manual(json.load(open(OUT, encoding="utf-8")) if os.path.exists(OUT) else {})
     body = json.dumps(dict(sorted(irreg_map(data, state, info).items())), ensure_ascii=False, separators=(",", ":"))
     return re.sub(r"var IRREG_MAP = \{.*?\};\n", lambda _: "var IRREG_MAP = %s;\n" % body, html, count=1)
 
@@ -149,7 +167,7 @@ def main():
     if a.days == 0 and len(missing) > 20:
         sys.exit("書類一覧が取れなかった日が多すぎるので、書き込まずに終わります(あとでもう一度動かしてください)")
     data = json.load(open(OUT, encoding="utf-8")) if os.path.exists(OUT) else {}
-    data = merge(data, rows)
+    data = apply_manual(merge(data, rows))
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(dict(sorted(data.items())), f, ensure_ascii=False, indent=1)
         f.write("\n")
