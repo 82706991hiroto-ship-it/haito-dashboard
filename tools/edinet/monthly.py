@@ -126,6 +126,14 @@ def parse(text):
         if len(r) >= 9 and r[0] in ("jpcrp_cor:PayoutRatioSummaryOfBusinessResults",
                                     "jpcrp_cor:InterimDividendPaidPerShareSummaryOfBusinessResults"):
             extra[(r[0].split(":")[1], r[2])] = r[8]
+        # 連結の1株利益(IFRS・米国基準を含む)。配当性向は有報では提出会社(個別)の値しか無く、
+        # 持株会社だと200%などに見えるので、連結の1株利益があればそちらで割る
+        if len(r) >= 9 and r[2] == "CurrentYearDuration" and re.match(
+                r"jpcrp_cor:BasicEarningsLossPerShare(IFRS|USGAAP)?SummaryOfBusinessResults$", r[0]):
+            try:
+                base.setdefault("eps_cons", float(r[8].replace(",", "")))
+            except ValueError:
+                pass
 
     def cur(el):
         for ctx in ("CurrentYearDuration_NonConsolidatedMember", "CurrentYearDuration"):
@@ -465,7 +473,10 @@ def main():
                 while len(v) < 5:
                     v.append(None)
                 v[3] = merged[:MAX_PERIODS]
-                if parsed.get("payout") is not None:
+                eps = parsed.get("eps_cons")
+                if eps and eps > 0 and v[3] and v[3][0]:
+                    v[4] = round(v[3][0] / eps, 3)
+                elif parsed.get("payout") is not None:
                     v[4] = round(parsed["payout"], 3)
                 elif v[4] is None:
                     v[4] = 0
