@@ -486,6 +486,9 @@ def main():
         html = write_perks(html, perk_info, perk_texts)
     html = write_split_map(html)
     html = write_special_map(html, info, state)
+    # 決算期間が12か月でない期(data/irregular-periods.json)の位置も、新しい期に合わせて書き直す
+    from period_scan import write_irreg_map
+    html = write_irreg_map(html, info, state)
     open(a.html, "w", encoding="utf-8").write(html)
     with open(STATE, "w") as f:
         json.dump(dict(sorted(state.items())), f, separators=(",", ":"))

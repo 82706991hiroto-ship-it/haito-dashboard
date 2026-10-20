@@ -1,0 +1,40 @@
+# 有価証券報告書の決算期間(EDINETの書類一覧)から、12か月でない期(持株会社化の最初の期・決算期の変更)を探し、
+# data/irregular-periods.json と index.html の IRREG_MAP に書く。初回(約10年分)は Actions の画面の「Run workflow」から。
+# 毎週の分は「EDINETの週次更新」が直近の提出だけ見て足す。
+name: 決算期間の点検
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "何日前までの提出を見るか(0なら約10年分)"
+        default: "0"
+permissions:
+  contents: write
+  pages: write
+concurrency: edinet-monthly
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: 書類一覧の決算期間から12か月でない期を探す
+        env:
+          EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+        run: python3 tools/edinet/period_scan.py --days "${{ inputs.days || '0' }}"
+      - name: 変わっていればコミットして公開
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add index.html data/irregular-periods.json
+          if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "決算期間が12か月でない期を内蔵データに印付け"
+          git pull --rebase origin main
+          git push
+          gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" || true

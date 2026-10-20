@@ -55,6 +55,12 @@ jobs:
         env:
           EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
         run: python3 tools/edinet/fund_scan.py --days "${{ inputs.days || '45' }}"
+      - name: 決算期間が12か月でない期(持株会社化・決算期の変更)を直近の提出から足す
+        if: github.event_name != 'push'
+        continue-on-error: true
+        env:
+          EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
+        run: python3 tools/edinet/period_scan.py --days "${{ inputs.days || '45' }}"
       - name: 有報で内蔵データを更新
         env:
           EDINET_API_KEY: ${{ secrets.EDINET_API_KEY }}
@@ -76,7 +82,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git add index.html tools/edinet/state.json data/splits.json data/splits-applied.json data/special-dividends.json data/fund-distributions.json perks/
+          git add index.html tools/edinet/state.json data/irregular-periods.json data/splits.json data/splits-applied.json data/special-dividends.json data/fund-distributions.json perks/
           if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
