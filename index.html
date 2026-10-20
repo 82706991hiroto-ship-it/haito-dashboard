@@ -5069,7 +5069,7 @@
       var stk = dividendStreak(v.w.code);
       var ods = ordinaryDivs(v.w.code), g5 = cagr(ods, 5), gN = g5 !== null ? 5 : 3, gv = g5 !== null ? g5 : cagr(ods, 3);
       var growthNote = gv !== null ? "増配率" + (gv >= 0 ? "+" : "−") + Math.abs(gv * 100).toFixed(1) + "%" : "";
-      var streakNote = stk ? (stk.up > 0 ? stk.up + "期連続増配" : stk.kind === "down" ? "直近で減配" : stk.kind === "flat" ? "据え置き" : "") : "";
+      var streakNote = stk ? (stk.up > 0 ? stk.up + (stk.up === stk.years - 1 ? "期以上連続増配" : "期連続増配") : stk.kind === "down" ? "直近で減配" : stk.kind === "flat" ? "据え置き" : "") : "";
       var gapTxt = v.gapPct === null ? (v.price > 0 ? "—" : "株価なし") : v.gapPct >= 0 ? "到達" : "−" + fmtPct(-v.gapPct);
       row.innerHTML = '<span class="wr-name"><b>' + escapeHtml((cut ? "⚠ " : "") + v.w.code + " " + v.name) + '</b><small>' + escapeHtml(v.sector + (watchSortMode === "sector" && v.secPct !== null ? " " + (v.secPct > 0 ? fmtPct(v.secPct) : "未保有") : "") + (v.heldShares > 0 ? " ・ 保有中" : "")) + '</small>' +
         (streakNote || growthNote ? '<small class="wr-growth" title="増配率は直近' + gN + '年の1株配当の伸び(年あたり)">' + [streakNote, growthNote].filter(Boolean).map(function (t) { return '<span>' + escapeHtml(t) + '</span>'; }).join(" ") + '</small>' : "") + '</span>' +
