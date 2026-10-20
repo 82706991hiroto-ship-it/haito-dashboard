@@ -11,7 +11,7 @@ data/irregular-periods.json に残し、index.html の IRREG_MAP(内蔵の1株�
 
 書類の中身は読まない(一覧の日付だけ)。出典: EDINET(公共データ利用規約 PDL1.0)。
 """
-import argparse, datetime as dt, json, os, re, sys
+import argparse, datetime as dt, json, os, re, sys, time
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -25,24 +25,52 @@ SHORT_DAYS, LONG_DAYS = 340, 390
 
 
 def period_list(start, end):
-    """日付ごとの書類一覧から、有価証券報告書の (コード, 期首, 期末, 提出日時) を集める。"""
+    """日付ごとの書類一覧から、有価証券報告書の (コード, 期首, 期末, 提出日時) を集める。
+    取れなかった日(混み合い・一時的な失敗)は、間をあけて少ない並列でやり直す。年ごとの件数を出して抜けに気づけるようにする"""
     dates = list(fh.days(start, end))
 
     def one(d):
         r = fh.get(fh.API + "/documents.json", {"date": d, "type": 2})
-        rows = (r.json().get("results") or []) if r is not None else []
-        return [(x["secCode"][:4].upper(), x.get("periodStart"), x.get("periodEnd"), x.get("submitDateTime") or "")
-                for x in rows
-                if x.get("docTypeCode") == "120" and x.get("ordinanceCode") == "010" and x.get("secCode")
-                and x.get("withdrawalStatus") == "0" and x.get("periodStart") and x.get("periodEnd")]
+        if r is None:
+            return d, None
+        try:
+            j = r.json()
+        except ValueError:
+            return d, None
+        # 混み合っているときは 200 でも本文の status がエラーで results が空になる。保存期間外(404)は「無し」とみる
+        st = str((j.get("metadata") or {}).get("status") or "")
+        if st == "404":
+            return d, []
+        rows = j.get("results")
+        if st != "200" or rows is None:
+            return d, None
+        return d, [(x["secCode"][:4].upper(), x.get("periodStart"), x.get("periodEnd"), x.get("submitDateTime") or "")
+                   for x in rows
+                   if x.get("docTypeCode") == "120" and x.get("ordinanceCode") == "010" and x.get("secCode")
+                   and x.get("withdrawalStatus") == "0" and x.get("periodStart") and x.get("periodEnd")]
 
-    out = []
-    with ThreadPoolExecutor(6) as ex:
-        for i, rows in enumerate(ex.map(one, dates)):
-            out.extend(rows)
-            if i % 200 == 0:
-                print("書類一覧", i, "/", len(dates), flush=True)
-    return out
+    got, todo = {}, dates
+    for rnd, workers in enumerate((4, 2, 1, 1)):
+        failed = []
+        with ThreadPoolExecutor(workers) as ex:
+            for i, (d, rows) in enumerate(ex.map(one, todo)):
+                if rows is None:
+                    failed.append(d)
+                else:
+                    got[d] = rows
+                if i % 200 == 0:
+                    print("書類一覧(%d回目)" % (rnd + 1), i, "/", len(todo), "取れなかった日", len(failed), flush=True)
+        todo = failed
+        if not todo:
+            break
+        time.sleep(30)
+    if todo:
+        print("取れなかった日", len(todo), "日:", " ".join(todo[:20]), "…" if len(todo) > 20 else "", flush=True)
+    per_year = {}
+    for d, rows in got.items():
+        per_year[d[:4]] = per_year.get(d[:4], 0) + len(rows)
+    print("年ごとの有報の件数:", " ".join("%s:%d" % kv for kv in sorted(per_year.items())), flush=True)
+    return [x for rows in got.values() for x in rows], todo
 
 
 def span_days(start, end):
@@ -116,8 +144,10 @@ def main():
     a = ap.parse_args()
     today = dt.date.today()
     start = (today - dt.timedelta(days=a.days)) if a.days else today.replace(year=today.year - 10)
-    rows = period_list(start.isoformat(), None)
+    rows, missing = period_list(start.isoformat(), None)
     print("有報", len(rows), "件", flush=True)
+    if a.days == 0 and len(missing) > 20:
+        sys.exit("書類一覧が取れなかった日が多すぎるので、書き込まずに終わります(あとでもう一度動かしてください)")
     data = json.load(open(OUT, encoding="utf-8")) if os.path.exists(OUT) else {}
     data = merge(data, rows)
     with open(OUT, "w", encoding="utf-8") as f:
