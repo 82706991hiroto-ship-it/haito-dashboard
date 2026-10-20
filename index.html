@@ -3722,11 +3722,17 @@
     var label, kind;
     // データの最初の期まで増配が続いていれば、実際の連続記録はもっと長いかもしれない
     if (up === years - 1) { label = up + "期以上連続増配"; kind = "up"; }
-    else if (up > 0) { label = up + "期連続増配"; kind = "up"; }
+    else if (up > 0) {
+      label = up + "期連続増配"; kind = "up";
+      // 増配が止まった年が据え置きなら、減配していない年数も添える(ひろぎん: 4期連続増配・5期以上減配なし)
+      var nc = 0;
+      while (nc < years - 1 && s[nc] >= s[nc + 1] - 0.005) nc++;
+      if (nc > up) label += "・" + nc + (nc === years - 1 ? "期以上" : "期") + "減配なし";
+    }
     else if (cut === 0) { label = "直近で減配"; kind = "down"; }
     else if (cut === -1) { label = "減配なし"; kind = "flat"; }
     else { label = "据え置き"; kind = "flat"; }
-    return { up: up, years: years, cutAgo: cut, kind: kind,
+    return { up: up, years: years, cutAgo: cut, kind: kind, label: label,
              text: label + "(直近" + years + "期のデータ)" + (kind !== "down" && cut > 0 ? "・" + (cut + 1) + "期前に減配" : "") };
   }
 
@@ -5083,7 +5089,7 @@
       var stk = dividendStreak(v.w.code);
       var ods = comparableDivs(v.w.code), g5 = cagr(ods, 5), gN = g5 !== null ? 5 : 3, gv = g5 !== null ? g5 : cagr(ods, 3);
       var growthNote = gv !== null ? "増配率" + (gv >= 0 ? "+" : "−") + Math.abs(gv * 100).toFixed(1) + "%" : "";
-      var streakNote = stk ? (stk.up > 0 ? stk.up + (stk.up === stk.years - 1 ? "期以上連続増配" : "期連続増配") : stk.kind === "down" ? "直近で減配" : stk.kind === "flat" ? "据え置き" : "") : "";
+      var streakNote = stk ? (stk.up > 0 ? stk.label : stk.kind === "down" ? "直近で減配" : stk.kind === "flat" ? "据え置き" : "") : "";
       var gapTxt = v.gapPct === null ? (v.price > 0 ? "—" : "株価なし") : v.gapPct >= 0 ? "到達" : "−" + fmtPct(-v.gapPct);
       row.innerHTML = '<span class="wr-name"><b>' + escapeHtml((cut ? "⚠ " : "") + v.w.code + " " + v.name) + '</b><small>' + escapeHtml(v.sector + (watchSortMode === "sector" && v.secPct !== null ? " " + (v.secPct > 0 ? fmtPct(v.secPct) : "未保有") : "") + (v.heldShares > 0 ? " ・ 保有中" : "")) + '</small>' +
         (streakNote || growthNote ? '<small class="wr-growth" title="増配率は直近' + gN + '年の1株配当の伸び(年あたり)">' + [streakNote, growthNote].filter(Boolean).map(function (t) { return '<span>' + escapeHtml(t) + '</span>'; }).join(" ") + '</small>' : "") + '</span>' +
