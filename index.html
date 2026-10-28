@@ -2232,7 +2232,7 @@
         '<button type="button" class="btn" data-fq="paste">📋 貼り付け</button>' +
         '<button type="button" class="btn ghost" data-fq="skip">飛ばす</button>' +
         '<button type="button" class="btn ghost" data-fq="stop">やめる</button></div>' +
-        '<p class="fq-help">「参考指標」から「単元株数」までをコピーして戻ると、自動で読み込んで次の銘柄に進みます。</p>' +
+        '<p class="fq-help">「配当利回り」から「BPS」まで(色の付いた所)をコピーして戻ると、自動で読み込んで次の銘柄に進みます。</p>' +
         (fq.msg ? '<p class="fq-msg">' + escapeHtml(fq.msg) + '</p>' : "");
       return;
     }
@@ -2254,7 +2254,7 @@
     var q = t && t.length > 40 ? parseQuoteBlock(t) : null;
     var it = fq.list[fq.i];
     if (!q) {
-      fq.msg = t && t.length > 40 ? "読み取れませんでした。「参考指標」から「単元株数」までを選んでコピーし直してください。" : "コピーした内容が見つかりません。参考指標をコピーしてから「📋 貼り付け」を押してください。";
+      fq.msg = t && t.length > 40 ? "読み取れませんでした。「配当利回り」から「BPS」までを選んでコピーし直してください。" : "コピーした内容が見つかりません。参考指標をコピーしてから「📋 貼り付け」を押してください。";
       renderForecastBox();
       return false;
     }
@@ -3388,7 +3388,7 @@
     function takeQuote(t) {
       var q = t && t.length > 40 ? parseQuoteBlock(t) : null;
       if (!q) {
-        qStatus.textContent = t && t.length > 40 ? "株価・予想配当を読み取れませんでした。Yahoo!ファイナンスの「参考指標」から「単元株数」までを選んでコピーしてください。" : "";
+        qStatus.textContent = t && t.length > 40 ? "株価・予想配当を読み取れませんでした。Yahoo!ファイナンスの「配当利回り」から「BPS」まで(色の付いた所)を選んでコピーしてください。" : "";
         return false;
       }
       applyQuoteTo(h, q, todayStamp());
@@ -9366,21 +9366,25 @@
   // 内蔵データに後から入った銘柄(名証だけの会社など)は、登録済みの行に配当が入っていない。
   // 配当が空欄(または「無配(0円)にする」で0にした行)の日本株で、内蔵データに配当があれば補う
   // Yahoo!ファイナンスの「参考指標」をまとめてコピーした文字から、会社予想の1株配当と株価を読む(チェックシートと同じ読み方)。
-  // 株価は 最低購入代金 ÷ 単元株数(無ければ 1株配当 ÷ 配当利回り で近似)
+  // 株価は PER(会社予想) × EPS(会社予想)。PERはその時刻の株価で出ているので、画面上の株価とほぼ同じになる
+  // (最低購入代金は少し前の株価のことがある)。PERが出ない(赤字など)ときは 最低購入代金 ÷ 単元株数、それも無ければ 1株配当 ÷ 配当利回り
   function parseQuoteBlock(t) {
     var s = String(t || "").normalize("NFKC").replace(/\s+/g, " ");
     function after(re) { var m = s.match(re); return m ? parseFloat(m[1].replace(/,/g, "")) : NaN; }
     var fdiv = after(/1株配当\s*\(会社予想\)[^0-9-]{0,40}?([0-9][0-9,]*(?:\.[0-9]+)?)/);
     var yld = after(/配当利回り\s*\(会社予想\)[^0-9-]{0,40}?([0-9][0-9,]*(?:\.[0-9]+)?)\s*%/);
     var feps = after(/EPS\s*\(会社予想\)[^0-9-]{0,40}?(-?[0-9][0-9,]*(?:\.[0-9]+)?)/);
+    var fper = after(/PER\s*\(会社予想\)[^0-9-]{0,40}?([0-9][0-9,]*(?:\.[0-9]+)?)\s*倍/);
     var minBuy = after(/最低購入代金[^0-9]*?([0-9][0-9,]*)/), unit = after(/単元株数[^0-9]*?([0-9][0-9,]*)/);
-    var exact = minBuy > 0 && unit > 0;
-    var price = exact ? minBuy / unit : fdiv > 0 && yld > 0 ? fdiv / (yld / 100) : NaN;
+    var byPer = fper > 0 && feps > 0, exact = byPer || (minBuy > 0 && unit > 0);
+    var price = byPer ? fper * feps : minBuy > 0 && unit > 0 ? minBuy / unit : fdiv > 0 && yld > 0 ? fdiv / (yld / 100) : NaN;
+    // PER×EPSは小数の丸めで±0.05%ほどずれるので、1,000円以上は円単位に丸める
+    if (byPer) price = price >= 1000 ? Math.round(price) : Math.round(price * 10) / 10;
     if (!(fdiv > 0) && !(price > 0)) return null;
     return { price: price > 0 ? Math.round(price * 10) / 10 : NaN, fdiv: fdiv, feps: feps };
   }
   function yahooQuoteUrl(code) {
-    return "https://finance.yahoo.co.jp/quote/" + encodeURIComponent(code) + ".T#:~:text=" + encodeURIComponent("参考指標") + "," + encodeURIComponent("単元株数");
+    return "https://finance.yahoo.co.jp/quote/" + encodeURIComponent(code) + ".T#:~:text=" + encodeURIComponent("配当利回り") + "," + encodeURIComponent("BPS");
   }
   function isoDay(d) { return String(d || "").slice(0, 10).replace(/\//g, "-"); }
   // チェックシートと共有する株価・会社予想(irPrices)にも残す
