@@ -67,6 +67,8 @@ def update_perk(info, texts, code, text):
         texts.pop(code, None)
         return "なしに" if old else None
     yen_in_text = set(int(x.replace(",", "")) for x in re.findall(r"([0-9][0-9,]*)円", text))
+    # 年2回(9月末と3月末など)の優待は、1回分の2倍を年額にしているので、その2倍も文にある金額とみなす
+    yen_in_text |= set(y * 2 for y in yen_in_text)
     # 前の段階の金額が新しい文にもすべてあれば、段階はそのまま。読めないときは金額を出さない「あり」にする
     new = old if isinstance(old, list) and all(t[1] in yen_in_text for t in old) else 1
     info[code] = new
