@@ -2232,7 +2232,7 @@
         '<button type="button" class="btn" data-fq="paste">📋 貼り付け</button>' +
         '<button type="button" class="btn ghost" data-fq="skip">飛ばす</button>' +
         '<button type="button" class="btn ghost" data-fq="stop">やめる</button></div>' +
-        '<p class="fq-help">「配当利回り」から「BPS」まで(色の付いた所)をコピーして戻ると、自動で読み込んで次の銘柄に進みます。</p>' +
+        '<p class="fq-help">「発行済株式数」から「BPS」まで(色の付いた所)をコピーして戻ると(項目名はリンクのことがあるので、発行済株式数の右の数字を長押しして選び始めると確実です)、自動で読み込んで次の銘柄に進みます。</p>' +
         (fq.msg ? '<p class="fq-msg">' + escapeHtml(fq.msg) + '</p>' : "");
       return;
     }
@@ -2254,7 +2254,7 @@
     var q = t && t.length > 40 ? parseQuoteBlock(t) : null;
     var it = fq.list[fq.i];
     if (!q) {
-      fq.msg = t && t.length > 40 ? "読み取れませんでした。「配当利回り」から「BPS」までを選んでコピーし直してください。" : "コピーした内容が見つかりません。参考指標をコピーしてから「📋 貼り付け」を押してください。";
+      fq.msg = t && t.length > 40 ? "読み取れませんでした。「発行済株式数」から「BPS」までを選んでコピーし直してください。" : "コピーした内容が見つかりません。参考指標をコピーしてから「📋 貼り付け」を押してください。";
       renderForecastBox();
       return false;
     }
@@ -3388,7 +3388,7 @@
     function takeQuote(t) {
       var q = t && t.length > 40 ? parseQuoteBlock(t) : null;
       if (!q) {
-        qStatus.textContent = t && t.length > 40 ? "株価・予想配当を読み取れませんでした。Yahoo!ファイナンスの「配当利回り」から「BPS」まで(色の付いた所)を選んでコピーしてください。" : "";
+        qStatus.textContent = t && t.length > 40 ? "株価・予想配当を読み取れませんでした。Yahoo!ファイナンスの「発行済株式数」から「BPS」まで(色の付いた所)を選んでコピーしてください。" : "";
         return false;
       }
       applyQuoteTo(h, q, todayStamp());
@@ -9384,7 +9384,7 @@
     return { price: price > 0 ? Math.round(price * 10) / 10 : NaN, fdiv: fdiv, feps: feps };
   }
   function yahooQuoteUrl(code) {
-    return "https://finance.yahoo.co.jp/quote/" + encodeURIComponent(code) + ".T#:~:text=" + encodeURIComponent("配当利回り") + "," + encodeURIComponent("BPS");
+    return "https://finance.yahoo.co.jp/quote/" + encodeURIComponent(code) + ".T#:~:text=" + encodeURIComponent("発行済株式数") + "," + encodeURIComponent("BPS");
   }
   function isoDay(d) { return String(d || "").slice(0, 10).replace(/\//g, "-"); }
   // チェックシートと共有する株価・会社予想(irPrices)にも残す
