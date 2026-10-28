@@ -1645,6 +1645,8 @@
         <option value="gap">目標利回りに近い順</option>
         <option value="sector">持っている割合が少ない業種順</option>
         <option value="yield">今の利回りが高い順</option>
+        <option value="total">総合利回り(優待込み)が高い順</option>
+        <option value="perk">優待ありを先に</option>
         <option value="growth">増配率(5年)が高い順</option>
         <option value="new">追加が新しい順</option>
         <option value="code">コード順</option>
@@ -5024,7 +5026,7 @@
   document.getElementById("backToCheckClose").addEventListener("click", function () { document.getElementById("backToCheckBox").hidden = true; });
 
   var WATCH_SHOW = 10, watchShowAll = false;
-  var watchSortMode = (function () { try { var v = localStorage.getItem("haitoWatchSort"); return ["gap", "sector", "yield", "growth", "new", "code"].indexOf(v) === -1 ? "gap" : v; } catch (e) { return "gap"; } })();
+  var watchSortMode = (function () { try { var v = localStorage.getItem("haitoWatchSort"); return ["gap", "sector", "yield", "total", "perk", "growth", "new", "code"].indexOf(v) === -1 ? "gap" : v; } catch (e) { return "gap"; } })();
   (function () {
     var sel = document.getElementById("watchSort");
     sel.value = watchSortMode;
@@ -5051,6 +5053,10 @@
     var sortKey = { gap: function (x) { return x.gapPct === null ? null : -x.gapPct; },
       sector: function (x) { return x.secPct; },
       yield: function (x) { return x.yieldNow === null ? null : -x.yieldNow; },
+      // 優待の金額が分からない・優待なしの銘柄は、配当利回りだけで並べる
+      total: function (x) { return x.totalYield !== null ? -x.totalYield : x.yieldNow === null ? null : -x.yieldNow; },
+      // 優待ありを先に(PERK_INFO が 0 以外)。その中は総合利回りが高い順
+      perk: function (x) { var t = x.totalYield !== null ? x.totalYield : (x.yieldNow || 0); return (PERK_INFO[String(x.w.code).toUpperCase()] ? 0 : 1000) - t; },
       growth: function (x) { var g = cagr(comparableDivs(x.w.code), 5); return g === null ? null : -g; },
       new: function (x) { return x.w.addedAt ? -new Date(x.w.addedAt).getTime() : null; },
       code: function (x) { return String(x.w.code); } }[watchSortMode] || null;
@@ -5064,7 +5070,7 @@
       return ka < kb ? -1 : ka > kb ? 1 : 0;
     });
     var hintEl = document.getElementById("watchSortHint");
-    if (hintEl) hintEl.textContent = { gap: "目標利回りに近い順", sector: "持っている割合が少ない業種順", yield: "今の利回りが高い順", growth: "増配率(5年)が高い順", new: "追加が新しい順", code: "コード順" }[watchSortMode];
+    if (hintEl) hintEl.textContent = { gap: "目標利回りに近い順", sector: "持っている割合が少ない業種順", yield: "今の利回りが高い順", total: "総合利回り(優待込み)が高い順", perk: "優待ありを先に", growth: "増配率(5年)が高い順", new: "追加が新しい順", code: "コード順" }[watchSortMode];
     list.innerHTML = "";
     // 候補が増えても下の株主優待まで遠くならないよう、並べた順に10件だけ出す(追加した銘柄・試算中の銘柄は必ず出す)
     var more = document.getElementById("watchMore");
