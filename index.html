@@ -1475,6 +1475,10 @@
         <input type="checkbox" id="reportHide">
         <span>金額を隠して%・倍率だけにする</span>
       </label>
+      <label class="field-check">
+        <input type="checkbox" id="reportShowUrl">
+        <span>アプリのURLを載せる(載せないと「何のアプリ?」と聞かれやすい)</span>
+      </label>
       <p class="hint" id="reportSource"></p>
       <img class="report-preview" id="reportPreview" alt="配当レポートの画像">
       <div class="toolbar">
@@ -7919,8 +7923,7 @@
       : "受取履歴の実績から作成";
     text(note, L, base + 84, C.muted);
     g.strokeStyle = C.line; g.beginPath(); g.moveTo(L, H - 150); g.lineTo(R, H - 150); g.stroke();
-    font(700, 26); text("高配当株ポートフォリオダッシュボード", L, H - 102, C.text);
-    font(500, 22); text(REPORT_URL, L, H - 66, C.text2);
+    reportFoot(g, L, H, C, font, text);
   }
 
   // 配当の軌跡のまとめ: 最初に受け取った年 → 去年(受け取った額)と、今年の年間予想
@@ -8009,8 +8012,30 @@
     font(500, 22);
     text("受取履歴CSV・配当金のお知らせなどの記録から作成。今年は今の保有からの予想", L, base + 80, C.muted);
     g.strokeStyle = C.line; g.beginPath(); g.moveTo(L, H - 150); g.lineTo(R, H - 150); g.stroke();
-    font(700, 26); text("高配当株ポートフォリオダッシュボード", L, H - 102, C.text);
-    font(500, 22); text(REPORT_URL, L, H - 66, C.text2);
+    reportFoot(g, L, H, C, font, text);
+  }
+
+  // 下: アプリのアイコンと名前(「何のアプリ?」と聞かれるように)。URLは「アプリのURLを載せる」を選んだときだけ
+  var reportIcon = null;
+  function loadReportIcon() {
+    if (reportIcon) return Promise.resolve(reportIcon);
+    return new Promise(function (res) {
+      var im = new Image();
+      im.onload = function () { reportIcon = im; res(im); };
+      im.onerror = function () { res(null); };
+      im.src = "icon-192.png";
+    });
+  }
+  function reportFoot(g, L, H, C, font, text) {
+    var showUrl = document.getElementById("reportShowUrl").checked, x = L, y0 = H - 150;
+    if (reportIcon) {
+      g.save(); g.beginPath();
+      if (g.roundRect) g.roundRect(L, y0 + 22, 64, 64, 16); else g.rect(L, y0 + 22, 64, 64);
+      g.clip(); g.drawImage(reportIcon, L, y0 + 22, 64, 64); g.restore();
+      x = L + 84;
+    }
+    font(800, 30); text("HAITO", x, y0 + 52, C.text);
+    font(500, 21); text(showUrl ? REPORT_URL : "高配当株の配当管理アプリ", x, y0 + 82, C.text2);
   }
 
   var reportBlob = null, reportKind = "month";
@@ -8079,6 +8104,7 @@
       ? Promise.all([document.fonts.load('800 40px "Manrope"'), document.fonts.load('700 40px "Zen Kaku Gothic New"')]).catch(function () {}) : Promise.resolve();
     paintReport();
     fontsReady.then(paintReport);
+    loadReportIcon().then(function (im) { if (im) paintReport(); });
   }
 
   function reportFileName() {
@@ -8101,13 +8127,15 @@
   document.addEventListener("click", function (e) { if (e.target.closest("#trackShareBtn")) openReportDialog("track"); });
   document.getElementById("reportMonth").addEventListener("change", paintReport);
   document.getElementById("reportHide").addEventListener("change", paintReport);
+  document.getElementById("reportShowUrl").addEventListener("change", paintReport);
   document.getElementById("reportCloseBtn").addEventListener("click", function () {
     document.getElementById("reportDialog").close();
   });
   document.getElementById("reportSaveBtn").addEventListener("click", saveReportImage);
   document.getElementById("reportShareBtn").addEventListener("click", function () {
     var parts = document.getElementById("reportMonth").value.split("/");
-    var msg = (reportKind === "track" ? "配当の軌跡 #配当金生活 #高配当株" : parts[0] + "年" + parts[1] + "月の配当金 #配当金報告") + "\nhttps://" + REPORT_URL + "/";
+    var msg = (reportKind === "track" ? "配当の軌跡 #配当金生活 #高配当株" : parts[0] + "年" + parts[1] + "月の配当金 #配当金報告") +
+      (document.getElementById("reportShowUrl").checked ? "\nhttps://" + REPORT_URL + "/" : "");
     var file = reportBlob ? new File([reportBlob], reportFileName(), { type: "image/png" }) : null;
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       navigator.share({ files: [file], text: msg }).catch(function () {});
