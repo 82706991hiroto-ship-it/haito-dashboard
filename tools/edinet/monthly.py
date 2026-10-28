@@ -36,7 +36,15 @@ def close(a, b):
     return abs(a - b) <= max(0.02 * abs(b), 0.011)
 
 
-NO_PERK = re.compile(r"^(該当(事項)?(は|が)?(ありません|ございません|なし|無し)|なし|無し|ありません|特になし|実施していません)")
+# 「株主に対する特典」が無いことを表す書き方(該当する事項はありません・当該事項はありません・特にありません・今期は行いません など)
+NO_PERK = re.compile(r"^(株主優待\s*)?(該当(する)?(事項)?(は|が)?\s*(ありません|ございません|なし|無し)|当該事項(は|が)?\s*(ありません|ございません|なし)"
+                     r"|特に\s*(なし|無し|ありません|ございません)|なし|無し|ありません|ございません|実施していません|今期は行いません)")
+DASHES = r"[-‐―ー—－─━\s]*"
+
+
+def is_no_perk(t):
+    return not t or bool(NO_PERK.match(t)) or bool(re.fullmatch(DASHES, t))
+
 def perk_text(block):
     """「株式事務の概要」から「株主に対する特典」の文を返す。項目が無ければ None、無しなら ""。"""
     t = unicodedata.normalize("NFKC", block or "")
@@ -46,7 +54,7 @@ def perk_text(block):
     t = re.sub(r"\s+", " ", t[i + len("株主に対する特典"):]).strip()
     # 末尾の定款の注記(単元未満株主の権利)は優待と関係ないので外す
     t = re.split(r"\(注\s*\d?\)\s*(?:\d\.\s*)?(?:当社|当会社|当行|当金庫)?(?:の)?(?:定款の定めにより|株主は、?その有する単元未満株式)", t)[0].strip()
-    if not t or NO_PERK.match(t) or re.fullmatch(r"[-―ー—－\s]*", t):
+    if is_no_perk(t):
         return ""
     return t
 
@@ -79,7 +87,13 @@ def load_perks(html):
     for f in os.listdir(PERKS_DIR):
         if re.match(r"^[0-9]\.json$", f):
             texts.update(json.load(open(os.path.join(PERKS_DIR, f), encoding="utf-8")))
-    return json.loads(m.group(1)), texts
+    info = json.loads(m.group(1))
+    # 前の読み方で「あり」にしていた「該当する事項はありません」などを「なし」に直す(何度動かしても同じ)
+    for code, t in list(texts.items()):
+        if is_no_perk(unicodedata.normalize("NFKC", t or "").strip()):
+            info[code] = 0
+            texts.pop(code)
+    return info, texts
 
 
 def write_perks(html, info, texts):
