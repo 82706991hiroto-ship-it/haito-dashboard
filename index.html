@@ -4943,7 +4943,9 @@
       tag.className = "chk " + verdict;
       tag.textContent = c.counts.bad > 0 ? "❌" + c.counts.bad + "項目" : (c.starPassing === c.starTotal ? "基準内" : "要確認");
       var t = document.createElement("span");
-      t.textContent = "チェック " + String(c.date || "").slice(5).replace("-", "/") + " ・ ◎" + c.counts.good + " ○" + c.counts.ok +
+      // 「チェック 10/18」が点数に見えたので、採点した日だとわかる書き方にする
+      var cd = String(c.date || "").match(/\d{4}-(\d{2})-(\d{2})/);
+      t.textContent = (cd ? (+cd[1]) + "月" + (+cd[2]) + "日に採点" : "採点済み") + " ・ ◎" + c.counts.good + " ○" + c.counts.ok +
         " △" + c.counts.mid + " ❌" + c.counts.bad + " ・ 重要項目 " + c.starPassing + "/" + c.starTotal;
       box.appendChild(tag); box.appendChild(t);
       a.textContent = "見直す";
