@@ -1501,6 +1501,13 @@
       <label class="field">約定単価(円)
         <input type="number" id="buyPrice" min="0" step="any" inputmode="decimal">
       </label>
+      <label class="field">口座
+        <select id="buyAccount"></select>
+      </label>
+      <label class="field-check" id="buyWatchField" hidden>
+        <input type="checkbox" id="buyRemoveWatch" checked>
+        <span>買い増し候補から外す</span>
+      </label>
       <div class="buy-preview" id="buyPreview"></div>
       <p class="hint" id="buyHistory"></p>
       <div class="toolbar">
@@ -5038,15 +5045,16 @@
     inp.addEventListener("input", paint);
     paint();
     var held = heldOf(v.w.code);
-    if (held.length > 0) {
-      var rec = document.createElement("button");
-      rec.type = "button"; rec.className = "btn"; rec.style.marginTop = "10px";
-      rec.textContent = "買ったので保有に記録する";
-      rec.addEventListener("click", function () {
-        openBuyDialog(held[0], { shares: Math.max(0, Math.floor(num(inp.value))), price: v.price > 0 ? v.price : "" });
-      });
-      box.appendChild(rec);
-    }
+    var rec = document.createElement("button");
+    rec.type = "button"; rec.className = "btn"; rec.style.marginTop = "10px";
+    rec.textContent = held.length > 0 ? "買ったので保有に記録する" : "買ったので保有に追加する";
+    rec.addEventListener("click", function () {
+      var preset = { shares: Math.max(0, Math.floor(num(inp.value))), price: v.price > 0 ? v.price : "" };
+      // まだ持っていない銘柄は、候補の値(名前・業種・1株配当・株価)から新しい行を作る
+      openBuyDialog(held.length > 0 ? held[0] : { isNew: true, code: v.w.code, name: v.name, sector: v.sector, div: v.div,
+        price: v.price, priceDate: v.priceDate, months: (CODE_INFO_MAP[v.w.code] || [])[2] }, preset);
+    });
+    box.appendChild(rec);
   }
 
   // 高配当株チェックシート(同じサイトの ../ir-check/)が端末に保存した採点を読む。
@@ -5440,10 +5448,18 @@
   // 平均取得単価 = (今の株数×今の単価 + 買った株数×約定単価) ÷ 合計株数。買った記録は銘柄ごとに残す。
   var buyTarget = null;
 
+  // h.isNew: まだ持っていない銘柄(買い増し候補・次に買うならから)。記録すると保有に新しく加える
   function openBuyDialog(h, preset) {
     buyTarget = h;
     var dlg = document.getElementById("buyDialog");
-    document.getElementById("buyTitle").textContent = (h.code ? h.code + " " : "") + (h.name || "") + " を買い増し";
+    document.getElementById("buyTitle").textContent = (h.code ? h.code + " " : "") + (h.name || "") + (h.isNew ? " を買った" : " を買い増し");
+    var accSel = document.getElementById("buyAccount");
+    accSel.innerHTML = ACCOUNTS.map(function (a) { return '<option value="' + a + '">' + a + '</option>'; }).join("");
+    accSel.value = (preset && preset.account) || h.account || "特定";
+    accSel.closest("label").hidden = isUS(h);
+    var inWatch = (state.watch || []).some(function (w) { return w.code === h.code; });
+    document.getElementById("buyWatchField").hidden = !(h.isNew && inWatch);
+    document.getElementById("buyRemoveWatch").checked = true;
     var sh = document.getElementById("buyShares"), pr = document.getElementById("buyPrice");
     var us = isUS(h), fx = us ? usdRate() : 1;
     pr.closest("label").firstChild.textContent = us ? "約定単価(ドル)" : "約定単価(円)";
@@ -5455,8 +5471,16 @@
           return b.date.slice(5).replace("-", "/") + " " + b.shares + "株@" + fmtPerShare(b.price);
         }).join(" / ");
     function paint() {
-      var s0 = num(h.shares), c0 = num(h.cost), n = num(sh.value), p = num(pr.value) * fx, d = num(h.div);
+      // 選んだ口座に同じ銘柄があればそこへ足す。無ければ新しい行になる
+      var tgt = buyTargetFor(h, accSel.value);
+      var s0 = tgt ? num(tgt.shares) : 0, c0 = tgt ? num(tgt.cost) : 0, n = num(sh.value), p = num(pr.value) * fx, d = num(h.div);
       var box = document.getElementById("buyPreview");
+      if (!tgt && n > 0 && p > 0) {
+        box.innerHTML = '<div class="r"><span>' + escapeHtml(accSel.value) + 'に新しく追加</span><b>' + n.toLocaleString("ja-JP") + "株 @ " + fmtPerShare(p) + "</b></div>" +
+          (d > 0 ? '<div class="r"><span>簿価利回り</span><b>' + fmtPct(d / p * 100, 2) + '</b></div><div class="r"><span>年間配当</span><b>+' + fmtYen(d * n) + "</b></div>" : "") +
+          '<div class="r"><span>支払額</span><b>' + fmtYen(n * p) + "</b></div>";
+        return;
+      }
       if (!(n > 0) || !(p > 0)) {
         box.innerHTML = '<div class="r"><span>今の保有</span><b>' + s0.toLocaleString("ja-JP") + "株 @ " + fmtPerShare(c0) + "</b></div>";
         return;
@@ -5470,7 +5494,7 @@
         (d > 0 ? '<div class="r"><span>年間配当</span><b>+' + fmtYen(d * n) + "</b></div>" : "") +
         '<div class="r"><span>支払額</span><b>' + fmtYen(n * p) + "</b></div>";
     }
-    sh.oninput = paint; pr.oninput = paint;
+    sh.oninput = paint; pr.oninput = paint; accSel.onchange = paint;
     paint();
     dlg.showModal();
     setTimeout(function () { (sh.value ? pr : sh).focus(); }, 50);
@@ -5479,10 +5503,25 @@
   document.getElementById("buyCancelBtn").addEventListener("click", function () {
     document.getElementById("buyDialog").close();
   });
+  // 買った口座の行: 開いた行と同じ口座ならその行、違う口座なら同じ銘柄のその口座の行、無ければ null(新しく作る)
+  function buyTargetFor(h, acc) {
+    if (isUS(h)) return h.isNew ? null : h;
+    if (!h.isNew && (h.account || "特定") === acc) return h;
+    return state.holdings.filter(function (x) { return x.code === h.code && (x.account || "特定") === acc && !isUS(x) && !isFund(x); })[0] || null;
+  }
   document.getElementById("buyApplyBtn").addEventListener("click", function () {
-    var h = buyTarget;
+    var src = buyTarget;
     var n = num(document.getElementById("buyShares").value), p = num(document.getElementById("buyPrice").value);
-    if (!h || !(n > 0) || !(p > 0)) return;
+    if (!src || !(n > 0) || !(p > 0)) return;
+    var acc = document.getElementById("buyAccount").value || "特定";
+    var h = buyTargetFor(src, acc), added = false;
+    if (!h) {
+      var info = CODE_INFO_MAP[src.code] || [];
+      h = { id: uid(), code: src.code, name: src.name || info[0] || "", sector: src.sector || info[1] || UNCLASSIFIED, account: acc,
+            shares: 0, cost: 0, div: num(src.div) > 0 ? src.div : "", months: src.months || info[2], prevDiv: "",
+            price: num(src.price) > 0 ? src.price : undefined, priceDate: num(src.price) > 0 ? (src.priceDate || todayStamp()) : undefined, addedAt: todayIso() };
+      state.holdings.push(h); state.isSample = false; added = true;
+    }
     var s0 = num(h.shares), c0 = num(h.cost), s1 = s0 + n;
     if (!Array.isArray(h.buys)) h.buys = [];
     if (isUS(h)) {
@@ -5497,8 +5536,11 @@
       h.shares = s1;
       h.buys.push({ date: todayIso(), shares: n, price: p });
     }
+    if (added && src.isNew && !document.getElementById("buyWatchField").hidden && document.getElementById("buyRemoveWatch").checked)
+      state.watch = (state.watch || []).filter(function (w) { return w.code !== src.code; });
     document.getElementById("buyDialog").close();
-    save(); renderTable(); renderDashboard();
+    save(); renderAll();
+    if (added) showToast((h.code + " " + (h.name || "")).trim() + " を保有(" + acc + ")に追加しました: " + n.toLocaleString("ja-JP") + "株 @ " + fmtPerShare(p));
   });
 
   // ---------- 株主優待の受取と期限 ----------
