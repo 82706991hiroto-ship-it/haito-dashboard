@@ -70,7 +70,9 @@ def update_perk(info, texts, code, text):
     # 年2回(9月末と3月末など)の優待は、1回分の2倍を年額にしているので、その2倍も文にある金額とみなす
     yen_in_text |= set(y * 2 for y in yen_in_text)
     # 前の段階の金額が新しい文にもすべてあれば、段階はそのまま。読めないときは金額を出さない「あり」にする
-    new = old if isinstance(old, list) and all(t[1] in yen_in_text for t in old) else 1
+    # 文が前と同じ(空白の違いだけ)なら、人が文を読んで入れた段階(合計額・ポイント換算など)をそのまま残す
+    same = re.sub(r"\s", "", texts.get(code) or "") == re.sub(r"\s", "", text)
+    new = old if isinstance(old, list) and (same or all(t[1] in yen_in_text for t in old)) else 1
     info[code] = new
     # 空白の入り方だけの違いは変更とみなさない(表の区切りの扱いで変わるため)
     changed = re.sub(r"\s", "", texts.get(code) or "") != re.sub(r"\s", "", text)
