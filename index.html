@@ -2538,12 +2538,12 @@
       body.innerHTML = '<p class="calendar-note">提案できる銘柄がありません。保有銘柄か買い増し候補に、株価と配当が入っている国内株が必要です。</p>' + skipHtml;
       return;
     }
-    var top = r.list.slice(0, 3), decider = nextBuyDecider(r.list);
+    var top = r.list.slice(0, 5), decider = nextBuyDecider(r.list);
     var firstBad = function (x) { var t = x.tags.filter(function (q) { return q.c && q.c !== "dim"; })[0]; return t ? t.t : ""; };
     body.innerHTML = '<p class="nb-lead">毎月 <b>' + fmtYen(r.budget) + '</b> を1銘柄に入れるなら(積立額は「将来見通し」で変えられます)</p>' +
       '<ol class="nb-list">' + top.map(function (x, i) {
         var folded = i > 0 && !nbOpen[x.code];
-        // 1位は全部見せ、2位・3位は1行にたたむ(押すと開く)
+        // 1位は全部見せ、2位〜5位は1行にたたむ(押すと開く)
         var mini = i > 0 ? '<span class="nb-mini">利回り' + x.y.toFixed(2) + '% ・ 増配' + (x.gr === null ? "—" : (x.gr >= 0 ? "+" : "") + (x.gr * 100).toFixed(1) + "%") +
           (firstBad(x) ? ' ・ <em>' + escapeHtml(firstBad(x).replace(/[:。].*$/, "")) + '</em>' : "") + '</span>' : "";
         return '<li data-code="' + escapeHtml(x.code) + '" class="' + (i > 0 ? "nb-fold" : "") + (folded ? "" : " is-open") + '">' +
@@ -2561,7 +2561,7 @@
           '<div class="nb-extra"></div></div></li>';
       }).join("") + '</ol>' + skipHtml +
       '<details class="nb-skip"><summary>点数のつけかた</summary><p class="calendar-note">利回り(目標〜目標+2%が満点、それより高いと減点)・5年の増配率(利回りが目標を1%以上下回る銘柄は半分)・分散の上限までの余裕・配当方針・日本株の景気敏感の比率(積立額で買った後に目標±5%の外へ離れるなら減点)・チェックシートの採点(採点済みの銘柄だけ)から点数を付けた目安です。要注意・チェックシートで❌の銘柄と、分散の上限に達している銘柄は順位を下げています。株価と予想配当が新しいほど正確になります。売買の判断はご自身で。</p></details>';
-    // 2位・3位の開閉
+    // 2位〜5位の開閉
     Array.prototype.forEach.call(body.querySelectorAll(".nb-list li.nb-fold .nb-head"), function (hd) {
       function toggle() {
         var li = hd.parentNode, code = li.dataset.code, open = li.classList.toggle("is-open");
