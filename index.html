@@ -1505,7 +1505,7 @@
         <select id="buyAccount"></select>
       </label>
       <label class="field-check" id="buyWatchField" hidden>
-        <input type="checkbox" id="buyRemoveWatch" checked>
+        <input type="checkbox" id="buyRemoveWatch">
         <span>買い増し候補から外す</span>
       </label>
       <div class="buy-preview" id="buyPreview"></div>
@@ -5459,7 +5459,8 @@
     accSel.closest("label").hidden = isUS(h);
     var inWatch = (state.watch || []).some(function (w) { return w.code === h.code; });
     document.getElementById("buyWatchField").hidden = !(h.isNew && inWatch);
-    document.getElementById("buyRemoveWatch").checked = true;
+    // 買っても候補には残す(目標利回り・目標の株価で買い増しを続けられるように)。外すのは選んだときだけ
+    document.getElementById("buyRemoveWatch").checked = false;
     var sh = document.getElementById("buyShares"), pr = document.getElementById("buyPrice");
     var us = isUS(h), fx = us ? usdRate() : 1;
     pr.closest("label").firstChild.textContent = us ? "約定単価(ドル)" : "約定単価(円)";
