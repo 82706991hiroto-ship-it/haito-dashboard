@@ -283,6 +283,10 @@
   .nb-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 0 30px; }
   .nb-tag { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 8px; background: var(--accent-soft); color: var(--accent); }
   .nb-tag.dim { background: var(--field); color: var(--text-2); font-weight: 500; }
+  .rv-why { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--text-2); }
+  .rv-box { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--field); font-size: 13px; }
+  .rv-box p { margin: 2px 0; }
+  .rv-box .up { color: var(--good, #16a34a); } .rv-box .down { color: var(--crit); }
   .nb-tag.warn { background: var(--warn-soft); color: var(--warn); }
   .nb-tag.ng { background: var(--crit-soft, var(--warn-soft)); color: var(--crit); }
   .nb-decide { font-size: 12.5px; font-weight: 700; margin: 7px 0 0 30px; }
@@ -1642,6 +1646,11 @@
     <div id="nextBuyBody"></div>
   </section>
 
+  <section class="panel" id="reviewPanel" data-view="extras">
+    <h2>見直し候補 <span class="hint">減配・配当の余力・チェックシート・持ちすぎ・利回りから</span></h2>
+    <div id="reviewBody"></div>
+  </section>
+
   <section class="panel" id="watchPanel" data-view="extras">
     <h2>買い増し候補 <span class="hint" id="watchSortHint">目標利回りに近い順</span></h2>
     <label class="watch-sort">並べ替え
@@ -2724,9 +2733,111 @@
       if (rp) setTimeout(function () { rp.scrollIntoView({ behavior: "smooth", block: "start" }); }, 80);
     }
   });
+
+  // ---------- 見直し候補 ----------
+  // 持っている国内株を、減配・配当の余力・チェックシート・持ちすぎ・利回りの下がりで点検し、理由を添えて並べる。
+  // 売るかどうかは税金や買った理由で変わるので、言い切らずに「見直し」とし、押すと「売って次に買うならの1位を買ったら」を試算する
+  var TAX_GAIN = 0.20315, rvOpen = {};
+  function reviewList() {
+    var g = state.guides || {}, target = goalYieldOf(state.goals), agg = aggregate("jp"), out = [];
+    var codes = {};
+    state.holdings.forEach(function (h) {
+      var c = String(h.code || "").trim().toUpperCase();
+      if (!isUS(h) && !isFund(h) && !h.excluded && /^[1-9][0-9A-Z]{3}$/.test(c) && num(h.shares) > 0) codes[c] = true;
+    });
+    var nStocks = Object.keys(codes).length, nSectors = agg.bySector.length;
+    var maxS = num(g.maxStockPct), maxSec = num(g.maxSectorPct);
+    Object.keys(codes).forEach(function (code) {
+      var held = heldOf(code).filter(function (h) { return !h.excluded && num(h.shares) > 0; });
+      var h0 = held[0], shares = held.reduce(function (t, h) { return t + num(h.shares); }, 0);
+      var cost = held.reduce(function (t, h) { return t + num(h.shares) * num(h.cost); }, 0) / (shares || 1);
+      var price = held.reduce(function (p, h) { return num(h.price) > 0 ? num(h.price) : p; }, 0);
+      var div = num(h0.div), name = shortStockName(h0.name || code), sector = sectorFor(code, h0.sector);
+      var reasons = [];
+      var fst = forecastStatus(h0), risk = dividendRisk(code, fst && fst.kind === "ok" ? div : 0);
+      if (risk && risk.level === 2) reasons.push({ k: "cut", c: "ng", t: "減配リスク高", d: risk.items.slice(0, 2).map(function (x) { return x.s; }).join("・") });
+      else if (forecastCut(code, fst && fst.kind === "ok" ? div : 0)) reasons.push({ k: "cut", c: "ng", t: "会社予想が減配", d: "" });
+      var po = payoutOf(h0);
+      if (po !== null && po >= 9.9) reasons.push({ k: "payout", c: "ng", t: "赤字なのに配当", d: "利益で配当をまかなえていません" });
+      else if (po !== null && po >= 1) reasons.push({ k: "payout", c: "warn", t: "配当性向" + Math.round(po * 100) + "%", d: "利益より配当が多い状態です" });
+      var ck = latestCheck(code);
+      if (ck && ck.counts && ck.counts.bad > 0 && ck.starPassing < ck.starTotal)
+        reasons.push({ k: "check", c: "warn", t: "チェックシートで×" + ck.counts.bad, d: "重要項目 " + ck.starPassing + "/" + ck.starTotal + " が◎○(" + String(ck.date || "").slice(5).replace("-", "/") + "に採点)" });
+      // 持ちすぎ: 上限まで減らせるだけの銘柄数・業種数があるときだけ(少ないうちは全部が超えてしまうため)
+      var sh = guideShares(agg, code, sector), sell = 0;
+      if (maxS > 0 && sh.stockPct > maxS && nStocks >= Math.ceil(100 / maxS) && div > 0) {
+        var D = sh.stockPct / 100 * sh.total, T = sh.total, L = maxS / 100;
+        sell = Math.min(shares, Math.ceil((D - L * T) / (1 - L) / div));
+        reasons.push({ k: "over", c: "warn", t: "持ちすぎ(1銘柄 " + sh.stockPct.toFixed(1) + "%)", d: "上限" + maxS + "%まで約" + sell + "株減らす目安" });
+      } else if (maxSec > 0 && sh.sectorPct > maxSec && nSectors >= Math.ceil(100 / maxSec)) {
+        reasons.push({ k: "over", c: "warn", t: "業種が多め(" + sector + " " + sh.sectorPct.toFixed(1) + "%)", d: "上限" + maxSec + "%" });
+      }
+      // 利回りが下がった: 株価が上がり、今の利回りが目標を1.5%以上下回り、含み益が3割以上
+      var yNow = price > 0 ? div / price * 100 : null, gain = cost > 0 && price > 0 ? price / cost - 1 : null;
+      if (yNow !== null && gain !== null && yNow < target - 1.5 && gain >= 0.3)
+        reasons.push({ k: "yield", c: "dim", t: "利回り" + yNow.toFixed(2) + "%に低下", d: "目標" + target + "% ・ 含み益+" + Math.round(gain * 100) + "%" });
+      if (!reasons.length) return;
+      var rank = reasons.reduce(function (t, r) { return t + (r.c === "ng" ? 10 : r.c === "warn" ? 4 : 1); }, 0);
+      out.push({ code: code, name: name, held: held, shares: shares, cost: cost, price: price, div: div, sector: sector, reasons: reasons, rank: rank, sell: sell });
+    });
+    return out.sort(function (a, b) { return b.rank - a.rank || a.code.localeCompare(b.code); });
+  }
+  // 入れ替えの試算: 売る株数ぶん(持ちすぎは減らす目安、ほかは全部)を売り、次に買うならの1位(この銘柄以外)を買う
+  function swapPlan(x) {
+    var nb = nextBuyList().list.filter(function (y) { return y.code !== x.code; })[0];
+    if (!nb || !(x.price > 0)) return null;
+    var n = x.sell > 0 ? x.sell : x.shares, left = n, proceeds = 0, tax = 0, nisaUsed = false;
+    // 特定口座から先に売る(NISAの非課税枠を残すため)。特定口座は値上がり益に約20%
+    x.held.slice().sort(function (a, b) { return (isTaxFree(a.account) ? 1 : 0) - (isTaxFree(b.account) ? 1 : 0); }).forEach(function (h) {
+      if (left <= 0) return;
+      var k = Math.min(left, num(h.shares)); left -= k;
+      proceeds += k * x.price;
+      if (isTaxFree(h.account)) nisaUsed = true;
+      else tax += Math.max(0, (x.price - num(h.cost)) * k) * TAX_GAIN;
+    });
+    var net = proceeds - tax, m = Math.floor(net / nb.price);
+    return { nb: nb, n: n, proceeds: proceeds, tax: tax, net: net, m: m, divOut: n * x.div, divIn: m * nb.div, nisaUsed: nisaUsed };
+  }
+  function renderReview() {
+    var body = document.getElementById("reviewBody");
+    if (!body) return;
+    var list = reviewList();
+    if (!list.length) { body.innerHTML = '<p class="calendar-note">今のところ見直し候補はありません。</p>'; return; }
+    body.innerHTML = '<ol class="nb-list rv-list">' + list.map(function (x) {
+      var open = !!rvOpen[x.code];
+      return '<li data-code="' + escapeHtml(x.code) + '" class="nb-fold' + (open ? " is-open" : "") + '">' +
+        '<div class="nb-head is-toggle" role="button" tabindex="0" aria-expanded="' + open + '"><b>' + escapeHtml(x.code + " " + x.name) + '</b>' +
+        '<span class="nb-kind">' + x.shares.toLocaleString("ja-JP") + '株</span><span class="nb-chev" aria-hidden="true">›</span></div>' +
+        '<div class="nb-tags">' + x.reasons.map(function (r) { return '<span class="nb-tag ' + r.c + '">' + escapeHtml(r.t) + '</span>'; }).join("") + '</div>' +
+        '<div class="nb-more"' + (open ? "" : " hidden") + '><ul class="rv-why">' + x.reasons.filter(function (r) { return r.d; }).map(function (r) { return '<li>' + escapeHtml(r.t + ": " + r.d) + '</li>'; }).join("") + '</ul>' +
+        '<div class="rv-swap"></div></div></li>';
+    }).join("") + '</ol><p class="calendar-note">売るかどうかは、買った理由や税金・NISAの枠もふまえてご自身で判断してください。押すと入れ替えの試算が出ます。</p>';
+    Array.prototype.forEach.call(body.querySelectorAll(".rv-list > li"), function (li) {
+      var hd = li.querySelector(".nb-head"), code = li.dataset.code, x = list.filter(function (y) { return y.code === code; })[0];
+      function fill() {
+        var box = li.querySelector(".rv-swap"), sp = swapPlan(x);
+        if (!sp) { box.innerHTML = '<p class="calendar-note">入れ替え先(次に買うなら)が見つからないか、株価が入っていません。</p>'; return; }
+        var dd = sp.divIn - sp.divOut;
+        box.innerHTML = '<div class="rv-box"><p><b>' + (x.sell > 0 ? "約" + sp.n + "株を売って" : "全部(" + sp.n + "株)売って") + '、' + escapeHtml(sp.nb.code + " " + sp.nb.name) + 'を買ったら</b></p>' +
+          '<p>売った額 ' + fmtYen(sp.proceeds) + (sp.tax > 0 ? ' − 税金の目安 ' + fmtYen(sp.tax) : '') + ' → 約' + sp.m + '株(1株' + fmtYen(sp.nb.price) + ')</p>' +
+          '<p>年間配当(税引前) ' + fmtYen(sp.divOut) + ' → ' + fmtYen(sp.divIn) + ' <b class="' + (dd >= 0 ? "up" : "down") + '">(' + (dd >= 0 ? "+" : "−") + fmtYen(Math.abs(dd)) + ')</b></p>' +
+          (sp.nisaUsed ? '<p class="calendar-note">NISAの分を売っても、使った枠はその年には戻りません(翌年に復活)。</p>' : '') + '</div>';
+      }
+      function toggle() {
+        var o = li.classList.toggle("is-open"); rvOpen[code] = o;
+        li.querySelector(".nb-more").hidden = !o; hd.setAttribute("aria-expanded", o ? "true" : "false");
+        if (o) fill();
+      }
+      hd.addEventListener("click", toggle);
+      hd.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+      if (rvOpen[code]) fill();
+    });
+  }
+
   function renderDecisionPanels() {
     renderRiskPanel();
     renderNextBuy();
+    renderReview();
     renderSeasonPanel();
   }
 
