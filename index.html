@@ -283,6 +283,7 @@
   .nb-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 0 30px; }
   .nb-tag { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 8px; background: var(--accent-soft); color: var(--accent); }
   .nb-tag.dim { background: var(--field); color: var(--text-2); font-weight: 500; }
+  .rv-all { margin-top: 8px; width: 100%; }
   .rv-why { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--text-2); }
   .rv-box { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--field); font-size: 13px; }
   .rv-box p { margin: 2px 0; }
@@ -2744,7 +2745,7 @@
   // ---------- 見直し候補 ----------
   // 持っている国内株を、減配・配当の余力・チェックシート・持ちすぎ・利回りの下がりで点検し、理由を添えて並べる。
   // 売るかどうかは税金や買った理由で変わるので、言い切らずに「見直し」とし、押すと「売って次に買うならの1位を買ったら」を試算する
-  var TAX_GAIN = 0.20315, rvOpen = {};
+  var TAX_GAIN = 0.20315, rvOpen = {}, rvAll = false, RV_SHOW = 3;
   function reviewList() {
     var g = state.guides || {}, target = goalYieldOf(state.goals), agg = aggregate("jp"), out = [];
     var codes = {};
@@ -2810,15 +2811,20 @@
     if (!body) return;
     var list = reviewList();
     if (!list.length) { body.innerHTML = '<p class="calendar-note">今のところ見直し候補はありません。</p>'; return; }
-    body.innerHTML = '<ol class="nb-list rv-list">' + list.map(function (x) {
+    var extra = list.length - RV_SHOW;
+    body.innerHTML = '<ol class="nb-list rv-list">' + list.map(function (x, i) {
       var open = !!rvOpen[x.code];
-      return '<li data-code="' + escapeHtml(x.code) + '" class="nb-fold' + (open ? " is-open" : "") + '">' +
+      return '<li data-code="' + escapeHtml(x.code) + '" class="nb-fold' + (open ? " is-open" : "") + '"' + (i >= RV_SHOW && !rvAll ? " hidden" : "") + '>' +
         '<div class="nb-head is-toggle" role="button" tabindex="0" aria-expanded="' + open + '"><b>' + escapeHtml(x.code + " " + x.name) + '</b>' +
         '<span class="nb-kind">' + x.shares.toLocaleString("ja-JP") + '株</span><span class="nb-chev" aria-hidden="true">›</span></div>' +
         '<div class="nb-tags">' + x.reasons.map(function (r) { return '<span class="nb-tag ' + r.c + '">' + escapeHtml(r.t) + '</span>'; }).join("") + '</div>' +
         '<div class="nb-more"' + (open ? "" : " hidden") + '><ul class="rv-why">' + x.reasons.filter(function (r) { return r.d; }).map(function (r) { return '<li>' + escapeHtml(r.t + ": " + r.d) + '</li>'; }).join("") + '</ul>' +
         '<div class="rv-swap"></div></div></li>';
-    }).join("") + '</ol><p class="calendar-note">売るかどうかは、買った理由や税金・NISAの枠もふまえてご自身で判断してください。押すと入れ替えの試算が出ます。</p>';
+    }).join("") + '</ol>' +
+      (extra > 0 ? '<button class="btn rv-all" type="button" aria-expanded="' + rvAll + '">' + (rvAll ? "たたむ" : "ほか" + extra + "件を見る") + '</button>' : '') +
+      '<p class="calendar-note">押すと入れ替えの試算が出ます。売るかは税金・NISAの枠もふまえてご判断ください。</p>';
+    var allBtn = body.querySelector(".rv-all");
+    if (allBtn) allBtn.addEventListener("click", function () { rvAll = !rvAll; renderReview(); });
     Array.prototype.forEach.call(body.querySelectorAll(".rv-list > li"), function (li) {
       var hd = li.querySelector(".nb-head"), code = li.dataset.code, x = list.filter(function (y) { return y.code === code; })[0];
       function fill() {
