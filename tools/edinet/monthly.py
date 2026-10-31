@@ -73,13 +73,16 @@ def update_perk(info, texts, code, text):
     # 文が前と同じ(空白の違いだけ)なら、人が文を読んで入れた段階(合計額・ポイント換算など)をそのまま残す
     same = re.sub(r"\s", "", texts.get(code) or "") == re.sub(r"\s", "", text)
     new = old if isinstance(old, list) and (same or all(t[1] in yen_in_text for t in old)) else 1
+    # 人が文を読んで「なし」(記念の1回だけ・今回で廃止など)にした会社は、文が同じあいだは「なし」のまま
+    if old == 0 and same and code in texts:
+        new = 0
     info[code] = new
     # 空白の入り方だけの違いは変更とみなさない(表の区切りの扱いで変わるため)
     changed = re.sub(r"\s", "", texts.get(code) or "") != re.sub(r"\s", "", text)
     if changed or code not in texts:
         texts[code] = text
     if not old:
-        return "ありに"
+        return "ありに" if new else None
     if isinstance(old, list) and new == 1:
         return "内容が変わり金額を外した"
     return "文を更新" if changed else None
