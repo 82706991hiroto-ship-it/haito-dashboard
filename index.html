@@ -309,6 +309,11 @@
   .rv-legend { margin: 6px 0 0 !important; font-size: 10.5px; color: var(--text-2); display: flex; align-items: center; gap: 4px; }
   .rv-legend .k { display: inline-block; width: 14px; height: 8px; border-radius: 2px; margin-left: 6px; } .rv-legend .k:first-child { margin-left: 0; }
   .rv-legend s.k { position: static; height: 12px; width: 0; border-radius: 0; margin-left: 8px; }
+  .rv-qty { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 8px; font-size: 13px; }
+  .rv-qn { width: 6em; font: inherit; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface, transparent); color: var(--text); text-align: right; }
+  .rv-qty span { display: inline-flex; gap: 4px; }
+  .rv-qb { font: inherit; font-size: 12px; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text-2); cursor: pointer; }
+  .rv-qb.on { background: #2563eb; border-color: #2563eb; color: #fff; font-weight: 600; }
   .rv-pick { width: 100%; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface, transparent); color: var(--text); }
   .rv-role { font-style: normal; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 6px; flex: none; }
   .rv-role.out { background: rgba(127,127,127,.15); color: var(--text-2); } .rv-role.in { background: rgba(37,99,235,.12); color: #2563eb; }
@@ -2829,12 +2834,13 @@
   }
   // 入れ替えの試算: 売る株数ぶん(持ちすぎは減らす目安、ほかは全部)を売り、次に買うならの1位(この銘柄以外)を買う
   // 入れ替え先は「次に買うなら」の順位の銘柄から選べる(既定は1位)。rvPick[売る銘柄] = 買う銘柄のコード
-  var rvPick = {};
+  var rvPick = {}, rvQty = {};
   function swapChoices(x) { return nextBuyList().list.filter(function (y) { return y.code !== x.code; }); }
   function swapPlan(x) {
     var ch = swapChoices(x), nb = ch.filter(function (y) { return y.code === rvPick[x.code]; })[0] || ch[0];
     if (!nb || !(x.price > 0)) return null;
-    var n = x.sell > 0 ? x.sell : x.shares, left = n, proceeds = 0, tax = 0, nisaUsed = false;
+    // 売る株数は自分で決められる(rvQty)。決めていなければ、持ちすぎは目安の株数、ほかは全部
+    var n = Math.min(x.shares, Math.max(1, Math.floor(num(rvQty[x.code]) || (x.sell > 0 ? x.sell : x.shares)))), left = n, proceeds = 0, tax = 0, nisaUsed = false;
     // 特定口座から先に売る(NISAの非課税枠を残すため)。特定口座は値上がり益に約20%
     x.held.slice().sort(function (a, b) { return (isTaxFree(a.account) ? 1 : 0) - (isTaxFree(b.account) ? 1 : 0); }).forEach(function (h) {
       if (left <= 0) return;
@@ -2962,7 +2968,11 @@
         var pick = '<select class="rv-pick" aria-label="入れ替えて買う銘柄">' + ch.map(function (y, i) {
           return '<option value="' + escapeHtml(y.code) + '"' + (y.code === sp.nb.code ? " selected" : "") + '>' + (i + 1) + '位 ' + escapeHtml(y.code + " " + y.name) + '(' + y.y.toFixed(2) + '%)</option>';
         }).join("") + '</select>';
-        box.innerHTML = '<div class="rv-box"><p><b>' + (x.sell > 0 ? "約" + sp.n + "株を売って" : "全部(" + sp.n + "株)売って") + '、次の銘柄を買ったら</b></p>' +
+        var qb = function (n, label) { return '<button type="button" class="rv-qb' + (sp.n === n ? " on" : "") + '" data-n="' + n + '">' + label + '</button>'; };
+        var half = Math.max(1, Math.round(x.shares / 2 / 100) * 100 || Math.floor(x.shares / 2));
+        box.innerHTML = '<div class="rv-box"><div class="rv-qty"><label>売る株数 <input type="number" class="rv-qn" min="1" max="' + x.shares + '" step="1" inputmode="numeric" value="' + sp.n + '"> 株</label>' +
+          '<span>' + (x.sell > 0 && x.sell < x.shares ? qb(x.sell, "持ちすぎ分") : '') + (half < x.shares ? qb(half, "半分") : '') + qb(x.shares, "全部") + '</span></div>' +
+          '<p><b>' + (sp.n >= x.shares ? "全部(" + sp.n + "株)" : sp.n + "株(" + x.shares + "株のうち)") + 'を売って、次の銘柄を買ったら</b></p>' +
           '<p class="rv-pick-row">' + pick + '</p><p class="calendar-note">「次に買うなら」の順位から選べます(保有の買い増し・買い増し候補)。</p>' +
           '<p>売った額 ' + fmtYen(sp.proceeds) + (sp.tax > 0 ? ' − 税金の目安 ' + fmtYen(sp.tax) : '') + ' → 約' + sp.m + '株(1株' + fmtYen(sp.nb.price) + ')</p>' +
           '<p>年間配当(税引前) ' + fmtYen(sp.divOut) + ' → ' + fmtYen(sp.divIn) + ' <b class="' + (dd >= 0 ? "up" : "down") + '">(' + (dd >= 0 ? "+" : "−") + fmtYen(Math.abs(dd)) + ')</b></p>' +
@@ -2971,6 +2981,12 @@
         var sel = box.querySelector(".rv-pick");
         sel.addEventListener("click", function (e) { e.stopPropagation(); });
         sel.addEventListener("change", function () { rvPick[code] = sel.value; fill(); });
+        var qn = box.querySelector(".rv-qn");
+        qn.addEventListener("click", function (e) { e.stopPropagation(); });
+        qn.addEventListener("change", function () { var v = Math.min(Math.floor(num(qn.value)), x.shares); if (v > 0 && v !== sp.n) { rvQty[code] = v; setTimeout(fill, 0); } });
+        Array.prototype.forEach.call(box.querySelectorAll(".rv-qb"), function (bt) {
+          bt.addEventListener("click", function (e) { e.stopPropagation(); rvQty[code] = +bt.dataset.n; fill(); });
+        });
         Array.prototype.forEach.call(box.querySelectorAll(".rv-sec-more"), function (d) { d.addEventListener("click", function (e) { e.stopPropagation(); }); });
         Array.prototype.forEach.call(box.querySelectorAll(".rv-seg button"), function (bt) {
           bt.addEventListener("click", function (e) { e.stopPropagation(); rvMode[code] = bt.dataset.mode; fill(); });
