@@ -284,6 +284,10 @@
   .nb-tag { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 8px; background: var(--accent-soft); color: var(--accent); }
   .nb-tag.dim { background: var(--field); color: var(--text-2); font-weight: 500; }
   .rv-all { margin-top: 8px; width: 100%; }
+  .rv-mix-h { margin-top: 8px !important; font-size: 12px; color: var(--text-2); }
+  .rv-mix { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .rv-mix th { text-align: left; font-weight: 500; padding: 1px 10px 1px 0; color: var(--text-2); max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rv-mix td { padding: 1px 4px; text-align: right; } .rv-mix td i { font-style: normal; font-size: 11px; color: var(--text-2); margin-left: 6px; }
   .rv-why { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--text-2); }
   .rv-box { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--field); font-size: 13px; }
   .rv-box p { margin: 2px 0; }
@@ -2804,7 +2808,41 @@
       else tax += Math.max(0, (x.price - num(h.cost)) * k) * TAX_GAIN;
     });
     var net = proceeds - tax, m = Math.floor(net / nb.price);
-    return { nb: nb, n: n, proceeds: proceeds, tax: tax, net: net, m: m, divOut: n * x.div, divIn: m * nb.div, nisaUsed: nisaUsed };
+    return { nb: nb, n: n, proceeds: proceeds, tax: tax, net: net, m: m, divOut: n * x.div, divIn: m * nb.div, nisaUsed: nisaUsed, mix: swapMix(x, n, nb, m) };
+  }
+  // 入れ替えた後の比率(日本株の年間配当に占める割合。分散の上限と同じ物差し)。売る分を一時的に減らし、買う分を足して集計し直す
+  function swapMix(x, n, nb, m) {
+    var secOut = sectorFor(x.code, x.held[0] && x.held[0].sector), secIn = nb.sector;
+    function shot() {
+      var agg = aggregate("jp"), o = guideShares(agg, x.code, secOut), i = guideShares(agg, nb.code, secIn);
+      return { out: o.stockPct, outSec: o.sectorPct, inn: i.stockPct, inSec: i.sectorPct, sens: o.sensPct };
+    }
+    var before = shot(), saved = state.holdings.map(function (h) { return h.shares; }), left = n;
+    x.held.slice().sort(function (a, b) { return (isTaxFree(a.account) ? 1 : 0) - (isTaxFree(b.account) ? 1 : 0); }).forEach(function (h) {
+      var k = Math.min(left, num(h.shares)); left -= k; h.shares = num(h.shares) - k;
+    });
+    if (m > 0) state.holdings.push({ id: "__swap__", code: nb.code, name: nb.name, sector: secIn, account: "特定", shares: m, cost: nb.price, div: nb.div, prevDiv: "" });
+    var after;
+    try { after = shot(); } finally {
+      if (m > 0) state.holdings.pop();
+      state.holdings.forEach(function (h, i) { h.shares = saved[i]; });
+    }
+    return { before: before, after: after, secOut: secOut, secIn: secIn };
+  }
+  function mixHtml(x, sp) {
+    var mx = sp.mix, b = mx.before, a = mx.after, g = state.guides || {}, sensT = num(g.sensitiveTarget) || 50;
+    function pc(v) { return v.toFixed(1) + "%"; }
+    function row(label, from, to, cap) {
+      var over = cap > 0 && to >= cap;
+      return '<tr><th>' + escapeHtml(label) + '</th><td>' + pc(from) + '</td><td>→</td><td><b' + (over ? ' class="down"' : '') + '>' + pc(to) + '</b>' + (cap > 0 ? '<i>上限' + cap + '%</i>' : '') + '</td></tr>';
+    }
+    var maxS = num(g.maxStockPct), maxSec = num(g.maxSectorPct);
+    return '<p class="rv-mix-h">比率(日本株の年間配当に占める割合)</p><table class="rv-mix">' +
+      row(x.name, b.out, a.out, maxS) +
+      (mx.secOut ? row(mx.secOut, b.outSec, a.outSec, maxSec) : '') +
+      row(sp.nb.name, b.inn, a.inn, maxS) +
+      (mx.secIn && mx.secIn !== mx.secOut ? row(mx.secIn, b.inSec, a.inSec, maxSec) : '') +
+      '<tr><th>景気敏感</th><td>' + pc(b.sens) + '</td><td>→</td><td><b>' + pc(a.sens) + '</b><i>目標' + sensT + '%</i></td></tr></table>';
   }
   function renderReview() {
     var body = document.getElementById("reviewBody");
@@ -2834,6 +2872,7 @@
         box.innerHTML = '<div class="rv-box"><p><b>' + (x.sell > 0 ? "約" + sp.n + "株を売って" : "全部(" + sp.n + "株)売って") + '、' + escapeHtml(sp.nb.code + " " + sp.nb.name) + 'を買ったら</b></p>' +
           '<p>売った額 ' + fmtYen(sp.proceeds) + (sp.tax > 0 ? ' − 税金の目安 ' + fmtYen(sp.tax) : '') + ' → 約' + sp.m + '株(1株' + fmtYen(sp.nb.price) + ')</p>' +
           '<p>年間配当(税引前) ' + fmtYen(sp.divOut) + ' → ' + fmtYen(sp.divIn) + ' <b class="' + (dd >= 0 ? "up" : "down") + '">(' + (dd >= 0 ? "+" : "−") + fmtYen(Math.abs(dd)) + ')</b></p>' +
+          mixHtml(x, sp) +
           (sp.nisaUsed ? '<p class="calendar-note">NISAの分を売っても、使った枠はその年には戻りません(翌年に復活)。</p>' : '') + '</div>';
       }
       function toggle() {
