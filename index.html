@@ -298,7 +298,7 @@
   .rv-band-l { flex: none; width: 5.8em; white-space: nowrap; font-size: 11.5px; color: var(--text-2); text-align: right; }
   .rv-band { flex: 1; display: flex; gap: 2px; height: 18px; min-width: 0; }
   .rv-band i, .rv-keys .k { background: rgba(127,127,127,.22); }
-  .rv-band i { flex-basis: 0; min-width: 2px; } .rv-band i:first-child { border-radius: 4px 0 0 4px; } .rv-band i:last-child { border-radius: 0 4px 4px 0; }
+  .rv-band i { flex-basis: 0; min-width: 2px; } .rv-band i.out, .rv-band i.in { min-width: 6px; } .rv-band i:first-child { border-radius: 4px 0 0 4px; } .rv-band i:last-child { border-radius: 0 4px 4px 0; }
   .rv-band i.out, .rv-keys .k.out { background: #64748b; } .rv-band i.in, .rv-keys .k.in { background: #2563eb; }
   .rv-band i { cursor: pointer; } .rv-band i.sel { outline: 2px solid var(--text); outline-offset: 1px; position: relative; z-index: 1; }
   .rv-tip { margin: 4px 0 0 6.4em !important; font-size: 12.5px; font-variant-numeric: tabular-nums; }
@@ -2893,9 +2893,12 @@
     if (Math.abs(dAft - dNow) >= 1) msgs.push('<li class="' + (dAft < dNow ? "good" : "bad") + '">景気敏感が目標' + sensT + '%から' + (dAft < dNow ? "近づきます" : "離れます") + '(' + b.sens.toFixed(0) + '→' + a.sens.toFixed(0) + '%)</li>');
     if (!msgs.length) msgs.push('<li>上限や目標に関わる大きな変化はありません</li>');
     // 業種の構成を、今と後の2本の帯(100%の積み上げ)で比べる。売る銘柄の業種は濃い灰、買う銘柄の業種は青、ほかは薄い灰。
-    // 業種の並びは「今」の多い順で固定し、2本で同じ業種が同じ色・同じ順になるようにする
+    // 業種の並びは売る・買う業種を左端、ほかは「今」の多い順で固定し、2本で同じ業種が同じ色・同じ順になるようにする
     var order = Object.keys(b.secs).concat(Object.keys(a.secs).filter(function (k) { return !(k in b.secs); }))
       .sort(function (p, q) { return (b.secs[q] || 0) - (b.secs[p] || 0); });
+    // 売る・買う銘柄の業種は左端に寄せる(少ししか持っていない業種でも、右端の細い帯に埋もれないように)
+    var hot = [mx.secOut].concat(mode === "swap" && mx.secIn !== mx.secOut ? [mx.secIn] : []).filter(Boolean);
+    order = hot.concat(order.filter(function (k) { return hot.indexOf(k) === -1; }));
     function band(sh, label) {
       return '<div class="rv-band-row"><span class="rv-band-l">' + label + '</span><div class="rv-band">' + order.map(function (k) {
         var v = sh.secs[k] || 0;
