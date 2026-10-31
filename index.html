@@ -294,28 +294,32 @@
   .rv-list .rv-msg li.good::before { content: "✓"; color: var(--good, #16a34a); } .rv-list .rv-msg li.bad::before { content: "!"; color: var(--crit); font-weight: 700; left: .3em; }
   .rv-list .rv-msg li.bad { color: var(--crit); }
   .rv-sub { margin: 10px 0 4px !important; font-size: 11.5px; color: var(--text-2); }
-  .rv-band-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
-  .rv-band-l { flex: none; width: 5.8em; white-space: nowrap; font-size: 11.5px; color: var(--text-2); text-align: right; }
-  .rv-band { flex: 1; display: flex; gap: 2px; height: 18px; min-width: 0; }
-  .rv-band i, .rv-keys .k { background: rgba(127,127,127,.22); }
-  .rv-band i { flex-basis: 0; min-width: 2px; } .rv-band i.out, .rv-band i.in { min-width: 6px; } .rv-band i:first-child { border-radius: 4px 0 0 4px; } .rv-band i:last-child { border-radius: 0 4px 4px 0; }
-  .rv-band i.out, .rv-keys .k.out { background: #64748b; } .rv-band i.in, .rv-keys .k.in { background: #2563eb; }
-  .rv-band i { cursor: pointer; } .rv-band i.sel { outline: 2px solid var(--text); outline-offset: 1px; position: relative; z-index: 1; }
-  .rv-tip { margin: 4px 0 0 6.4em !important; font-size: 12.5px; font-variant-numeric: tabular-nums; }
-  .rv-tap { margin: 2px 0 0 6.4em !important; font-size: 10.5px; color: var(--text-2); }
-  .rv-tip:not([hidden]) + .rv-tap { display: none; }
+  .rv-sec { padding: 5px 0; }
+  .rv-sec-h { display: flex; align-items: baseline; gap: 6px; font-size: 12.5px; }
+  .rv-sec-h > b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .rv-sec-h span { margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-2); font-size: 12px; }
+  .rv-sec-h span b { color: var(--text); } .rv-sec-h span.over, .rv-sec-h span.over b { color: var(--crit); }
+  .rv-sec-bar { position: relative; height: 14px; margin-top: 3px; }
+  .rv-sec-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; }
+  .rv-sec-bar i.was, .rv-legend .k.was { background: rgba(127,127,127,.2); }
+  .rv-sec-bar i.now { top: 3px; bottom: 3px; }
+  .rv-sec-bar i.now.etc, .rv-legend .k.now { background: #94a3b8; } .rv-sec-bar i.now.out { background: #64748b; } .rv-sec-bar i.now.in { background: #2563eb; }
+  .rv-sec-bar s, .rv-legend s.k { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 2px dashed rgba(127,127,127,.75); }
+  .rv-sec-more summary { font-size: 12px; color: var(--text-2); cursor: pointer; padding: 4px 0; }
+  .rv-legend { margin: 6px 0 0 !important; font-size: 10.5px; color: var(--text-2); display: flex; align-items: center; gap: 4px; }
+  .rv-legend .k { display: inline-block; width: 14px; height: 8px; border-radius: 2px; margin-left: 6px; } .rv-legend .k:first-child { margin-left: 0; }
+  .rv-legend s.k { position: static; height: 12px; width: 0; border-radius: 0; margin-left: 8px; }
   .rv-pick { width: 100%; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface, transparent); color: var(--text); }
   .rv-role { font-style: normal; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 6px; flex: none; }
   .rv-role.out { background: rgba(127,127,127,.15); color: var(--text-2); } .rv-role.in { background: rgba(37,99,235,.12); color: #2563eb; }
-  .rv-list .rv-keys li, .rv-list .rv-nums li { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; border: 0; font-size: 12.5px; }
-  .rv-keys, .rv-nums { list-style: none; margin: 6px 0 0; padding: 0; }
+  .rv-list .rv-nums li { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; border: 0; font-size: 12.5px; }
+  .rv-nums { list-style: none; margin: 6px 0 0; padding: 0; }
   .rv-nums { border-top: 1px solid var(--line); padding-top: 4px; margin-top: 8px; }
-  .rv-keys .k { flex: none; width: 10px; height: 10px; border-radius: 3px; align-self: center; }
-  .rv-keys small, .rv-nums small { font-size: 10.5px; color: var(--text-2); }
-  .rv-keys span, .rv-nums span { margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-2); }
-  .rv-keys b, .rv-nums b { color: var(--text); } .rv-keys b.over, .rv-nums b.over, .rv-keys span:has(b.over) { color: var(--crit); }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rv-band i.in, :root:not([data-theme="light"]) .rv-keys .k.in { background: #60a5fa; } :root:not([data-theme="light"]) .rv-band i.out, :root:not([data-theme="light"]) .rv-keys .k.out { background: #94a3b8; } }
-  :root[data-theme="dark"] .rv-band i.in, :root[data-theme="dark"] .rv-keys .k.in { background: #60a5fa; } :root[data-theme="dark"] .rv-band i.out, :root[data-theme="dark"] .rv-keys .k.out { background: #94a3b8; }
+  .rv-nums small { font-size: 10.5px; color: var(--text-2); }
+  .rv-nums span { margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-2); }
+  .rv-nums b { color: var(--text); } .rv-nums b.over { color: var(--crit); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rv-sec-bar i.now.in { background: #60a5fa; } :root:not([data-theme="light"]) .rv-sec-bar i.now.out { background: #a3b1c6; } }
+  :root[data-theme="dark"] .rv-sec-bar i.now.in { background: #60a5fa; } :root[data-theme="dark"] .rv-sec-bar i.now.out { background: #a3b1c6; }
   .rv-why { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--text-2); }
   .rv-box { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--field); font-size: 13px; }
   .rv-box p { margin: 2px 0; }
@@ -2892,29 +2896,28 @@
     if (broke.length) msgs.push('<li class="bad">' + escapeHtml(broke.join("・")) + ' が上限を超えます</li>');
     if (Math.abs(dAft - dNow) >= 1) msgs.push('<li class="' + (dAft < dNow ? "good" : "bad") + '">景気敏感が目標' + sensT + '%から' + (dAft < dNow ? "近づきます" : "離れます") + '(' + b.sens.toFixed(0) + '→' + a.sens.toFixed(0) + '%)</li>');
     if (!msgs.length) msgs.push('<li>上限や目標に関わる大きな変化はありません</li>');
-    // 業種の構成を、今と後の2本の帯(100%の積み上げ)で比べる。売る銘柄の業種は濃い灰、買う銘柄の業種は青、ほかは薄い灰。
-    // 業種の並びは売る・買う業種を左端、ほかは「今」の多い順で固定し、2本で同じ業種が同じ色・同じ順になるようにする
-    var order = Object.keys(b.secs).concat(Object.keys(a.secs).filter(function (k) { return !(k in b.secs); }))
-      .sort(function (p, q) { return (b.secs[q] || 0) - (b.secs[p] || 0); });
-    // 売る・買う銘柄の業種は左端に寄せる(少ししか持っていない業種でも、右端の細い帯に埋もれないように)
-    var hot = [mx.secOut].concat(mode === "swap" && mx.secIn !== mx.secOut ? [mx.secIn] : []).filter(Boolean);
-    order = hot.concat(order.filter(function (k) { return hot.indexOf(k) === -1; }));
-    function band(sh, label) {
-      return '<div class="rv-band-row"><span class="rv-band-l">' + label + '</span><div class="rv-band">' + order.map(function (k) {
-        var v = sh.secs[k] || 0;
-        if (v < 0.05) return "";
-        var cls = k === mx.secOut ? "out" : (mode === "swap" && k === mx.secIn) ? "in" : "etc";
-        return '<i class="' + cls + '" style="flex-grow:' + v.toFixed(2) + '" title="' + escapeHtml(k + " " + v.toFixed(1) + "%") + '" data-sec="' + escapeHtml(k) + '" data-from="' + (b.secs[k] || 0).toFixed(1) + '" data-to="' + (a.secs[k] || 0).toFixed(1) + '" role="button" tabindex="0"></i>';
-      }).join("") + '</div></div>';
-    }
-    function key(cls, name, k, role) {
+    // 業種ごとの横棒: 今(薄い棒)と後(濃い棒)を重ね、上限を点線で引く。棒の色は業種の役(買う=青・売る=濃い灰・ほか=灰)で、上限超えは数字の赤字で示す。買う業種・売る業種を上に、ほかは後の多い順。
+    // 名前はいつも見え、少ししか持っていない業種も埋もれない。ほかの業種は5つまで出し、残りはたたむ
+    var hot = [mode === "swap" ? mx.secIn : "", mx.secOut].filter(function (k, i, arr) { return k && arr.indexOf(k) === i; });
+    var rest = Object.keys(b.secs).concat(Object.keys(a.secs)).filter(function (k, i, arr) { return arr.indexOf(k) === i && hot.indexOf(k) === -1; })
+      .sort(function (p, q) { return (a.secs[q] || 0) - (a.secs[p] || 0) || (b.secs[q] || 0) - (b.secs[p] || 0); });
+    var topV = Math.max(maxSec * 1.25 || 0, 10);
+    Object.keys(b.secs).forEach(function (k) { topV = Math.max(topV, b.secs[k]); });
+    Object.keys(a.secs).forEach(function (k) { topV = Math.max(topV, a.secs[k]); });
+    function w(v) { return Math.min(100, v / topV * 100).toFixed(1) + "%"; }
+    function secRow(k) {
       var from = b.secs[k] || 0, to = a.secs[k] || 0, over = maxSec > 0 && to >= maxSec;
-      return '<li><i class="k ' + cls + '"></i>' + escapeHtml(name) + '<small>(' + role + ')</small>' +
-        '<span>' + from.toFixed(1) + '% → <b' + (over ? ' class="over"' : '') + '>' + to.toFixed(1) + '%</b>' + (over ? ' 上限超え' : '') + '</span></li>';
+      var cls = k === mx.secIn && mode === "swap" ? "in" : k === mx.secOut ? "out" : "etc";
+      var role = cls === "in" ? (k === mx.secOut ? "売る・買う" : "買う") : cls === "out" ? "売る" : "";
+      return '<div class="rv-sec">' +
+        '<div class="rv-sec-h">' + (role ? '<em class="rv-role ' + (cls === "in" ? "in" : "out") + '">' + role + '</em>' : '') + '<b>' + escapeHtml(k) + '</b>' +
+          '<span class="' + (over ? "over" : "") + '">' + from.toFixed(1) + ' → <b>' + to.toFixed(1) + '%</b>' + (over ? ' 上限超え' : '') + '</span></div>' +
+        '<div class="rv-sec-bar"><i class="was" style="width:' + w(from) + '"></i><i class="now ' + cls + '" style="width:' + w(to) + '"></i>' +
+          (maxSec > 0 ? '<s style="left:' + w(maxSec) + '"></s>' : '') + '</div></div>';
     }
-    var keys = (mx.secOut ? key("out", mx.secOut, mx.secOut, same ? "売る・買う" : "売る") : "") +
-      (mode === "swap" && mx.secIn && !same ? key("in", mx.secIn, mx.secIn, "買う") : "") +
-      '<li><i class="k etc"></i>そのほかの業種</li>';
+    var shown = rest.slice(0, 5), more = rest.slice(5);
+    var secHtml = hot.concat(shown).map(secRow).join("") +
+      (more.length ? '<details class="rv-sec-more"><summary>ほか' + more.length + '業種</summary>' + more.map(secRow).join("") + '</details>' : '');
     // 銘柄・景気敏感は数字だけ
     var nums = rows.filter(function (r) { return r.key === "out" || r.key === "inn" || r.key === "sens"; }).map(function (r) {
       var over = r.cap > 0 && a[r.key] >= r.cap;
@@ -2926,10 +2929,8 @@
       '<span class="rv-seg" role="group"><button type="button" data-mode="swap" class="' + (mode === "swap" ? "on" : "") + '">入れ替え</button>' +
       '<button type="button" data-mode="sell" class="' + (mode === "sell" ? "on" : "") + '">売るだけ</button></span></div>' +
       '<ul class="rv-msg">' + msgs.join("") + '</ul>' +
-      '<p class="rv-sub">業種の内訳' + (maxSec > 0 ? '(1業種の上限' + maxSec + '%)' : '') + '</p>' +
-      band(b, "今") + band(a, mode === "swap" ? "入れ替え後" : "売った後") +
-      '<p class="rv-tip" hidden></p><p class="rv-tap">帯を押すと業種名が出ます</p>' +
-      '<ul class="rv-keys">' + keys + '</ul>' +
+      '<p class="rv-sub">業種の内訳' + (maxSec > 0 ? '(上限' + maxSec + '%は点線)' : '') + '</p>' + secHtml +
+      '<p class="rv-legend"><i class="k was"></i>今 <i class="k now"></i>' + (mode === "swap" ? "入れ替え後" : "売った後") + (maxSec > 0 ? ' <s class="k"></s>上限' : '') + '</p>' +
       '<ul class="rv-nums">' + nums + '</ul>';
   }
   function renderReview() {
@@ -2970,17 +2971,7 @@
         var sel = box.querySelector(".rv-pick");
         sel.addEventListener("click", function (e) { e.stopPropagation(); });
         sel.addEventListener("change", function () { rvPick[code] = sel.value; fill(); });
-        // 帯を押すと、その業種の名前と今→後の割合を出す(スマホでも見られるように)
-        Array.prototype.forEach.call(box.querySelectorAll(".rv-band i"), function (seg) {
-          seg.addEventListener("click", function (e) {
-            e.stopPropagation();
-            var k = seg.dataset.sec, tip = box.querySelector(".rv-tip"), on = tip.dataset.sec !== k;
-            Array.prototype.forEach.call(box.querySelectorAll(".rv-band i"), function (z) { z.classList.toggle("sel", on && z.dataset.sec === k); });
-            tip.dataset.sec = on ? k : "";
-            tip.hidden = !on;
-            if (on) tip.innerHTML = '<b>' + escapeHtml(k) + '</b> ' + seg.dataset.from + '% → ' + seg.dataset.to + '%';
-          });
-        });
+        Array.prototype.forEach.call(box.querySelectorAll(".rv-sec-more"), function (d) { d.addEventListener("click", function (e) { e.stopPropagation(); }); });
         Array.prototype.forEach.call(box.querySelectorAll(".rv-seg button"), function (bt) {
           bt.addEventListener("click", function (e) { e.stopPropagation(); rvMode[code] = bt.dataset.mode; fill(); });
         });
