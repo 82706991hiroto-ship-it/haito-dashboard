@@ -128,12 +128,17 @@
   // とする。両方にあるものは勝った側の中身を使う。
   // 同じ銘柄が両方にあるときも、株価・予想配当は入れた日付の新しいほうを使う(古い端末で株価を更新した場合など)
   function day(v) { return String(v || "").replace(/-/g, "/").slice(0, 10); }
+  function divStamp(x) {
+    return [String(x.divAt || ""), String(x.fdivDate || "").replace(/\//g, "-").slice(0, 10), String(x.divCheckedAt || "")].sort().pop();
+  }
   function newerQuote(w, l) {
     if (!w || !l) return w;
     var out = w;
     if (l.price > 0 && day(l.priceDate) > day(w.priceDate)) { out = Object.assign({}, out, { price: l.price, priceDate: l.priceDate }); }
-    if (day(l.fdivDate) > day(w.fdivDate) && (l.div > 0 || l.fdiv > 0)) {
-      out = Object.assign({}, out, { fdivDate: l.fdivDate, feps: l.feps });
+    // 予想配当は、入れた日時(divAt: 手入力・貼り付け・チェックシート・有報の実績のどれでも)の新しいほう。
+    // divAt の無い古い記録は、会社予想を取り込んだ日・「変更なし」で確かめた日を使う
+    if (divStamp(l) > divStamp(w) && (l.div > 0 || l.fdiv > 0)) {
+      out = Object.assign({}, out, { fdivDate: l.fdivDate, feps: l.feps, divAt: l.divAt, divBy: l.divBy, divCheckedAt: l.divCheckedAt });
       if (l.div > 0 && "div" in l) out.div = l.div;
       if (l.fdiv > 0) out.fdiv = l.fdiv;
     }
@@ -156,7 +161,15 @@
     { name: "earnings", get: function (d) { return d.state && d.state.earnings; }, set: function (d, v) { d.state.earnings = v; } },
     { name: "irPrices", get: function (d) { return d.irPrices; }, set: function (d, v) { d.irPrices = v; },
       // 両方にある株価は、入れた日付の新しいほう
-      pick: function (w, l) { return l && w && String(l.d || "") > String(w.d || "") ? l : w; } },
+      // 株価は d、予想配当は fd(無ければ d)の新しいほうを、別々に選ぶ
+      pick: function (w, l) {
+        if (!l || !w) return w;
+        var out = String(l.d || "") > String(w.d || "") ? Object.assign({}, l, { f: w.f, fd: w.fd }) : Object.assign({}, w);
+        var src = String(l.fd || l.d || "") > String(w.fd || w.d || "") ? l : w;
+        if (src.f > 0) { out.f = src.f; if (src.fd) out.fd = src.fd; else delete out.fd; } else { delete out.f; delete out.fd; }
+        if (src.e != null) out.e = src.e;
+        return out;
+      } },
     { name: "splits", get: function (d) { return d.splits; }, set: function (d, v) { d.splits = v; } }
   ];
   function payoutKey(x) { return x.code + "|" + (x.date || x.ym) + "|" + Math.round(Number(x.gross) || 0); }
@@ -333,6 +346,7 @@
   window.HaitoSync = {
     configured: function () { return !!CFG; }, on: on, code: code, meta: meta, status: S,
     norm: norm, fmt: fmt, startNew: startNew, peek: peek, adopt: adopt, off: off,
-    syncNow: syncNow, soon: soon, init: init
+    syncNow: syncNow, soon: soon, init: init,
+    _merge: mergeKeep  // 点検用
   };
 })();

@@ -2215,8 +2215,9 @@
   function forecastStatus(h) {
     var code = String(h.code || "").trim().toUpperCase();
     if (isUS(h) || !/^[1-9][0-9A-Z]{3}$/.test(code) || h.excluded) return null;
-    if (!h.fdivDate) return { kind: "none" };
-    var got = new Date(isoDay(h.fdivDate) + "T00:00:00"), now = new Date(), due = null;
+    var gotDay = h.divBy === "内蔵データ" ? "" : [isoDay(h.fdivDate || ""), isoDay(h.divAt || "")].sort().pop();
+    if (!gotDay) return { kind: "none" };
+    var got = new Date(gotDay + "T00:00:00"), now = new Date(), due = null;
     var rec = FIN[code[0]] && FIN[code[0]][code], fy = rec && rec.fy ? new Date(rec.fy + "T00:00:00") : null;
     if (fy && !isNaN(fy)) {
       for (var k = 0; k < 8; k++) {
@@ -3310,15 +3311,17 @@
       input.addEventListener("focus", function () { divBefore = h.div; });
       input.addEventListener("change", function () {
         if (recordDivChange(h, divBefore, h.div)) { save(); renderDashboard(); renderReviewList(); }
+        storeDivForCheck(h);
         divBefore = h.div;
       });
     }
     input.addEventListener("input", function () {
       h[field] = type === "number" ? input.value : input.value;
       if (field === "div" && h.divSrc) { delete h.divSrc; delete h.divNote; }
+      if (field === "div") { h.divAt = nowIso(); h.divBy = "手入力"; }
       // 1株配当・前年配当・銘柄名は銘柄で決まるので、同じ銘柄のほかの口座の行にも入れる
       if (field === "div" || field === "prevDiv" || field === "name") {
-        shareStockFields(h, field === "div" ? ["div", "divCheckedAt"] : [field]);
+        shareStockFields(h, field === "div" ? ["div", "divCheckedAt", "divAt", "divBy"] : [field]);
         siblingsOf(h).forEach(function (x) {
           var other = document.querySelector('#holdingsBody tr[data-id="' + x.id + '"] input[data-field="' + field + '"]');
           if (other && other !== input) other.value = input.value;
@@ -3536,11 +3539,14 @@
     divIn.oninput = function () {
       h.div = divIn.value;
       if (h.divSrc) { delete h.divSrc; delete h.divNote; }
-      shareStockFields(h, ["div"]);
+      h.divAt = nowIso(); h.divBy = "手入力";
+      shareStockFields(h, ["div", "divAt", "divBy"]);
+      qStatus.textContent = divSourceText(h);
       save(); paintYield(); renderTable(); renderDashboard();
     };
     divIn.onchange = function () {
       if (recordDivChange(h, divBefore, h.div)) { shareStockFields(h, ["divCheckedAt"]); save(); renderDashboard(); renderReviewList(); }
+      storeDivForCheck(h);
       divBefore = h.div;
     };
     bind(perk, "perk", true);
@@ -3555,7 +3561,7 @@
     var qCode = String(h.code || "").trim().toUpperCase(), qStatus = document.getElementById("detailQuoteStatus");
     document.getElementById("detailQuote").hidden = isUS(h) || !/^[0-9][0-9A-Z]{3}$/.test(qCode);
     document.getElementById("detailYahoo").href = yahooQuoteUrl(qCode);
-    qStatus.textContent = h.fdivDate ? "配当/株は " + h.fdivDate + " に取り込んだ会社予想です。" : "";
+    qStatus.textContent = divSourceText(h);
     function takeQuote(t) {
       var q = t && t.length > 40 ? parseQuoteBlock(t) : null;
       if (!q) {
@@ -6041,7 +6047,7 @@
         var p2 = snapToOfficial(code, round2(num(h.prevDiv)));
         if (p2 !== round2(num(h.prevDiv))) { h.prevDiv = p2; did = true; }
       }
-      if (!h.fdivDate && !h.divCheckedAt && num(h.div) > 0) {
+      if (!h.fdivDate && !h.divCheckedAt && !h.divAt && num(h.div) > 0) {
         var d2 = snapToOfficial(code, round2(num(h.div)));
         if (d2 !== round2(num(h.div))) { h.div = d2; did = true; }
       }
@@ -6262,20 +6268,58 @@
       if (!c) return null;
       if (h.divCheckedAt && h.divCheckedAt >= c.date) return null;
       if (h.fdivDate && isoDay(h.fdivDate) >= c.date) return null;  // 決算のあとに会社予想を取り込み済み
+      if (h.divAt && h.divBy !== "内蔵データ" && h.divAt >= c.date) return null;  // 決算のあとに入れ直した
       // 決算より後に登録した銘柄は、登録時に確かめた値として扱う
       if (h.addedAt && h.addedAt >= c.date) return null;
       return { h: h, c: c };
     }).filter(Boolean);
   }
 
+  // 内蔵データ(有報)の前期の実績(特別配当を除く)が、入れてある配当/株より多い銘柄。予想が古いままのことが多い
+  // (会社が減配を予想していることもあるので、自動では書き換えず「このまま」も選べる)
+  function actualAboveTargets() {
+    var seen = {}, out = [];
+    state.holdings.forEach(function (h) {
+      var code = String(h.code || "").trim().toUpperCase();
+      if (seen[code] || h.excluded || isUS(h) || isFund(h) || !(num(h.div) > 0)) return;
+      var a = ordinaryDivs(code), act = a && a[0];
+      if (!(act > 0) || act <= round2(num(h.div)) * 1.005 || h.divSeenAct === act) return;
+      seen[code] = true;
+      out.push({ h: h, act: act });
+    });
+    return out;
+  }
+  function actualAboveRow(x) {
+    var h = x.h, li = document.createElement("li");
+    li.innerHTML = '<span class="mname"></span><span class="mlack"></span>';
+    li.querySelector(".mname").textContent = (h.name || h.code) + "(" + h.code + ")";
+    li.querySelector(".mlack").textContent = "有報の前期実績 " + x.act + "円 > 今の配当/株 " + round2(num(h.div)) + "円" + (h.divBy ? "(" + h.divBy + ")" : "");
+    var take = document.createElement("button");
+    take.type = "button"; take.className = "mjump"; take.textContent = x.act + "円にする";
+    take.addEventListener("click", function () {
+      recordDivChange(h, h.div, x.act);
+      h.div = x.act; h.divSeenAct = x.act; markDiv(h, "有報の実績");
+      shareStockFields(h, ["div", "divSeenAct", "divCheckedAt"]); storeDivForCheck(h);
+      save(); renderTable(); renderDashboard(); renderReviewList();
+    });
+    var keep = document.createElement("button");
+    keep.type = "button"; keep.className = "mok"; keep.textContent = "このまま";
+    keep.addEventListener("click", function () {
+      h.divSeenAct = x.act; shareStockFields(h, ["divSeenAct"]);
+      save(); renderReviewList();
+    });
+    li.appendChild(take); li.appendChild(keep);
+    return li;
+  }
   function renderReviewList() {
     var box = document.getElementById("reviewBox");
     var list = document.getElementById("reviewList");
     if (!box || !list) return;
-    var rows = reviewTargets();
-    box.hidden = rows.length === 0;
+    var rows = reviewTargets(), acts = actualAboveTargets();
+    box.hidden = rows.length === 0 && acts.length === 0;
     list.innerHTML = "";
-    if (rows.length === 0) return;
+    acts.forEach(function (x) { list.appendChild(actualAboveRow(x)); });
+    if (rows.length === 0) { document.getElementById("reviewHint").textContent = "有報(内蔵データ)の前期の実績が、入れてある今期の予想より多い銘柄です。予想が古いままかもしれません。"; return; }
     var exactCount = rows.filter(function (x) { return x.c.exact; }).length;
     document.getElementById("reviewHint").textContent =
       (exactCount === rows.length ? "決算発表の予定日を過ぎた銘柄です。" : "決算発表が済んだ(「目安」は済んだ可能性がある)銘柄です。") +
@@ -8937,7 +8981,39 @@
       });
     });
   }
-  function divDateOf(h) { return [isoDay(h.divCheckedAt || ""), isoDay(h.fdivDate || ""), isoDay(h.quoteDate || "")].sort().pop() || ""; }
+  // 入れた日時(秒まで)。同じ日に何度か入れても後のほうが分かる。日付だけの古い記録はその日の始めとして比べる
+  function nowIso() { var d = new Date(); return todayIso() + "T" + [d.getHours(), d.getMinutes(), d.getSeconds()].map(function (n) { return ("0" + n).slice(-2); }).join(":"); }
+  function divDateOf(h) { return [String(h.divAt || ""), isoDay(h.divCheckedAt || ""), isoDay(h.fdivDate || ""), isoDay(h.quoteDate || "")].sort().pop() || ""; }
+  // 1株配当(今期の予想)は、手入力・Yahoo!の貼り付け・チェックシート・内蔵データ(有報)・ほかの端末の同期のどれからでも入る。
+  // 食い違ったら「入れた日付の新しいほう」を使う(divAt: 入れた日、divBy: どこから)。同じ日なら手入力 > Yahoo! > チェックシート > 内蔵データ。
+  // チェックシートとは irPrices の f(予想配当)・fd(入れた日)でやりとりし、どちらで直してももう一方に伝わる
+  var DIV_RANK = { "手入力": 3, "Yahoo!": 2, "チェックシート": 1, "有報の実績": 0, "内蔵データ": 0 };
+  function divWins(h, at, by) {
+    var cur = divDateOf(h);
+    if (!cur || at > cur) return true;
+    return at === cur && (DIV_RANK[by] || 0) > (DIV_RANK[h.divBy] || 0);
+  }
+  function markDiv(h, by, at) {
+    h.divAt = at || nowIso(); h.divBy = by;
+    shareStockFields(h, ["divAt", "divBy"]);
+  }
+  // 手で直した予想配当をチェックシートにも伝える
+  function storeDivForCheck(h) {
+    var code = String(h.code || "").trim().toUpperCase();
+    if (isUS(h) || isFund(h) || !/^[1-9][0-9A-Z]{3}$/.test(code) || !(num(h.div) > 0)) return;
+    var all = {};
+    try { all = JSON.parse(localStorage.getItem("irPrices") || "{}") || {}; } catch (e) {}
+    var cur = all[code] || {};
+    if (cur.f === num(h.div) && cur.fd === h.divAt) return;
+    cur.f = num(h.div); cur.fd = h.divAt || nowIso();
+    all[code] = cur;
+    try { localStorage.setItem("irPrices", JSON.stringify(all)); } catch (e) {}
+  }
+  function divSourceText(h) {
+    var at = isoDay(h.divAt || "") || isoDay(h.fdivDate || "") || h.divCheckedAt || "";
+    if (!at && !h.divBy) return "";
+    return "配当/株は " + (at ? at.slice(5).replace(/^0/, "").replace("-", "/").replace("/0", "/") + " に" : "") + (h.divBy || (h.fdivDate ? "会社予想から" : "")) + (h.divBy ? "で入れた値" : "取り込んだ値") + "です。";
+  }
   // 開いたとき・表を描くときに、食い違っている値をそろえる
   //  株価: 日付の新しいほう
   //  1株配当: 入れた日付の新しいほう。日付が分からなければ、内蔵の直近実績と違うほう(会社予想を入れた行)
@@ -9624,16 +9700,18 @@
     try { all = JSON.parse(localStorage.getItem("irPrices") || "{}") || {}; } catch (e) {}
     var cur = all[code] || {}, today = isoDay(todayStamp());
     if (q.price > 0) { cur.p = q.price; cur.d = today; }
-    if (q.fdiv > 0) cur.f = q.fdiv;
+    if (q.fdiv > 0) { cur.f = q.fdiv; cur.fd = nowIso(); }
     if (q.feps != null && !isNaN(q.feps)) cur.e = q.feps;
     all[code] = cur;
     try { localStorage.setItem("irPrices", JSON.stringify(all)); } catch (e) {}
   }
   // 株価と会社予想の1株配当を保有銘柄に入れる。配当/株は「今期の予想」として扱う(前年配当は内蔵の実績のまま)
-  function applyQuoteTo(h, q, stamp) {
+  function applyQuoteTo(h, q, stamp, by, divAt) {
     noteSplitHint(h, q, stamp);
     if (q.price > 0) { h.price = q.price; h.priceDate = stamp; }
+    by = by || "Yahoo!"; divAt = divAt || nowIso();
     if (q.fdiv > 0) {
+      h.divAt = divAt; h.divBy = by;
       // 前の値も会社予想(取り込んだもの)なら、予想の修正として増配・減配を記録する
       if (h.fdivDate) recordDivChange(h, h.div, q.fdiv);
       h.div = q.fdiv; h.fdivDate = stamp; h.feps = q.feps != null && !isNaN(q.feps) ? q.feps : undefined;
@@ -9648,10 +9726,15 @@
     state.holdings.forEach(function (h) {
       if (isUS(h) || isFund(h)) return;
       var code = String(h.code || "").trim().toUpperCase(), q = all[code];
-      if (!q || !q.d || !(q.p > 0 || q.f > 0)) return;
-      if (h.quoteDate && isoDay(q.d) <= isoDay(h.quoteDate)) return;
-      if (h.priceDate && isoDay(q.d) < isoDay(h.priceDate)) return;  // 明細で後から入れた株価の方が新しい
-      applyQuoteTo(h, { price: q.p, fdiv: q.f, feps: q.e }, q.d.replace(/-/g, "/"));
+      if (!q || !(q.p > 0 || q.f > 0)) return;
+      // 株価と予想配当は別々に、入れた日付で比べる(fd が無い古い記録は d を使う)
+      var pd = isoDay(q.d || ""), fd = String(q.fd || isoDay(q.d || ""));
+      var takeP = q.p > 0 && pd && (!h.quoteDate || pd > isoDay(h.quoteDate)) && !(h.priceDate && pd < isoDay(h.priceDate)) && num(h.price) !== q.p;
+      var takeF = q.f > 0 && fd && round2(num(h.div)) !== round2(q.f) && divWins(h, fd, "チェックシート");
+      if (!takeP && !takeF) return;
+      var stamp = (takeP ? pd : isoDay(fd)).replace(/-/g, "/");
+      applyQuoteTo(h, { price: takeP ? q.p : NaN, fdiv: takeF ? q.f : NaN, feps: takeF ? q.e : undefined }, stamp, "チェックシート", fd);
+      if (takeF) shareStockFields(h, ["div", "divAt", "divBy", "fdivDate", "feps"]);
       took.push(h.name || code);
     });
     if (took.length) {
@@ -9673,7 +9756,7 @@
       var empty = h.div === "" || h.div == null;
       var zeroed = !empty && num(h.div) === 0 && (h.prevDiv === "" || h.prevDiv == null || num(h.prevDiv) === 0);
       if (!empty && !zeroed) return;
-      h.div = s[0];
+      h.div = s[0]; h.divBy = "内蔵データ";
       if (zeroed) h.prevDiv = "";  // 前年配当は内蔵データから自動で出す
       filled.push(h.name || code);
     });
