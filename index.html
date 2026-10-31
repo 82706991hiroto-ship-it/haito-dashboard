@@ -287,7 +287,7 @@
   .rv-mix-h { margin-top: 8px !important; font-size: 12px; color: var(--text-2); }
   .rv-mix { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
   .rv-mix th { text-align: left; font-weight: 500; padding: 1px 10px 1px 0; color: var(--text-2); max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rv-mix td { padding: 1px 4px; text-align: right; } .rv-mix td i { font-style: normal; font-size: 11px; color: var(--text-2); margin-left: 6px; }
+  .rv-mix td { padding: 1px 4px 1px 8px; text-align: right; } .rv-mix td small { font-size: 10.5px; color: var(--text-2); } .rv-mix td.down { color: var(--crit); } .rv-mix td i { font-style: normal; font-size: 11px; color: var(--text-2); margin-left: 6px; }
   .rv-why { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--text-2); }
   .rv-box { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--field); font-size: 13px; }
   .rv-box p { margin: 2px 0; }
@@ -2821,28 +2821,32 @@
     x.held.slice().sort(function (a, b) { return (isTaxFree(a.account) ? 1 : 0) - (isTaxFree(b.account) ? 1 : 0); }).forEach(function (h) {
       var k = Math.min(left, num(h.shares)); left -= k; h.shares = num(h.shares) - k;
     });
-    if (m > 0) state.holdings.push({ id: "__swap__", code: nb.code, name: nb.name, sector: secIn, account: "特定", shares: m, cost: nb.price, div: nb.div, prevDiv: "" });
-    var after;
-    try { after = shot(); } finally {
-      if (m > 0) state.holdings.pop();
+    var sold, after;
+    try {
+      sold = shot();
+      if (m > 0) state.holdings.push({ id: "__swap__", code: nb.code, name: nb.name, sector: secIn, account: "特定", shares: m, cost: nb.price, div: nb.div, prevDiv: "" });
+      after = shot();
+    } finally {
+      if (state.holdings.length && state.holdings[state.holdings.length - 1].id === "__swap__") state.holdings.pop();
       state.holdings.forEach(function (h, i) { h.shares = saved[i]; });
     }
-    return { before: before, after: after, secOut: secOut, secIn: secIn };
+    return { before: before, sold: sold, after: after, secOut: secOut, secIn: secIn };
   }
   function mixHtml(x, sp) {
-    var mx = sp.mix, b = mx.before, a = mx.after, g = state.guides || {}, sensT = num(g.sensitiveTarget) || 50;
-    function pc(v) { return v.toFixed(1) + "%"; }
-    function row(label, from, to, cap) {
-      var over = cap > 0 && to >= cap;
-      return '<tr><th>' + escapeHtml(label) + '</th><td>' + pc(from) + '</td><td>→</td><td><b' + (over ? ' class="down"' : '') + '>' + pc(to) + '</b>' + (cap > 0 ? '<i>上限' + cap + '%</i>' : '') + '</td></tr>';
-    }
+    var mx = sp.mix, b = mx.before, o = mx.sold, a = mx.after, g = state.guides || {}, sensT = num(g.sensitiveTarget) || 50;
     var maxS = num(g.maxStockPct), maxSec = num(g.maxSectorPct);
+    function cell(v, cap) { return '<td' + (cap > 0 && v >= cap ? ' class="down"' : '') + '>' + v.toFixed(1) + '%</td>'; }
+    function row(label, key, cap, note) {
+      return '<tr><th>' + escapeHtml(label) + '</th>' + cell(b[key], cap) + cell(o[key], cap) + '<td><b' + (cap > 0 && a[key] >= cap ? ' class="down"' : '') + '>' + a[key].toFixed(1) + '%</b></td>' +
+        '<td><i>' + (note || (cap > 0 ? "上限" + cap + "%" : "")) + '</i></td></tr>';
+    }
     return '<p class="rv-mix-h">比率(日本株の年間配当に占める割合)</p><table class="rv-mix">' +
-      row(x.name, b.out, a.out, maxS) +
-      (mx.secOut ? row(mx.secOut, b.outSec, a.outSec, maxSec) : '') +
-      row(sp.nb.name, b.inn, a.inn, maxS) +
-      (mx.secIn && mx.secIn !== mx.secOut ? row(mx.secIn, b.inSec, a.inSec, maxSec) : '') +
-      '<tr><th>景気敏感</th><td>' + pc(b.sens) + '</td><td>→</td><td><b>' + pc(a.sens) + '</b><i>目標' + sensT + '%</i></td></tr></table>';
+      '<tr><th></th><td><small>今</small></td><td><small>売るだけ</small></td><td><small>入れ替え</small></td><td></td></tr>' +
+      row(x.name, "out", maxS) +
+      (mx.secOut ? row(mx.secOut, "outSec", maxSec) : '') +
+      row(sp.nb.name, "inn", maxS) +
+      (mx.secIn && mx.secIn !== mx.secOut ? row(mx.secIn, "inSec", maxSec) : '') +
+      row("景気敏感", "sens", 0, "目標" + sensT + "%") + '</table>';
   }
   function renderReview() {
     var body = document.getElementById("reviewBody");
