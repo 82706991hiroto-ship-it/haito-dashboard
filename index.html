@@ -284,22 +284,31 @@
   .nb-tag { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 8px; background: var(--accent-soft); color: var(--accent); }
   .nb-tag.dim { background: var(--field); color: var(--text-2); font-weight: 500; }
   .rv-all { margin-top: 8px; width: 100%; }
-  .rv-mix-h { margin-top: 10px !important; font-size: 12px; color: var(--text-2); }
-  .rv-mix { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; table-layout: fixed; }
-  .rv-mix thead th { border-bottom: 1px solid var(--line, rgba(127,127,127,.25)); }
-  .rv-mix thead td { font-size: 11px; color: var(--text-2); padding: 0 6px 4px; border-bottom: 1px solid var(--line, rgba(127,127,127,.25)); }
-  .rv-mix tbody tr + tr th, .rv-mix tbody tr + tr td { border-top: 1px solid var(--line, rgba(127,127,127,.15)); }
-  .rv-mix th { width: 44%; text-align: left; font-weight: 400; padding: 6px 4px 6px 0; overflow: hidden; }
-  .rv-mix th b { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: calc(100% - 3em); vertical-align: bottom; }
-  .rv-mix th small { display: block; font-size: 10.5px; color: var(--text-2); }
-  .rv-role { font-style: normal; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 6px; margin-right: 5px; vertical-align: 1px; }
+  .rv-mix-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; font-size: 12px; color: var(--text-2); }
+  .rv-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; }
+  .rv-seg button { border: 0; background: transparent; color: var(--text-2); font: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer; }
+  .rv-seg button.on { background: #2563eb; color: #fff; font-weight: 600; }
+  .rv-msg { list-style: none; margin: 8px 0 6px; padding: 0; font-size: 13px; }
+  .rv-list .rv-msg li { padding: 0 0 0 1.2em; border: 0; position: relative; margin: 2px 0; }
+  .rv-list .rv-msg li::before { content: "・"; position: absolute; left: 0; }
+  .rv-list .rv-msg li.good::before { content: "✓"; color: var(--good, #16a34a); } .rv-list .rv-msg li.bad::before { content: "!"; color: var(--crit); font-weight: 700; left: .3em; }
+  .rv-list .rv-msg li.bad { color: var(--crit); }
+  .rv-bar-row { padding: 6px 0; } .rv-bar-row + .rv-bar-row { border-top: 1px solid var(--line); }
+  .rv-bar-head { display: flex; align-items: baseline; gap: 6px; font-size: 13px; }
+  .rv-bar-head > b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .rv-bar-head small { font-size: 10.5px; color: var(--text-2); white-space: nowrap; }
+  .rv-val { margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-2); font-size: 12.5px; }
+  .rv-val b { color: var(--text); font-size: 13.5px; } .rv-val b.over { color: var(--crit); }
+  .rv-role { font-style: normal; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 6px; flex: none; }
   .rv-role.out { background: rgba(127,127,127,.15); color: var(--text-2); } .rv-role.in { background: rgba(37,99,235,.12); color: #2563eb; }
-  .rv-mix td { text-align: right; padding: 6px 6px; color: var(--text-2); }
-  .rv-mix td.last { color: var(--text); font-weight: 700; }
-  .rv-mix td.zero span { opacity: .45; }
-  .rv-mix td.over span { color: var(--crit); background: rgba(220,38,38,.1); padding: 1px 5px; border-radius: 6px; font-weight: 700; }
-  .rv-mix-note { margin-top: 4px !important; font-size: 10.5px; color: var(--text-2); }
-  .rv-dot { display: inline-block; width: 8px; height: 8px; border-radius: 3px; background: rgba(220,38,38,.35); margin-right: 4px; }
+  .rv-track { position: relative; height: 12px; margin-top: 4px; border-radius: 4px; background: rgba(127,127,127,.08); }
+  .rv-track i { position: absolute; left: 0; border-radius: 4px; }
+  .rv-track i.was { top: 0; height: 5px; background: rgba(127,127,127,.35); }
+  .rv-track i.now { bottom: 0; height: 5px; background: #2563eb; } .rv-track i.now.over { background: var(--crit); }
+  .rv-track s { position: absolute; top: -2px; bottom: -2px; width: 0; border-left: 2px dashed rgba(127,127,127,.7); }
+  .rv-mix-note { margin-top: 4px !important; font-size: 10.5px; color: var(--text-2); display: flex; align-items: center; gap: 4px; }
+  .rv-mix-note .k { display: inline-block; width: 12px; height: 5px; border-radius: 2px; } .rv-mix-note .k.was { background: rgba(127,127,127,.35); } .rv-mix-note .k.now { background: #2563eb; margin-left: 6px; }
+  .rv-mix-note s.k { width: 0; height: 10px; border-left: 2px dashed rgba(127,127,127,.7); margin-left: 6px; border-radius: 0; }
   .rv-why { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--text-2); }
   .rv-box { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--field); font-size: 13px; }
   .rv-box p { margin: 2px 0; }
@@ -2845,27 +2854,48 @@
     }
     return { before: before, sold: sold, after: after, secOut: secOut, secIn: secIn };
   }
+  // 比率は「入れ替え」「売るだけ」を切り替えて、今 → 後 の2つだけを棒で見せる。上には変わることを1〜2行で書く
+  var rvMode = {};
   function mixHtml(x, sp) {
-    var mx = sp.mix, b = mx.before, o = mx.sold, a = mx.after, g = state.guides || {}, sensT = num(g.sensitiveTarget) || 50;
-    var maxS = num(g.maxStockPct), maxSec = num(g.maxSectorPct);
-    // 上限を超える値は赤い札、0%は薄く。いちばん右(入れ替え)を太字にする
-    function cell(v, cap, last) {
-      var over = cap > 0 && v >= cap, zero = v < 0.05;
-      return '<td class="' + (over ? "over" : zero ? "zero" : "") + (last ? " last" : "") + '"><span>' + (zero ? "0%" : v.toFixed(1) + "%") + '</span></td>';
-    }
-    function row(role, label, key, cap, note) {
-      return '<tr><th>' + (role ? '<em class="rv-role ' + (role === "売る" ? "out" : "in") + '">' + role + '</em>' : '') + '<b>' + escapeHtml(label) + '</b>' +
-        '<small>' + (note || (cap > 0 ? "上限" + cap + "%" : "")) + '</small></th>' + cell(b[key], cap) + cell(o[key], cap) + cell(a[key], cap, true) + '</tr>';
-    }
+    var mx = sp.mix, mode = rvMode[x.code] || "swap", b = mx.before, a = mode === "swap" ? mx.after : mx.sold;
+    var g = state.guides || {}, sensT = num(g.sensitiveTarget) || 50, maxS = num(g.maxStockPct), maxSec = num(g.maxSectorPct);
     var same = mx.secIn && mx.secIn === mx.secOut;
-    return '<p class="rv-mix-h">比率(日本株の年間配当に占める割合)</p><table class="rv-mix">' +
-      '<thead><tr><th></th><td>今</td><td>売るだけ</td><td class="last">入れ替え</td></tr></thead><tbody>' +
-      row("売る", x.name, "out", maxS) +
-      (mx.secOut ? row("", mx.secOut, "outSec", maxSec, (same ? "業種(両方)" : "業種") + (maxSec > 0 ? "・上限" + maxSec + "%" : "")) : '') +
-      row("買う", sp.nb.name, "inn", maxS) +
-      (mx.secIn && !same ? row("", mx.secIn, "inSec", maxSec, "業種" + (maxSec > 0 ? "・上限" + maxSec + "%" : "")) : '') +
-      row("", "景気敏感", "sens", 0, "目標" + sensT + "%") + '</tbody></table>' +
-      '<p class="rv-mix-note"><span class="rv-dot"></span>赤は上限を超える値</p>';
+    var rows = [{ role: "売る", label: x.name, key: "out", cap: maxS }];
+    if (mx.secOut) rows.push({ label: mx.secOut, key: "outSec", cap: maxSec, sub: "業種" });
+    if (mode === "swap") {
+      rows.push({ role: "買う", label: sp.nb.name, key: "inn", cap: maxS });
+      if (mx.secIn && !same) rows.push({ label: mx.secIn, key: "inSec", cap: maxSec, sub: "業種" });
+    }
+    rows.push({ label: "景気敏感", key: "sens", target: sensT });
+    // 変わること: 上限超えが無くなる・新たに超える・景気敏感が目標に近づく/離れる
+    var fixed = [], broke = [];
+    rows.forEach(function (r) {
+      if (!(r.cap > 0)) return;
+      if (b[r.key] >= r.cap && a[r.key] < r.cap) fixed.push(r.label);
+      if (b[r.key] < r.cap && a[r.key] >= r.cap) broke.push(r.label);
+    });
+    var dNow = Math.abs(b.sens - sensT), dAft = Math.abs(a.sens - sensT);
+    var msgs = [];
+    if (fixed.length) msgs.push('<li class="good">' + escapeHtml(fixed.join("・")) + ' の上限超えがなくなります</li>');
+    if (broke.length) msgs.push('<li class="bad">' + escapeHtml(broke.join("・")) + ' が上限を超えます</li>');
+    if (Math.abs(dAft - dNow) >= 1) msgs.push('<li class="' + (dAft < dNow ? "good" : "bad") + '">景気敏感が目標' + sensT + '%から' + (dAft < dNow ? "近づきます" : "離れます") + '(' + b.sens.toFixed(0) + '→' + a.sens.toFixed(0) + '%)</li>');
+    if (!msgs.length) msgs.push('<li>上限や目標に関わる大きな変化はありません</li>');
+    var top = Math.max(10, rows.reduce(function (m, r) { return Math.max(m, b[r.key], a[r.key], (r.cap || r.target || 0) * 1.3); }, 0));
+    function w(v) { return Math.min(100, v / top * 100).toFixed(1) + "%"; }
+    var html = rows.map(function (r) {
+      var limit = r.cap > 0 ? r.cap : r.target, over = r.cap > 0 && a[r.key] >= r.cap;
+      return '<div class="rv-bar-row">' +
+        '<div class="rv-bar-head">' + (r.role ? '<em class="rv-role ' + (r.role === "売る" ? "out" : "in") + '">' + r.role + '</em>' : '') +
+          '<b>' + escapeHtml(r.label) + '</b><small>' + (r.sub ? r.sub + "・" : "") + (r.cap > 0 ? "上限" + r.cap + "%" : r.target ? "目標" + r.target + "%" : "") + '</small>' +
+          '<span class="rv-val">' + b[r.key].toFixed(1) + '% → <b class="' + (over ? "over" : "") + '">' + a[r.key].toFixed(1) + '%</b></span></div>' +
+        '<div class="rv-track"><i class="was" style="width:' + w(b[r.key]) + '"></i><i class="now' + (over ? " over" : "") + '" style="width:' + w(a[r.key]) + '"></i>' +
+          (limit > 0 ? '<s style="left:' + w(limit) + '"></s>' : '') + '</div></div>';
+    }).join("");
+    return '<div class="rv-mix-h"><span>比率(日本株の年間配当に占める割合)</span>' +
+      '<span class="rv-seg" role="group"><button type="button" data-mode="swap" class="' + (mode === "swap" ? "on" : "") + '">入れ替え</button>' +
+      '<button type="button" data-mode="sell" class="' + (mode === "sell" ? "on" : "") + '">売るだけ</button></span></div>' +
+      '<ul class="rv-msg">' + msgs.join("") + '</ul>' + html +
+      '<p class="rv-mix-note"><i class="k was"></i>今 <i class="k now"></i>' + (mode === "swap" ? "入れ替え後" : "売った後") + ' <s class="k"></s>上限・目標</p>';
   }
   function renderReview() {
     var body = document.getElementById("reviewBody");
@@ -2897,6 +2927,9 @@
           '<p>年間配当(税引前) ' + fmtYen(sp.divOut) + ' → ' + fmtYen(sp.divIn) + ' <b class="' + (dd >= 0 ? "up" : "down") + '">(' + (dd >= 0 ? "+" : "−") + fmtYen(Math.abs(dd)) + ')</b></p>' +
           mixHtml(x, sp) +
           (sp.nisaUsed ? '<p class="calendar-note">NISAの分を売っても、使った枠はその年には戻りません(翌年に復活)。</p>' : '') + '</div>';
+        Array.prototype.forEach.call(box.querySelectorAll(".rv-seg button"), function (bt) {
+          bt.addEventListener("click", function (e) { e.stopPropagation(); rvMode[code] = bt.dataset.mode; fill(); });
+        });
       }
       function toggle() {
         var o = li.classList.toggle("is-open"); rvOpen[code] = o;
