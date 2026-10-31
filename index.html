@@ -284,10 +284,22 @@
   .nb-tag { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 8px; background: var(--accent-soft); color: var(--accent); }
   .nb-tag.dim { background: var(--field); color: var(--text-2); font-weight: 500; }
   .rv-all { margin-top: 8px; width: 100%; }
-  .rv-mix-h { margin-top: 8px !important; font-size: 12px; color: var(--text-2); }
-  .rv-mix { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
-  .rv-mix th { text-align: left; font-weight: 500; padding: 1px 10px 1px 0; color: var(--text-2); max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rv-mix td { padding: 1px 4px 1px 8px; text-align: right; } .rv-mix td small { font-size: 10.5px; color: var(--text-2); } .rv-mix td.down { color: var(--crit); } .rv-mix td i { font-style: normal; font-size: 11px; color: var(--text-2); margin-left: 6px; }
+  .rv-mix-h { margin-top: 10px !important; font-size: 12px; color: var(--text-2); }
+  .rv-mix { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; table-layout: fixed; }
+  .rv-mix thead th { border-bottom: 1px solid var(--line, rgba(127,127,127,.25)); }
+  .rv-mix thead td { font-size: 11px; color: var(--text-2); padding: 0 6px 4px; border-bottom: 1px solid var(--line, rgba(127,127,127,.25)); }
+  .rv-mix tbody tr + tr th, .rv-mix tbody tr + tr td { border-top: 1px solid var(--line, rgba(127,127,127,.15)); }
+  .rv-mix th { width: 44%; text-align: left; font-weight: 400; padding: 6px 4px 6px 0; overflow: hidden; }
+  .rv-mix th b { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; max-width: calc(100% - 3em); vertical-align: bottom; }
+  .rv-mix th small { display: block; font-size: 10.5px; color: var(--text-2); }
+  .rv-role { font-style: normal; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 6px; margin-right: 5px; vertical-align: 1px; }
+  .rv-role.out { background: rgba(127,127,127,.15); color: var(--text-2); } .rv-role.in { background: rgba(37,99,235,.12); color: #2563eb; }
+  .rv-mix td { text-align: right; padding: 6px 6px; color: var(--text-2); }
+  .rv-mix td.last { color: var(--text); font-weight: 700; }
+  .rv-mix td.zero span { opacity: .45; }
+  .rv-mix td.over span { color: var(--crit); background: rgba(220,38,38,.1); padding: 1px 5px; border-radius: 6px; font-weight: 700; }
+  .rv-mix-note { margin-top: 4px !important; font-size: 10.5px; color: var(--text-2); }
+  .rv-dot { display: inline-block; width: 8px; height: 8px; border-radius: 3px; background: rgba(220,38,38,.35); margin-right: 4px; }
   .rv-why { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--text-2); }
   .rv-box { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--field); font-size: 13px; }
   .rv-box p { margin: 2px 0; }
@@ -2836,18 +2848,24 @@
   function mixHtml(x, sp) {
     var mx = sp.mix, b = mx.before, o = mx.sold, a = mx.after, g = state.guides || {}, sensT = num(g.sensitiveTarget) || 50;
     var maxS = num(g.maxStockPct), maxSec = num(g.maxSectorPct);
-    function cell(v, cap) { return '<td' + (cap > 0 && v >= cap ? ' class="down"' : '') + '>' + v.toFixed(1) + '%</td>'; }
-    function row(label, key, cap, note) {
-      return '<tr><th>' + escapeHtml(label) + '</th>' + cell(b[key], cap) + cell(o[key], cap) + '<td><b' + (cap > 0 && a[key] >= cap ? ' class="down"' : '') + '>' + a[key].toFixed(1) + '%</b></td>' +
-        '<td><i>' + (note || (cap > 0 ? "上限" + cap + "%" : "")) + '</i></td></tr>';
+    // 上限を超える値は赤い札、0%は薄く。いちばん右(入れ替え)を太字にする
+    function cell(v, cap, last) {
+      var over = cap > 0 && v >= cap, zero = v < 0.05;
+      return '<td class="' + (over ? "over" : zero ? "zero" : "") + (last ? " last" : "") + '"><span>' + (zero ? "0%" : v.toFixed(1) + "%") + '</span></td>';
     }
+    function row(role, label, key, cap, note) {
+      return '<tr><th>' + (role ? '<em class="rv-role ' + (role === "売る" ? "out" : "in") + '">' + role + '</em>' : '') + '<b>' + escapeHtml(label) + '</b>' +
+        '<small>' + (note || (cap > 0 ? "上限" + cap + "%" : "")) + '</small></th>' + cell(b[key], cap) + cell(o[key], cap) + cell(a[key], cap, true) + '</tr>';
+    }
+    var same = mx.secIn && mx.secIn === mx.secOut;
     return '<p class="rv-mix-h">比率(日本株の年間配当に占める割合)</p><table class="rv-mix">' +
-      '<tr><th></th><td><small>今</small></td><td><small>売るだけ</small></td><td><small>入れ替え</small></td><td></td></tr>' +
-      row(x.name, "out", maxS) +
-      (mx.secOut ? row(mx.secOut, "outSec", maxSec) : '') +
-      row(sp.nb.name, "inn", maxS) +
-      (mx.secIn && mx.secIn !== mx.secOut ? row(mx.secIn, "inSec", maxSec) : '') +
-      row("景気敏感", "sens", 0, "目標" + sensT + "%") + '</table>';
+      '<thead><tr><th></th><td>今</td><td>売るだけ</td><td class="last">入れ替え</td></tr></thead><tbody>' +
+      row("売る", x.name, "out", maxS) +
+      (mx.secOut ? row("", mx.secOut, "outSec", maxSec, (same ? "業種(両方)" : "業種") + (maxSec > 0 ? "・上限" + maxSec + "%" : "")) : '') +
+      row("買う", sp.nb.name, "inn", maxS) +
+      (mx.secIn && !same ? row("", mx.secIn, "inSec", maxSec, "業種" + (maxSec > 0 ? "・上限" + maxSec + "%" : "")) : '') +
+      row("", "景気敏感", "sens", 0, "目標" + sensT + "%") + '</tbody></table>' +
+      '<p class="rv-mix-note"><span class="rv-dot"></span>赤は上限を超える値</p>';
   }
   function renderReview() {
     var body = document.getElementById("reviewBody");
