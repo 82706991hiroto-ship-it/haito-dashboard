@@ -300,6 +300,11 @@
   .rv-band i, .rv-keys .k { background: rgba(127,127,127,.22); }
   .rv-band i { flex-basis: 0; min-width: 2px; } .rv-band i:first-child { border-radius: 4px 0 0 4px; } .rv-band i:last-child { border-radius: 0 4px 4px 0; }
   .rv-band i.out, .rv-keys .k.out { background: #64748b; } .rv-band i.in, .rv-keys .k.in { background: #2563eb; }
+  .rv-band i { cursor: pointer; } .rv-band i.sel { outline: 2px solid var(--text); outline-offset: 1px; position: relative; z-index: 1; }
+  .rv-tip { margin: 4px 0 0 6.4em !important; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .rv-tap { margin: 2px 0 0 6.4em !important; font-size: 10.5px; color: var(--text-2); }
+  .rv-tip:not([hidden]) + .rv-tap { display: none; }
+  .rv-pick { width: 100%; font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface, transparent); color: var(--text); }
   .rv-role { font-style: normal; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 6px; flex: none; }
   .rv-role.out { background: rgba(127,127,127,.15); color: var(--text-2); } .rv-role.in { background: rgba(37,99,235,.12); color: #2563eb; }
   .rv-list .rv-keys li, .rv-list .rv-nums li { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; border: 0; font-size: 12.5px; }
@@ -2819,8 +2824,11 @@
     return out.sort(function (a, b) { return b.rank - a.rank || a.code.localeCompare(b.code); });
   }
   // 入れ替えの試算: 売る株数ぶん(持ちすぎは減らす目安、ほかは全部)を売り、次に買うならの1位(この銘柄以外)を買う
+  // 入れ替え先は「次に買うなら」の順位の銘柄から選べる(既定は1位)。rvPick[売る銘柄] = 買う銘柄のコード
+  var rvPick = {};
+  function swapChoices(x) { return nextBuyList().list.filter(function (y) { return y.code !== x.code; }); }
   function swapPlan(x) {
-    var nb = nextBuyList().list.filter(function (y) { return y.code !== x.code; })[0];
+    var ch = swapChoices(x), nb = ch.filter(function (y) { return y.code === rvPick[x.code]; })[0] || ch[0];
     if (!nb || !(x.price > 0)) return null;
     var n = x.sell > 0 ? x.sell : x.shares, left = n, proceeds = 0, tax = 0, nisaUsed = false;
     // 特定口座から先に売る(NISAの非課税枠を残すため)。特定口座は値上がり益に約20%
@@ -2893,7 +2901,7 @@
         var v = sh.secs[k] || 0;
         if (v < 0.05) return "";
         var cls = k === mx.secOut ? "out" : (mode === "swap" && k === mx.secIn) ? "in" : "etc";
-        return '<i class="' + cls + '" style="flex-grow:' + v.toFixed(2) + '" title="' + escapeHtml(k + " " + v.toFixed(1) + "%") + '"></i>';
+        return '<i class="' + cls + '" style="flex-grow:' + v.toFixed(2) + '" title="' + escapeHtml(k + " " + v.toFixed(1) + "%") + '" data-sec="' + escapeHtml(k) + '" data-from="' + (b.secs[k] || 0).toFixed(1) + '" data-to="' + (a.secs[k] || 0).toFixed(1) + '" role="button" tabindex="0"></i>';
       }).join("") + '</div></div>';
     }
     function key(cls, name, k, role) {
@@ -2917,6 +2925,7 @@
       '<ul class="rv-msg">' + msgs.join("") + '</ul>' +
       '<p class="rv-sub">業種の内訳' + (maxSec > 0 ? '(1業種の上限' + maxSec + '%)' : '') + '</p>' +
       band(b, "今") + band(a, mode === "swap" ? "入れ替え後" : "売った後") +
+      '<p class="rv-tip" hidden></p><p class="rv-tap">帯を押すと業種名が出ます</p>' +
       '<ul class="rv-keys">' + keys + '</ul>' +
       '<ul class="rv-nums">' + nums + '</ul>';
   }
@@ -2945,11 +2954,30 @@
         var box = li.querySelector(".rv-swap"), sp = swapPlan(x);
         if (!sp) { box.innerHTML = '<p class="calendar-note">入れ替え先(次に買うなら)が見つからないか、株価が入っていません。</p>'; return; }
         var dd = sp.divIn - sp.divOut;
-        box.innerHTML = '<div class="rv-box"><p><b>' + (x.sell > 0 ? "約" + sp.n + "株を売って" : "全部(" + sp.n + "株)売って") + '、' + escapeHtml(sp.nb.code + " " + sp.nb.name) + 'を買ったら</b></p>' +
+        var ch = swapChoices(x);
+        var pick = '<select class="rv-pick" aria-label="入れ替えて買う銘柄">' + ch.map(function (y, i) {
+          return '<option value="' + escapeHtml(y.code) + '"' + (y.code === sp.nb.code ? " selected" : "") + '>' + (i + 1) + '位 ' + escapeHtml(y.code + " " + y.name) + '(' + y.y.toFixed(2) + '%)</option>';
+        }).join("") + '</select>';
+        box.innerHTML = '<div class="rv-box"><p><b>' + (x.sell > 0 ? "約" + sp.n + "株を売って" : "全部(" + sp.n + "株)売って") + '、次の銘柄を買ったら</b></p>' +
+          '<p class="rv-pick-row">' + pick + '</p><p class="calendar-note">「次に買うなら」の順位から選べます(保有の買い増し・買い増し候補)。</p>' +
           '<p>売った額 ' + fmtYen(sp.proceeds) + (sp.tax > 0 ? ' − 税金の目安 ' + fmtYen(sp.tax) : '') + ' → 約' + sp.m + '株(1株' + fmtYen(sp.nb.price) + ')</p>' +
           '<p>年間配当(税引前) ' + fmtYen(sp.divOut) + ' → ' + fmtYen(sp.divIn) + ' <b class="' + (dd >= 0 ? "up" : "down") + '">(' + (dd >= 0 ? "+" : "−") + fmtYen(Math.abs(dd)) + ')</b></p>' +
           mixHtml(x, sp) +
           (sp.nisaUsed ? '<p class="calendar-note">NISAの分を売っても、使った枠はその年には戻りません(翌年に復活)。</p>' : '') + '</div>';
+        var sel = box.querySelector(".rv-pick");
+        sel.addEventListener("click", function (e) { e.stopPropagation(); });
+        sel.addEventListener("change", function () { rvPick[code] = sel.value; fill(); });
+        // 帯を押すと、その業種の名前と今→後の割合を出す(スマホでも見られるように)
+        Array.prototype.forEach.call(box.querySelectorAll(".rv-band i"), function (seg) {
+          seg.addEventListener("click", function (e) {
+            e.stopPropagation();
+            var k = seg.dataset.sec, tip = box.querySelector(".rv-tip"), on = tip.dataset.sec !== k;
+            Array.prototype.forEach.call(box.querySelectorAll(".rv-band i"), function (z) { z.classList.toggle("sel", on && z.dataset.sec === k); });
+            tip.dataset.sec = on ? k : "";
+            tip.hidden = !on;
+            if (on) tip.innerHTML = '<b>' + escapeHtml(k) + '</b> ' + seg.dataset.from + '% → ' + seg.dataset.to + '%';
+          });
+        });
         Array.prototype.forEach.call(box.querySelectorAll(".rv-seg button"), function (bt) {
           bt.addEventListener("click", function (e) { e.stopPropagation(); rvMode[code] = bt.dataset.mode; fill(); });
         });
