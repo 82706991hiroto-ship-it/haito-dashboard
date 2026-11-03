@@ -1,0 +1,35 @@
+# みんなのランキングを1日1回集計して data/ranking.json に書く(参加した端末が送った銘柄コードを数えるだけ)。
+# リポジトリの Settings → Secrets and variables → Actions に FIREBASE_SA(サービスアカウントの鍵のJSON)が必要。
+# 無いあいだは何もしないで終わる。手順は docs/ranking-setup.md
+name: みんなのランキングの集計
+on:
+  schedule:
+    - cron: "17 19 * * *"   # 毎日 4:17(日本時間)
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: ranking
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests google-auth
+      - name: 集計
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+          FIREBASE_DATABASE: ${{ vars.FIREBASE_DATABASE }}
+        run: python3 tools/ranking_aggregate.py
+      - name: 変わっていればコミット
+        run: |
+          [ -f data/ranking.json ] || exit 0
+          git add data/ranking.json
+          if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "みんなのランキングを集計($(date +%Y-%m-%d))"
+          git push

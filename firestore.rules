@@ -1,5 +1,5 @@
 rules_version = '2';
-// HAITOの端末間同期。文書IDは同期コードのハッシュ(64桁の16進)で、中身は端末側で暗号化済み。
+// HAITOの端末間同期と、みんなのランキングの参加データ。文書IDは同期コードのハッシュ(64桁の16進)で、中身は端末側で暗号化済み。
 // コードを知る端末だけが自分の文書を読み書きできる。一覧の取得と削除は誰にもさせない。
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -10,6 +10,17 @@ service cloud.firestore {
         && request.resource.data.ct is string
         && request.resource.data.ct.size() < 900000;
       allow list, delete: if false;
+    }
+    // みんなのランキング(参加した端末だけ)。匿名ログインの番号(uid)と同じ文書だけを、本人が書き換え・削除できる。
+    // 中身は国内株のコードの一覧(h: 持っている、w: 買い増し候補)と送った時刻だけ。誰も読めない(集計は管理者の鍵で1日1回)
+    match /poll/{uid} {
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['h', 'w', 't'])
+        && request.resource.data.h is list && request.resource.data.h.size() <= 300
+        && request.resource.data.w is list && request.resource.data.w.size() <= 300
+        && request.resource.data.t is int;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+      allow get, list: if false;
     }
   }
 }
