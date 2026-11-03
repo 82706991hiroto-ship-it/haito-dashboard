@@ -776,6 +776,7 @@
     background: var(--field);
   }
   .review-box .mlack { color: var(--text-2); }
+  .pol-box .mlack.pol-lost { color: var(--crit); } .pol-box .mlack.pol-new { color: var(--good, #16a34a); }
   .review-box .mok {
     font-family: inherit; font-size: 11.5px; padding: 3px 10px; border-radius: 999px; cursor: pointer;
     border: 1px solid var(--line); background: var(--card); color: var(--text-2);
@@ -1449,6 +1450,11 @@
       <ul class="missing-list" id="missingList"></ul>
     </div>
 
+    <div class="missing-box review-box pol-box" id="polBox" hidden>
+      <h3>配当方針のお知らせ</h3>
+      <p class="hint">最新の有価証券報告書で、累進配当・DOEの記載が変わった銘柄です(毎週の自動更新で見つけます)。記載が見つからないだけのこともあるので、会社の発表で確かめてください。</p>
+      <ul class="missing-list" id="polList"></ul>
+    </div>
     <div class="missing-box review-box" id="reviewBox" hidden>
       <h3>配当予想を見直す時期の銘柄</h3>
       <p class="hint" id="reviewHint"></p>
@@ -2423,6 +2429,7 @@
     var info = rec.pot ? "配当方針: 配当性向" + rec.pot + "%目安(利益に連動)" : "";
     if (pol.indexOf("累進配当") !== -1) plus(1, "累進配当の方針(減配しないと約束)");
     if (pol.indexOf("DOE") !== -1) plus(1, "DOEの方針(利益より安定した純資産が基準)");
+    if (rec.polgone) add(1, rec.polgone.t.join("・") + "の記載が消えた", "最新の有報で「" + rec.polgone.t.join("・") + "」の記載が見つからない(前の期にはあった)。方針を取り下げた可能性");
     items.sort(function (a, b) { return b.pt - a.pt; });
     var level = score >= 4 ? 2 : score >= 2 ? 1 : 0;
     return { level: level, score: score, items: items, good: good, info: info, check: dataCheckOf(code) };
@@ -6638,7 +6645,58 @@
     e.target.value = "";
   });
 
+  // 保有・買い増し候補の銘柄で、最新の有報で累進配当・DOEが無くなった(polgone)/新しく出てきた(polnew)もの。
+  // 「確認した」でその期の分は消える(state.polAck[コード|期末])
+  var polToasted = false;
+  function renderPolicyNotice() {
+    var box = document.getElementById("polBox"), list = document.getElementById("polList");
+    if (!box || !list) return;
+    var ack = state.polAck || {}, seen = {}, rows = [];
+    state.holdings.concat(state.watch || []).forEach(function (h) {
+      var code = String(h.code || "").trim().toUpperCase();
+      if (seen[code] || isUS(h) || !/^[1-9][0-9A-Z]{3}$/.test(code)) return;
+      seen[code] = true;
+      var rec = finRec(code);
+      if (!rec || ack[code + "|" + rec.fy] || !(rec.polgone || rec.polnew)) return;
+      rows.push({ code: code, name: h.name || rec.n || code, rec: rec, held: !!heldOf(code).length });
+    });
+    box.hidden = !rows.length || state.isSample;
+    list.innerHTML = "";
+    // 開いたときに一度だけ、別のタブにいても気づけるよう短く知らせる
+    if (rows.length && !state.isSample && !polToasted) {
+      polToasted = true;
+      var lost = rows.filter(function (x) { return x.rec.polgone; });
+      showToast("配当方針のお知らせ: " + (lost.length ? lost.map(function (x) { return shortStockName(x.name) + "の" + x.rec.polgone.t.join("・"); }).slice(0, 2).join("、") + "の記載が見つかりません"
+        : rows.map(function (x) { return shortStockName(x.name); }).slice(0, 2).join("、") + "が新しく方針を出しました") + "(保有銘柄のタブ)");
+    }
+    rows.forEach(function (x) {
+      var g = x.rec.polgone, a = x.rec.polnew, fy = String(x.rec.fy || "").slice(2, 7).replace("-", "/");
+      var li = document.createElement("li");
+      li.innerHTML = '<span class="mname"></span><span class="mlack"></span>';
+      li.querySelector(".mname").textContent = shortStockName(x.name) + "(" + x.code + ")" + (x.held ? "" : " ・ 買い増し候補");
+      var t = [];
+      if (g) t.push(fy + "期の有報で「" + g.t.join("・") + "」の記載が見つかりません(前の期にはありました)");
+      if (a) t.push(fy + "期の有報で新しく「" + a.t.join("・") + "」の方針が出てきました");
+      var m = li.querySelector(".mlack");
+      m.textContent = t.join("。");
+      if (g) m.classList.add("pol-lost"); else m.classList.add("pol-new");
+      var link = document.createElement("a");
+      link.className = "mlink"; link.target = "_blank"; link.rel = "noopener noreferrer";
+      link.href = "https://kabutan.jp/disclosures/?code=" + encodeURIComponent(x.code);
+      link.textContent = "会社の発表(適時開示)を見る";
+      li.appendChild(link);
+      var ok = document.createElement("button");
+      ok.type = "button"; ok.className = "mok"; ok.textContent = "確認した";
+      ok.addEventListener("click", function () {
+        state.polAck = state.polAck || {}; state.polAck[x.code + "|" + x.rec.fy] = todayIso();
+        save(); renderPolicyNotice();
+      });
+      li.appendChild(ok);
+      list.appendChild(li);
+    });
+  }
   function renderMissingList() {
+    renderPolicyNotice();
     renderReviewList();
     var box = document.getElementById("missingBox");
     var list = document.getElementById("missingList");
