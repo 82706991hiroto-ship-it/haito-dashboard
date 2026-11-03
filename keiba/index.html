@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>競馬予想ビューア</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1d2330;--sub:#6b7385;--line:#e3e6ec;--bar:#3b6fd4;--hot:#d9822b;--ok:#2e9e6b}
+@media (prefers-color-scheme:dark){:root{--bg:#12151c;--card:#1b1f2a;--text:#e8ebf2;--sub:#98a1b5;--line:#2b3140;--bar:#6b95ec;--hot:#f0a04b;--ok:#4cc790}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:4px 0 12px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+select,button,label.file{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+label.file{cursor:pointer}input[type=file]{display:none}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.meta{color:var(--sub);font-size:13px;margin-bottom:8px}
+.row{display:grid;grid-template-columns:28px 1fr 56px;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.fr{width:26px;height:26px;border-radius:6px;background:var(--line);display:grid;place-items:center;font-weight:600;font-size:13px}
+.name{font-weight:600}.name small{color:var(--sub);font-weight:400;margin-left:6px}
+.track{height:8px;background:var(--line);border-radius:4px;margin-top:4px;overflow:hidden}
+.fill{height:100%;background:var(--bar);border-radius:4px}
+.pct{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.tag{font-size:11px;border-radius:4px;padding:1px 5px;margin-left:6px;color:#fff;background:var(--hot)}
+.tag.win{background:var(--ok)}
+.ev{color:var(--sub);font-size:12px}
+.note{color:var(--sub);font-size:12px;margin-top:12px}
+.empty{padding:24px;text-align:center;color:var(--sub)}
+</style></head><body><main>
+<h1>競馬予想ビューア</h1>
+<div class="bar">
+ <select id="race" aria-label="レース"></select>
+ <label class="file">予想JSONを開く<input id="file" type="file" accept=".json"></label>
+</div>
+<div id="out" class="card"><div class="empty">読み込み中…</div></div>
+<p class="note">勝率はモデルが出した1着確率(レース内で合計100%)。<span class="tag">期待値</span>は 勝率×オッズ が1.2以上の馬。オッズがない場合は表示しません。投票は自己責任で。</p>
+</main>
+<script>
+let data=null;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function load(j){
+  data=j;const sel=$("race");
+  sel.innerHTML=j.races.map((r,i)=>`<option value="${i}">${esc(r.date)} ${esc(r.race_id)} ${esc(r.surface)}${r.distance}m</option>`).join("");
+  show(0);
+}
+function show(i){
+  const r=data.races[i];if(!r){$("out").innerHTML='<div class="empty">レースがありません</div>';return}
+  const max=Math.max(...r.horses.map(h=>h.p));
+  const rows=r.horses.map(h=>{
+    const ev=h.odds?h.p*h.odds:null;
+    const won=h.finish===1;
+    return `<div class="row"><div class="fr">${h.frame}</div>
+      <div><div class="name">${esc(h.name)}<small>${esc(h.jockey)}</small>${ev>=1.2?'<span class="tag">期待値</span>':''}${won?'<span class="tag win">1着</span>':''}</div>
+      <div class="track"><div class="fill" style="width:${h.p/max*100}%"></div></div>
+      ${ev!=null?`<div class="ev">オッズ ${h.odds} ／ 期待値 ${ev.toFixed(2)}</div>`:''}</div>
+      <div class="pct">${(h.p*100).toFixed(1)}%</div></div>`}).join("");
+  $("out").innerHTML=`<div class="meta">${esc(r.date)} ・ ${esc(r.surface)} ${r.distance}m ・ 馬場 ${esc(r.going)} ・ ${r.horses.length}頭(勝率順)</div>${rows}`;
+}
+$("race").onchange=e=>show(+e.target.value);
+$("file").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>load(JSON.parse(t))).catch(()=>alert("JSONを読み込めませんでした"))};
+(async()=>{for(const u of["predictions.json","sample_predictions.json"]){
+  try{const r=await fetch(u);if(r.ok){load(await r.json());return}}catch(e){}}
+  $("out").innerHTML='<div class="empty">予想JSONを読み込んでください(python predict.py … --json predictions.json)</div>'})();
+</script></body></html>

@@ -9,6 +9,13 @@ python train.py data/sample.csv [--use-odds]   # 学習+評価(新しい期間�
 python predict.py data/sample.csv --race R01499
 ```
 
+## 画面で見る
+```bash
+python predict.py data/sample.csv --last 12 --json predictions.json   # 出走表の予想なら --json だけ
+python -m http.server 8000     # → http://localhost:8000/ を開く
+```
+`index.html` が同じ場所の `predictions.json`(なければ `sample_predictions.json`)を読みます。「予想JSONを開く」で任意のファイルも読めます。
+
 ## CSVの列
 必須: `race_id,date,horse_id,jockey,frame,age,sex,weight_carried,body_weight,distance,surface,going`
 任意: `horse_name,odds`(あると期待値を出す)、`finish`(着順。予想したいレースは空欄)
