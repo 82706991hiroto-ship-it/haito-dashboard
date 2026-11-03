@@ -7,7 +7,7 @@
 (function () {
   "use strict";
   var CFG = window.HAITO_SYNC_CONFIG || null;
-  var KEY = "haitoPoll";  // { on, uid, rt(refresh token), sent(送った中身のハッシュ), at(送った時刻) }
+  var KEY = "haitoPoll";  // { on, asked(参加するか一度聞いた), uid, rt(refresh token), sent(送った中身のハッシュ), at(送った時刻) }
   var RESEND_MS = 7 * 86400000;  // 変わらなくても週に1回は送り直す(集計は90日送ってこない端末を外す)
   var token = null, tokenUntil = 0, timer = null, busy = false;
 
@@ -64,19 +64,21 @@
   // やめる: 送った分を消してから、この端末の番号も忘れる
   function leave() {
     var m = load();
-    var done = function () { store({ on: false }); token = null; };
+    var done = function () { store({ on: false, asked: 1 }); token = null; };
     if (!configured() || !m.uid) { done(); return Promise.resolve(); }
     return signIn(m).then(function (tk) {
       return fetch(docUrl(m.uid), { method: "DELETE", headers: { Authorization: "Bearer " + tk } });
     }).then(done, function (e) { done(); throw e; });
   }
   function join(codes) {
-    var m = load(); m.on = true; store(m);
+    var m = load(); m.on = true; m.asked = 1; store(m);
     return send(codes, true);
   }
 
   window.HaitoPoll = {
     configured: configured, on: function () { return !!load().on; },
+    asked: function () { return !!load().asked; },
+    markAsked: function () { var m = load(); m.asked = 1; store(m); },
     join: join, leave: leave, send: send, soon: soon
   };
 })();
