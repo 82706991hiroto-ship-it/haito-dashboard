@@ -16,6 +16,13 @@ python -m http.server 8000     # → http://localhost:8000/ を開く
 ```
 `index.html` が同じ場所の `predictions.json`(なければ `sample_predictions.json`)を読みます。「予想JSONを開く」で任意のファイルも読めます。
 
+## 実データを取り込む
+```bash
+python import_csv.py raw.csv data/real.csv          # 列名を自動で対応づけ(cp932も可)
+python import_csv.py raw.csv data/real.csv --map "date=開催日,finish=着順"   # 手で指定
+python train.py data/real.csv --use-odds
+```
+
 ## CSVの列
 必須: `race_id,date,horse_id,jockey,frame,age,sex,weight_carried,body_weight,distance,surface,going`
 任意: `horse_name,odds`(あると期待値を出す)、`finish`(着順。予想したいレースは空欄)
