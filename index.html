@@ -7286,6 +7286,22 @@
   // 年間配当を権利確定月に等分し、月別の受取額を組み立てる。
   // 支払月は権利確定のおよそ3ヶ月後という日本株の一般的な慣行で近似する。
   var PAYOUT_LAG_MONTHS = 3;
+  // お金が入る月。受け取った記録(受取履歴CSV・お知らせPDF)が直近1年分あればその月を使う。
+  // 無ければ、日本株は権利確定の約3か月後、米国株・ETFと投資信託は権利の月とほぼ同じ月(数日〜2週間ほどで入金)とする
+  function payMonthsOf(r) {
+    var code = String(r.code || "").trim().toUpperCase(), seen = {}, last = "";
+    (state.payouts || []).forEach(function (x) { if (String(x.code || "").toUpperCase() === code && x.ym > last) last = x.ym; });
+    if (last) {
+      var ly = parseInt(last.slice(0, 4), 10), lm = parseInt(last.slice(5, 7), 10), from = (ly - 1) + "/" + ("0" + lm).slice(-2);
+      (state.payouts || []).forEach(function (x) {
+        if (String(x.code || "").toUpperCase() === code && x.ym > from) seen[parseInt(x.ym.slice(5, 7), 10)] = 1;
+      });
+      var ms = Object.keys(seen).map(Number).sort(function (a, b) { return a - b; });
+      if (ms.length) return ms;
+    }
+    var lag = isUS(r) || isFund(r) ? 0 : PAYOUT_LAG_MONTHS;
+    return monthsOf(r).map(function (m) { return ((m - 1 + lag) % 12) + 1; });
+  }
 
   function buildCalendar(rows) {
     var record = [], payout = [], detail = [], payDetail = [], unknown = [];
@@ -7300,10 +7316,12 @@
         var ri = m - 1;
         if (ri < 0 || ri > 11) return;
         record[ri] += per;
-        var pi = (m - 1 + PAYOUT_LAG_MONTHS) % 12;
-        payout[pi] += per;
         detail[ri].push({ name: r.name || r.code || "無名銘柄", value: per });
-        payDetail[pi].push({ name: r.name || r.code || "無名銘柄", value: per });
+      });
+      var pms = payMonthsOf(r), pper = r.divPre / pms.length;
+      pms.forEach(function (m) {
+        payout[m - 1] += pper;
+        payDetail[m - 1].push({ name: r.name || r.code || "無名銘柄", value: pper });
       });
     });
 
@@ -8328,12 +8346,11 @@
     for (var i = 0; i < 12; i++) { forecast.push(0); forecastN.push(0); }
     agg.rows.forEach(function (r) {
       if (!(r.divPost > 0)) return;
-      var months = monthsOf(r);
+      var months = payMonthsOf(r);
       if (months.length === 0) return;
       months.forEach(function (m) {
-        var pi = (m - 1 + PAYOUT_LAG_MONTHS) % 12;
-        forecast[pi] += r.divPost / months.length;
-        forecastN[pi]++;
+        forecast[m - 1] += r.divPost / months.length;
+        forecastN[m - 1]++;
       });
     });
     function covered(ym) { return minYm !== null && ym >= minYm && ym <= maxYm; }
@@ -8783,7 +8800,7 @@
     if (pay) {
       var lag = document.createElement("p");
       lag.className = "calendar-note";
-      lag.textContent = "入る月は権利確定のおよそ3か月後として概算しています。実際の支払日は銘柄ごとに異なります。";
+      lag.textContent = "入る月は、受け取った記録(受取履歴CSV・配当金のお知らせ)があればその月、無ければ日本株は権利確定のおよそ3か月後、米国株・投資信託は権利と同じ月として概算しています。";
       el.appendChild(lag);
     }
   }
