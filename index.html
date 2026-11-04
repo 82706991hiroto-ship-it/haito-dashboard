@@ -692,6 +692,21 @@
   .calendar-lead strong { font-size: 13.5px; color: var(--text); font-weight: 700; margin-left: 5px; font-variant-numeric: tabular-nums; }
   .calendar-chart { display: flex; align-items: flex-end; gap: 6px; height: 200px; }
   .cal-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+  button.cal-col { min-width: 0; padding: 0; border: 0; background: transparent; font: inherit; color: inherit; cursor: pointer; border-radius: 6px; }
+  .cal-col.is-now .cal-bar { background: var(--accent); }
+  .cal-col.is-now .cal-month { color: var(--accent); font-weight: 700; }
+  .cal-col.is-pick .cal-month { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
+  button.cal-col.is-pick { background: var(--field); }
+  .calendar-lead span.is-now { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+  .calendar-lead span.is-now strong { color: var(--accent); }
+  .cal-detail { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--field); font-size: 13px; }
+  .cal-detail-h { display: flex; align-items: baseline; gap: 6px; margin: 0 0 6px; }
+  .cal-detail-h em { font-style: normal; font-size: 10.5px; font-weight: 700; color: #fff; background: var(--accent); border-radius: 6px; padding: 1px 6px; }
+  .cal-detail-h strong { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .cal-detail ul { list-style: none; margin: 0; padding: 0; }
+  .cal-detail li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px solid var(--line); }
+  .cal-detail li b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cal-detail .calendar-note { margin-top: 6px; }
   .cal-value { font-size: 10px; color: var(--text-2); height: 15px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .cal-bar-slot { flex: 1; width: 100%; display: flex; align-items: flex-end; }
   .cal-bar { width: 100%; background: var(--s1); border-radius: 6px 6px 0 0; min-height: 2px; }
@@ -7273,8 +7288,8 @@
   var PAYOUT_LAG_MONTHS = 3;
 
   function buildCalendar(rows) {
-    var record = [], payout = [], detail = [], unknown = [];
-    for (var i = 0; i < 12; i++) { record.push(0); payout.push(0); detail.push([]); }
+    var record = [], payout = [], detail = [], payDetail = [], unknown = [];
+    for (var i = 0; i < 12; i++) { record.push(0); payout.push(0); detail.push([]); payDetail.push([]); }
 
     rows.forEach(function (r) {
       if (r.divPre <= 0) return;
@@ -7285,13 +7300,15 @@
         var ri = m - 1;
         if (ri < 0 || ri > 11) return;
         record[ri] += per;
-        payout[((m - 1 + PAYOUT_LAG_MONTHS) % 12)] += per;
+        var pi = (m - 1 + PAYOUT_LAG_MONTHS) % 12;
+        payout[pi] += per;
         detail[ri].push({ name: r.name || r.code || "無名銘柄", value: per });
+        payDetail[pi].push({ name: r.name || r.code || "無名銘柄", value: per });
       });
     });
 
-    detail.forEach(function (list) { list.sort(function (a, b) { return b.value - a.value; }); });
-    return { record: record, payout: payout, detail: detail, unknownCount: unknown.length };
+    detail.concat(payDetail).forEach(function (list) { list.sort(function (a, b) { return b.value - a.value; }); });
+    return { record: record, payout: payout, detail: detail, payDetail: payDetail, unknownCount: unknown.length };
   }
 
   // ---------- Treemap (軸切替対応) ----------
@@ -8698,13 +8715,15 @@
 
   // ---------- Dashboard ----------
   // ---------- 配当金カレンダー ----------
-  var calendarMode = "record";
+  // 最初は「お金が入る月(支払月の概算)」。「権利確定月」は買う時期を見るための切り替え。
+  // 今月の棒に色を付け、月を押すとその月の銘柄と金額を下に出す(最初は今月)
+  var calendarMode = "payout", calendarPick = null;
 
   function renderCalendar(agg) {
     var el = document.getElementById("calendarBody");
     el.innerHTML = "";
-    var cal = agg.calendar;
-    var series = calendarMode === "payout" ? cal.payout : cal.record;
+    var cal = agg.calendar, pay = calendarMode === "payout";
+    var series = pay ? cal.payout : cal.record, details = pay ? cal.payDetail : cal.detail;
     var total = series.reduce(function (s, v) { return s + v; }, 0);
 
     if (total <= 0) {
@@ -8715,31 +8734,45 @@
       return;
     }
 
-    var max = Math.max.apply(null, series);
+    var max = Math.max.apply(null, series), now = new Date().getMonth();
     var nonZero = series.filter(function (v) { return v > 0; }).length;
+    var pick = calendarPick === null ? now : calendarPick;
 
     var lead = document.createElement("div");
     lead.className = "calendar-lead";
     lead.innerHTML =
+      '<span class="is-now">今月(' + (now + 1) + '月)' + (pay ? '' : 'の権利') + ' <strong>' + fmtYen(series[now]) + '</strong></span>' +
       '<span>月平均 <strong>' + fmtYen(total / 12) + '</strong></span>' +
-      '<span>受取のある月 <strong>' + nonZero + '</strong>／12</span>' +
-      '<span>最大の月 <strong>' + fmtYen(max) + '</strong></span>';
+      '<span>' + (pay ? '受取のある月' : '権利のある月') + ' <strong>' + nonZero + '</strong>／12</span>';
     el.appendChild(lead);
 
     var chart = document.createElement("div");
     chart.className = "calendar-chart";
     series.forEach(function (v, i) {
-      var col = document.createElement("div");
-      col.className = "cal-col" + (v <= 0 ? " is-empty" : "");
-      var names = cal.detail[i].map(function (d) { return d.name + " " + fmtYen(d.value); }).join("\n");
-      col.title = (i + 1) + "月 " + fmtYen(v) + (calendarMode === "record" && names ? "\n" + names : "");
+      var col = document.createElement("button");
+      col.type = "button";
+      col.className = "cal-col" + (v <= 0 ? " is-empty" : "") + (i === now ? " is-now" : "") + (i === pick ? " is-pick" : "");
+      col.setAttribute("aria-pressed", i === pick ? "true" : "false");
+      col.setAttribute("aria-label", (i + 1) + "月 " + fmtYen(v));
       col.innerHTML =
         '<div class="cal-value">' + (v > 0 ? fmtYen(v) : "") + '</div>' +
         '<div class="cal-bar-slot"><div class="cal-bar" style="height:' + (max > 0 ? (v / max) * 100 : 0) + '%"></div></div>' +
         '<div class="cal-month">' + (i + 1) + '</div>';
+      col.addEventListener("click", function () { calendarPick = i; renderCalendar(agg); });
       chart.appendChild(col);
     });
     el.appendChild(chart);
+
+    // 選んだ月の中身
+    var box = document.createElement("div");
+    box.className = "cal-detail";
+    var list = details[pick] || [];
+    box.innerHTML = '<p class="cal-detail-h"><b>' + (pick + 1) + '月</b>' + (pick === now ? '<em>今月</em>' : '') + (pay ? 'に入る配当(税引前)' : 'に権利が決まる配当(税引前)') +
+      '<strong>' + fmtYen(series[pick]) + '</strong></p>' +
+      (list.length ? '<ul>' + list.map(function (d) { return '<li><span>' + escapeHtml(shortStockName(d.name)) + '</span><b>' + fmtYen(d.value) + '</b></li>'; }).join("") + '</ul>'
+        : '<p class="calendar-note">この月は' + (pay ? '入る配当がありません。' : '権利の決まる銘柄がありません。') + '</p>') +
+      (pay ? '' : '<p class="calendar-note">この月の末日(権利付き最終日は2営業日前)に持っていると配当がもらえます。</p>');
+    el.appendChild(box);
 
     if (cal.unknownCount > 0) {
       var warn = document.createElement("p");
@@ -8747,10 +8780,10 @@
       warn.textContent = "権利確定月が判定できない銘柄が " + cal.unknownCount + " 件あり、集計に含めていません。保有銘柄の表で月を入力すると反映されます。";
       el.appendChild(warn);
     }
-    if (calendarMode === "payout") {
+    if (pay) {
       var lag = document.createElement("p");
       lag.className = "calendar-note";
-      lag.textContent = "支払月は権利確定のおよそ3ヶ月後として概算しています。実際の支払日は銘柄ごとに異なります。";
+      lag.textContent = "入る月は権利確定のおよそ3か月後として概算しています。実際の支払日は銘柄ごとに異なります。";
       el.appendChild(lag);
     }
   }
@@ -9685,10 +9718,10 @@
       '  <p class="records-note">日付は、保有銘柄の入力や読み込みで節目を越えたことが分かった日です。購入日ではありません。</p>' +
       '</div>' +
       '<div class="panel" data-view="home">' +
-      '  <h2><span class="chap">四</span>配当金カレンダー <span class="hint">権利確定月は受取履歴CSVか手入力から</span></h2>' +
+      '  <h2><span class="chap">四</span>配当金カレンダー <span class="hint">月を押すと銘柄が出ます</span></h2>' +
       '  <div class="axis-tabs" id="calendarTabs">' +
-      '    <button class="axis-tab active" data-mode="record">権利確定月</button>' +
-      '    <button class="axis-tab" data-mode="payout">支払月(概算)</button>' +
+      '    <button class="axis-tab active" data-mode="payout">お金が入る月</button>' +
+      '    <button class="axis-tab" data-mode="record">権利確定月(買う時期)</button>' +
       '  </div>' +
       '  <div id="calendarBody"></div>' +
       '</div>' +
