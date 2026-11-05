@@ -8607,7 +8607,14 @@
     return { annual: annual, monthly: annual / 12, top: top, next: next, tier: tierOf(annual),
              stocks: agg.stockCount, sectors: agg.sectorCount,
              yieldBook: agg.totalAcq > 0 ? annual / agg.totalAcq * 100 : null,
-             goalPct: goal > 0 ? annual / 12 / goal * 100 : null, goal: goal, months: agg.calendar.payout };
+             goalPct: goal > 0 ? annual / 12 / goal * 100 : null, goal: goal,
+             sectors5: (function () {
+               var t = agg.totalDivPre, list = agg.bySector.filter(function (x) { return x.value > 0; });
+               var top = list.slice(0, 5).map(function (x) { return { label: x.label, pct: t > 0 ? x.value / t * 100 : 0 }; });
+               var rest = list.slice(5).reduce(function (a, x) { return a + x.value; }, 0);
+               if (rest > 0) top.push({ label: "その他", pct: rest / t * 100, other: true });
+               return top;
+             })() };
   }
   function drawAnnual(canvas, d, hide) {
     var W = 1080, H = 1350;
@@ -8684,14 +8691,34 @@
     rr(L, gy + 28, R - L, 22, 11, C.field);
     rr(L, gy + 28, Math.max(22, Math.min(1, pct / 100) * (R - L)), 22, 11, gold);
 
-    // お金が入る月(小さな棒)。毎月どれだけ入るかの雰囲気だけ(金額は書かない)
-    var mx = Math.max.apply(null, d.months), cy = 1050, chh = 70, cw = (R - L) / 12;
-    font(500, 24); text("お金が入る月", L, cy, C.text2);
-    d.months.forEach(function (v, k) {
-      var hh = mx > 0 ? Math.max(4, v / mx * chh) : 4, x = L + k * cw + 8;
-      rr(x, cy + 20 + chh - hh, cw - 16, hh, 6, v > 0 ? gold : C.line);
-      font(500, 20); text(String(k + 1), x + (cw - 16) / 2, cy + 20 + chh + 30, C.muted, "center");
-    });
+    // 業種の内訳: 上位5業種と「その他」を1本の帯で。色は金色の濃い→薄い(多い順)、その他は灰色。名前と%は下に並べる
+    var ramp = d.tier >= 1 ? ["#7d5a12", "#a8791f", "#c99a3f", "#ddb96c", "#ecd4a0"] : ["#0f3f52", "#1a5f7a", "#3f86a3", "#79adc2", "#b3d0dc"];
+    var sy = 1018;
+    font(500, 26); text("業種の内訳", L, sy, C.text2);
+    if (d.sectors5.length) {
+      var top1 = d.sectors5[0];
+      font(700, 26); text("いちばん多いのは " + top1.label + " " + Math.round(top1.pct) + "%", R, sy, C.text, "right");
+      var bx = L, bw2 = R - L, gap = 4, n = d.sectors5.length, avail = bw2 - gap * (n - 1);
+      g.save(); g.beginPath(); if (g.roundRect) g.roundRect(L, sy + 22, bw2, 36, 10); else g.rect(L, sy + 22, bw2, 36); g.clip();
+      d.sectors5.forEach(function (x, k) {
+        var w = avail * x.pct / 100;
+        g.fillStyle = x.other ? "#d5d8de" : ramp[k]; g.fillRect(bx, sy + 22, w, 36);
+        bx += w + gap;
+      });
+      g.restore();
+      var colW = (R - L) / 3;
+      d.sectors5.forEach(function (x, k) {
+        var cx = L + (k % 3) * colW, cy2 = sy + 104 + Math.floor(k / 3) * 44;
+        rr(cx, cy2 - 20, 20, 20, 5, x.other ? "#d5d8de" : ramp[k]);
+        var nm = x.label, size2 = 24;
+        font(500, size2);
+        var pt = " " + Math.round(x.pct) + "%";
+        while (g.measureText(nm + pt).width > colW - 44 && nm.length > 2) nm = nm.slice(0, -1);
+        if (nm !== x.label) nm = nm.slice(0, -1) + "…";
+        text(nm, cx + 30, cy2, C.text);
+        font(700, size2); text(pt, cx + 30 + (function () { font(500, size2); return g.measureText(nm).width; })(), cy2, C.text);
+      });
+    }
 
     reportFoot(g, L, H, C, font, text);
   }
