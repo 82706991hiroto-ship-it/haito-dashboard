@@ -1557,6 +1557,7 @@
       <h3>配当レポート</h3>
       <p class="hint">SNSにそのまま使える画像です。金額を出したくないときは隠せます。</p>
       <div class="axis-tabs" id="reportKind"><button type="button" class="axis-tab active" data-kind="annual">年間の配当</button><button type="button" class="axis-tab" data-kind="month">月の配当</button><button type="button" class="axis-tab" data-kind="track">配当の軌跡</button></div>
+      <div class="axis-tabs" id="reportTheme"><button type="button" class="axis-tab active" data-theme="dark">濃紺</button><button type="button" class="axis-tab" data-theme="light">白</button></div>
       <label class="field" id="reportMonthField">対象の月
         <select id="reportMonth"></select>
       </label>
@@ -8622,19 +8623,23 @@
     canvas.width = W; canvas.height = H;
     var g = canvas.getContext("2d");
     var FONT = '"Manrope", "Zen Kaku Gothic New", "Hiragino Sans", system-ui, sans-serif';
-    var C = { text: "#f4f1ea", text2: "#a9b3bd", muted: "#6f7c88", line: "rgba(255,255,255,.12)",
-              gold: "#d9b26a", goldHi: "#f1d9a2", track: "rgba(255,255,255,.10)" };
+    var light = state.reportTheme === "light";
+    var C = light
+      ? { text: "#14202a", text2: "#5d6873", muted: "#8b949c", line: "rgba(20,32,42,.10)", sub: "rgba(20,32,42,.06)",
+          gold: "#a8791f", goldHi: "#8c6214", track: "rgba(20,32,42,.08)" }
+      : { text: "#f4f1ea", text2: "#a9b3bd", muted: "#6f7c88", line: "rgba(255,255,255,.12)", sub: "rgba(255,255,255,.06)",
+          gold: "#d9b26a", goldHi: "#f1d9a2", track: "rgba(255,255,255,.10)" };
     function font(w, px) { g.font = w + " " + px + "px " + FONT; }
     function text(t, x, y, color, align) { g.fillStyle = color; g.textAlign = align || "left"; g.fillText(t, x, y); }
     function line(x1, y1, x2, y2) { g.strokeStyle = C.line; g.lineWidth = 2; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
     function pill(x, y, w, h, color) { var r = h / 2; g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); g.fillStyle = color; g.fill(); }
 
     var bg = g.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, "#14232e"); bg.addColorStop(1, "#0a1219");
+    bg.addColorStop(0, light ? "#fdfcf9" : "#14232e"); bg.addColorStop(1, light ? "#f1ece2" : "#0a1219");
     g.fillStyle = bg; g.fillRect(0, 0, W, H);
     // 右上にうっすら金の光
     var glow = g.createRadialGradient(W * 0.85, 120, 0, W * 0.85, 120, 620);
-    glow.addColorStop(0, "rgba(217,178,106,.20)"); glow.addColorStop(1, "rgba(217,178,106,0)");
+    glow.addColorStop(0, light ? "rgba(217,178,106,.22)" : "rgba(217,178,106,.20)"); glow.addColorStop(1, "rgba(217,178,106,0)");
     g.fillStyle = glow; g.fillRect(0, 0, W, H);
     var L = 96, R = W - 96, now = new Date();
     g.textBaseline = "alphabetic";
@@ -8687,7 +8692,8 @@
     if (d.goalPct !== null && !hide) { font(500, 22); text("月" + fmtYen(d.goal) + "の目標まで", R, 832, C.muted, "right"); }
 
     // 業種の内訳(ドーナツ)
-    var ramp = ["#f1d9a2", "#d9b26a", "#b48a43", "#8d6a2f", "#66502a"], other = "#3a4753";
+    var ramp = light ? ["#7d5a12", "#a8791f", "#c99a3f", "#ddb96c", "#ecd4a0"] : ["#f1d9a2", "#d9b26a", "#b48a43", "#8d6a2f", "#66502a"],
+        other = light ? "#d5d8de" : "#3a4753";
     var sy = 880;
     font(500, 24); text("業種の内訳", L, sy, C.text2);
     if (d.sectors5.length) {
@@ -8710,7 +8716,7 @@
         if (nm !== x.label) nm = nm.slice(0, -1) + "…";
         text(nm, lx + 30, cy2, C.text);
         font(700, 26); text(Math.round(x.pct) + "%", R, cy2, k === 0 ? C.gold : C.text, "right");
-        if (k < d.sectors5.length - 1) { g.strokeStyle = "rgba(255,255,255,.06)"; g.lineWidth = 1; g.beginPath(); g.moveTo(lx, cy2 + 18); g.lineTo(R, cy2 + 18); g.stroke(); }
+        if (k < d.sectors5.length - 1) { g.strokeStyle = C.sub; g.lineWidth = 1; g.beginPath(); g.moveTo(lx, cy2 + 18); g.lineTo(R, cy2 + 18); g.stroke(); }
       });
     }
 
@@ -8756,6 +8762,8 @@
   function paintReport() {
     var agg = aggregate();
     document.getElementById("reportMonthField").hidden = reportKind !== "month";
+    document.getElementById("reportTheme").hidden = reportKind !== "annual";
+    Array.prototype.forEach.call(document.querySelectorAll("#reportTheme .axis-tab"), function (b) { b.classList.toggle("active", b.dataset.theme === (state.reportTheme === "light" ? "light" : "dark")); });
     Array.prototype.forEach.call(document.querySelectorAll("#reportKind .axis-tab"), function (b) { b.classList.toggle("active", b.dataset.kind === reportKind); });
     if (reportKind === "annual") {
       var hideA = document.getElementById("reportHide").checked, ca = document.createElement("canvas"), ad = annualData(agg);
@@ -8839,6 +8847,10 @@
   });
   document.addEventListener("click", function (e) { if (e.target.closest("#trackShareBtn")) openReportDialog("track"); });
   document.getElementById("reportMonth").addEventListener("change", paintReport);
+  document.getElementById("reportTheme").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-theme]");
+    if (b) { state.reportTheme = b.dataset.theme === "light" ? "light" : undefined; save(); paintReport(); }
+  });
   document.getElementById("reportHide").addEventListener("change", paintReport);
   document.getElementById("reportShowUrl").addEventListener("change", paintReport);
   document.getElementById("reportCloseBtn").addEventListener("click", function () {
