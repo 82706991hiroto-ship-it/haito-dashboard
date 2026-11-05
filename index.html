@@ -8674,16 +8674,16 @@
       { label: "業種", value: d.sectors + "" },
       { label: "利回り(取得)", value: d.yieldBook !== null ? d.yieldBook.toFixed(2) + "%" : "—" }
     ];
-    var by = 680, bw = (R - L - 40) / 3, bh = 180;
+    var by = 670, bw = (R - L - 40) / 3, bh = 170;
     boxes.forEach(function (b, k) {
       var x = L + k * (bw + 20);
       rr(x, by, bw, bh, 24, C.field);
       font(500, 26); text(b.label, x + 28, by + 60, C.text2);
-      font(800, 64); text(b.value, x + 28, by + 145, C.text);
+      font(800, 64); text(b.value, x + 28, by + 138, C.text);
     });
 
     // 目標(月○円)の達成率か、次の節目まで
-    var gy = 920;
+    var gy = 900;
     var pct = d.goalPct !== null ? d.goalPct : (d.next ? d.annual / d.next * 100 : 100);
     var label = d.goalPct !== null ? (hide ? "月の目標まで" : "月" + fmtYen(d.goal) + "の目標まで") : d.next ? "次の節目 年間" + manYen(d.next) + " まで" : "すべての節目を達成";
     font(500, 30); text(label, L, gy, C.text2);
@@ -8693,30 +8693,34 @@
 
     // 業種の内訳: 上位5業種と「その他」を1本の帯で。色は金色の濃い→薄い(多い順)、その他は灰色。名前と%は下に並べる
     var ramp = d.tier >= 1 ? ["#7d5a12", "#a8791f", "#c99a3f", "#ddb96c", "#ecd4a0"] : ["#0f3f52", "#1a5f7a", "#3f86a3", "#79adc2", "#b3d0dc"];
-    var sy = 1018;
+    // 円(ドーナツ)で、上位5業種とその他。真ん中に業種の数、右に名前と%
+    var sy = 990;
     font(500, 26); text("業種の内訳", L, sy, C.text2);
     if (d.sectors5.length) {
       var top1 = d.sectors5[0];
       font(700, 26); text("いちばん多いのは " + top1.label + " " + Math.round(top1.pct) + "%", R, sy, C.text, "right");
-      var bx = L, bw2 = R - L, gap = 4, n = d.sectors5.length, avail = bw2 - gap * (n - 1);
-      g.save(); g.beginPath(); if (g.roundRect) g.roundRect(L, sy + 22, bw2, 36, 10); else g.rect(L, sy + 22, bw2, 36); g.clip();
+      var ocx = L + 86, ocy = sy + 104, orad = 82, thick = 28, ang = -Math.PI / 2;
       d.sectors5.forEach(function (x, k) {
-        var w = avail * x.pct / 100;
-        g.fillStyle = x.other ? "#d5d8de" : ramp[k]; g.fillRect(bx, sy + 22, w, 36);
-        bx += w + gap;
+        var sweep = Math.PI * 2 * x.pct / 100;
+        g.beginPath(); g.arc(ocx, ocy, orad, ang, ang + sweep); g.arc(ocx, ocy, orad - thick, ang + sweep, ang, true); g.closePath();
+        g.fillStyle = x.other ? "#d5d8de" : ramp[k]; g.fill();
+        // 区切りの白い線
+        g.strokeStyle = C.card; g.lineWidth = 3; g.stroke();
+        ang += sweep;
       });
-      g.restore();
-      var colW = (R - L) / 3;
+      font(500, 22); text("業種", ocx, ocy - 6, C.text2, "center");
+      font(800, 40); text(String(d.sectors), ocx, ocy + 36, C.text, "center");
+      var lx0 = L + 230, colW = (R - lx0) / 2;
       d.sectors5.forEach(function (x, k) {
-        var cx = L + (k % 3) * colW, cy2 = sy + 104 + Math.floor(k / 3) * 44;
+        var cx = lx0 + Math.floor(k / 3) * colW, cy2 = sy + 70 + (k % 3) * 50;
         rr(cx, cy2 - 20, 20, 20, 5, x.other ? "#d5d8de" : ramp[k]);
-        var nm = x.label, size2 = 24;
-        font(500, size2);
-        var pt = " " + Math.round(x.pct) + "%";
+        var nm = x.label, pt = " " + Math.round(x.pct) + "%";
+        font(500, 25);
         while (g.measureText(nm + pt).width > colW - 44 && nm.length > 2) nm = nm.slice(0, -1);
         if (nm !== x.label) nm = nm.slice(0, -1) + "…";
+        var nw = g.measureText(nm).width;
         text(nm, cx + 30, cy2, C.text);
-        font(700, size2); text(pt, cx + 30 + (function () { font(500, size2); return g.measureText(nm).width; })(), cy2, C.text);
+        font(700, 25); text(pt, cx + 30 + nw, cy2, C.text);
       });
     }
 
