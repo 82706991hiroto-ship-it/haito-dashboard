@@ -1395,7 +1395,7 @@
     </div>
     <div class="hero-substats" id="heroSubstats"></div>
     <div class="tax-box" id="taxBox" hidden></div>
-    <div class="hero-actions"><button class="btn" id="reportBtn" type="button">月の配当レポートを画像にする</button></div>
+    <div class="hero-actions"><button class="btn" id="reportBtn" type="button">配当をSNSに投稿する</button></div>
   </section>
 
   <section class="panel season-panel" id="seasonPanel" data-view="home" hidden>
@@ -1556,7 +1556,7 @@
     <dialog class="months-dialog report-dialog" id="reportDialog">
       <h3>配当レポート</h3>
       <p class="hint">SNSにそのまま使える画像です。金額を出したくないときは隠せます。</p>
-      <div class="axis-tabs" id="reportKind"><button type="button" class="axis-tab active" data-kind="month">月の配当</button><button type="button" class="axis-tab" data-kind="track">配当の軌跡</button></div>
+      <div class="axis-tabs" id="reportKind"><button type="button" class="axis-tab active" data-kind="annual">年間の配当</button><button type="button" class="axis-tab" data-kind="month">月の配当</button><button type="button" class="axis-tab" data-kind="track">配当の軌跡</button></div>
       <label class="field" id="reportMonthField">対象の月
         <select id="reportMonth"></select>
       </label>
@@ -8598,6 +8598,104 @@
     reportFoot(g, L, H, C, font, text);
   }
 
+  // 年間の配当(自慢用): 主役は年間の配当金(税引前)。節目のバッジ・月あたり・銘柄数・業種数・取得利回り・目標の達成率。
+  // 金額を隠すときは、節目(「年間20万円を突破」)と%・数だけにする
+  function annualData(agg) {
+    var annual = agg.totalDivPre, goal = num(state.goals.monthly);
+    var top = MILESTONES.filter(function (m) { return annual >= m; }).pop() || 0;
+    var next = MILESTONES.filter(function (m) { return annual < m; })[0] || 0;
+    return { annual: annual, monthly: annual / 12, top: top, next: next, tier: tierOf(annual),
+             stocks: agg.stockCount, sectors: agg.sectorCount,
+             yieldBook: agg.totalAcq > 0 ? annual / agg.totalAcq * 100 : null,
+             goalPct: goal > 0 ? annual / 12 / goal * 100 : null, goal: goal, months: agg.calendar.payout };
+  }
+  function drawAnnual(canvas, d, hide) {
+    var W = 1080, H = 1350;
+    canvas.width = W; canvas.height = H;
+    var g = canvas.getContext("2d");
+    var FONT = '"Manrope", "Zen Kaku Gothic New", "Hiragino Sans", system-ui, sans-serif';
+    var C = { page: "#f4f5f7", card: "#ffffff", text: "#0d0f12", text2: "#5b6270", muted: "#8b909a",
+              line: "#e9eaee", field: "#f4f5f7", accent: "#1a5f7a", gold: "#a8791f", goldSoft: "#f6eedc" };
+    function font(w, px) { g.font = w + " " + px + "px " + FONT; }
+    function rr(x, y, w, h, r, fill) {
+      r = Math.min(r, w / 2, h / 2);
+      g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+      g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); g.fillStyle = fill; g.fill();
+    }
+    function text(t, x, y, color, align) { g.fillStyle = color; g.textAlign = align || "left"; g.fillText(t, x, y); }
+    var gold = d.tier >= 1 ? C.gold : C.accent;
+
+    g.fillStyle = C.page; g.fillRect(0, 0, W, H);
+    rr(40, 40, W - 80, H - 80, 44, C.card);
+    // 上の金の帯(節目を越えた人ほど映えるように)
+    var grd = g.createLinearGradient(40, 0, W - 40, 0);
+    grd.addColorStop(0, gold); grd.addColorStop(1, d.tier >= 1 ? "#e9c979" : "#5b9bb5");
+    g.save(); g.beginPath(); if (g.roundRect) g.roundRect(40, 40, W - 80, 14, [44, 44, 0, 0]); else g.rect(40, 40, W - 80, 14); g.fillStyle = grd; g.fill(); g.restore();
+    var L = 100, R = W - 100, now = new Date();
+    g.textBaseline = "alphabetic";
+
+    font(700, 40); text("わたしの年間配当金", L, 165, C.text);
+    font(500, 26); text(now.getFullYear() + "年" + (now.getMonth() + 1) + "月 時点", R, 163, C.text2, "right");
+
+    // 節目のバッジと段階の点
+    var tag = d.top ? "年間" + manYen(d.top) + "を突破" : "配当生活、はじめました";
+    font(800, 34);
+    var tw = g.measureText(tag).width;
+    rr(L, 215, tw + 56, 64, 32, d.tier >= 1 ? C.goldSoft : "#e3eef2");
+    text(tag, L + 28, 259, gold);
+    for (var i = 0; i < 5; i++) rr(L + tw + 90 + i * 46, 241, 34, 10, 5, i <= d.tier ? gold : C.line);
+
+    if (!hide) {
+      font(500, 30); text("年間の配当金(税引前)", L, 370, C.text2);
+      font(800, 92); text("¥", L - 4, 520, gold);
+      var big = Math.round(d.annual).toLocaleString("ja-JP"), size = 190;
+      font(800, size);
+      while (g.measureText(big).width > R - L - 80 && size > 110) { size -= 4; font(800, size); }
+      text(big, L + 62, 540, C.text);
+      font(500, 34); text("月あたり", L, 630, C.text2);
+      font(800, 44); text(fmtYen(d.monthly), L + 150, 632, C.text);
+    } else {
+      font(500, 30); text("年間の配当金(税引前)", L, 370, C.text2);
+      var ht = d.top ? manYen(d.top) : "—";
+      font(800, 150); var hw = g.measureText(ht).width; text(ht, L - 6, 540, C.text);
+      if (d.top) { font(800, 60); text("超え", L + hw + 10, 540, gold); }
+    }
+
+    // 3つの数字
+    var boxes = [
+      { label: "銘柄", value: d.stocks + "" },
+      { label: "業種", value: d.sectors + "" },
+      { label: "利回り(取得)", value: d.yieldBook !== null ? d.yieldBook.toFixed(2) + "%" : "—" }
+    ];
+    var by = 680, bw = (R - L - 40) / 3, bh = 180;
+    boxes.forEach(function (b, k) {
+      var x = L + k * (bw + 20);
+      rr(x, by, bw, bh, 24, C.field);
+      font(500, 26); text(b.label, x + 28, by + 60, C.text2);
+      font(800, 64); text(b.value, x + 28, by + 145, C.text);
+    });
+
+    // 目標(月○円)の達成率か、次の節目まで
+    var gy = 920;
+    var pct = d.goalPct !== null ? d.goalPct : (d.next ? d.annual / d.next * 100 : 100);
+    var label = d.goalPct !== null ? (hide ? "月の目標まで" : "月" + fmtYen(d.goal) + "の目標まで") : d.next ? "次の節目 年間" + manYen(d.next) + " まで" : "すべての節目を達成";
+    font(500, 30); text(label, L, gy, C.text2);
+    font(800, 40); text(pct.toFixed(1) + "%", R, gy + 2, gold, "right");
+    rr(L, gy + 28, R - L, 22, 11, C.field);
+    rr(L, gy + 28, Math.max(22, Math.min(1, pct / 100) * (R - L)), 22, 11, gold);
+
+    // お金が入る月(小さな棒)。毎月どれだけ入るかの雰囲気だけ(金額は書かない)
+    var mx = Math.max.apply(null, d.months), cy = 1050, chh = 70, cw = (R - L) / 12;
+    font(500, 24); text("お金が入る月", L, cy, C.text2);
+    d.months.forEach(function (v, k) {
+      var hh = mx > 0 ? Math.max(4, v / mx * chh) : 4, x = L + k * cw + 8;
+      rr(x, cy + 20 + chh - hh, cw - 16, hh, 6, v > 0 ? gold : C.line);
+      font(500, 20); text(String(k + 1), x + (cw - 16) / 2, cy + 20 + chh + 30, C.muted, "center");
+    });
+
+    reportFoot(g, L, H, C, font, text);
+  }
+
   // 下: アプリのアイコンと名前(「何のアプリ?」と聞かれるように)。URLは「アプリのURLを載せる」を選んだときだけ
   var reportIcon = null;
   function loadReportIcon() {
@@ -8621,7 +8719,7 @@
     font(500, 21); text(showUrl ? REPORT_URL : "高配当株の配当管理アプリ", x, y0 + 82, C.text2);
   }
 
-  var reportBlob = null, reportKind = "month";
+  var reportBlob = null, reportKind = "annual";
 
   function reportMonthOptions(agg) {
     var ser = reportSeries(agg), now = new Date(), opts = [];
@@ -8636,8 +8734,18 @@
 
   function paintReport() {
     var agg = aggregate();
-    document.getElementById("reportMonthField").hidden = reportKind === "track";
+    document.getElementById("reportMonthField").hidden = reportKind !== "month";
     Array.prototype.forEach.call(document.querySelectorAll("#reportKind .axis-tab"), function (b) { b.classList.toggle("active", b.dataset.kind === reportKind); });
+    if (reportKind === "annual") {
+      var hideA = document.getElementById("reportHide").checked, ca = document.createElement("canvas"), ad = annualData(agg);
+      drawAnnual(ca, ad, hideA);
+      document.getElementById("reportPreview").src = ca.toDataURL("image/png");
+      reportBlob = null;
+      ca.toBlob(function (b) { reportBlob = b; }, "image/png");
+      document.getElementById("reportSource").textContent = "今の保有銘柄の1株配当(会社予想・実績)から出した、1年間の配当金の見込みです(税引前)。";
+      state.reportHide = hideA; save();
+      return;
+    }
     if (reportKind === "track") {
       var hideT = document.getElementById("reportHide").checked, cv = document.createElement("canvas"), sm = trackSummary(agg);
       drawTrack(cv, sm, hideT);
@@ -8667,7 +8775,7 @@
   }
 
   function openReportDialog(kind) {
-    reportKind = kind === "track" ? "track" : "month";
+    reportKind = kind === "track" ? "track" : kind === "month" ? "month" : "annual";
     var agg = aggregate();
     var sel = document.getElementById("reportMonth");
     var opts = reportMonthOptions(agg);
@@ -8692,6 +8800,7 @@
 
   function reportFileName() {
     if (reportKind === "track") return "haito-track-" + todayIso() + ".png";
+    if (reportKind === "annual") return "haito-annual-" + todayIso() + ".png";
     return "haito-report-" + document.getElementById("reportMonth").value.replace("/", "-") + ".png";
   }
 
@@ -8702,7 +8811,7 @@
     document.body.appendChild(a); a.click(); a.remove();
   }
 
-  document.getElementById("reportBtn").addEventListener("click", function () { openReportDialog("month"); });
+  document.getElementById("reportBtn").addEventListener("click", function () { openReportDialog("annual"); });
   document.getElementById("reportKind").addEventListener("click", function (e) {
     var b = e.target.closest("[data-kind]");
     if (b) { reportKind = b.dataset.kind; paintReport(); }
@@ -8717,7 +8826,9 @@
   document.getElementById("reportSaveBtn").addEventListener("click", saveReportImage);
   document.getElementById("reportShareBtn").addEventListener("click", function () {
     var parts = document.getElementById("reportMonth").value.split("/");
-    var msg = (reportKind === "track" ? "配当の軌跡 #配当金生活 #高配当株" : parts[0] + "年" + parts[1] + "月の配当金 #配当金報告") +
+    var ad = reportKind === "annual" ? annualData(aggregate()) : null;
+    var msg = (reportKind === "annual" ? (ad.top ? "年間配当" + manYen(ad.top) + "を突破しました" : "年間の配当金") + " #高配当株 #配当金生活"
+      : reportKind === "track" ? "配当の軌跡 #配当金生活 #高配当株" : parts[0] + "年" + parts[1] + "月の配当金 #配当金報告") +
       (document.getElementById("reportShowUrl").checked ? "\nhttps://" + REPORT_URL + "/" : "");
     var file = reportBlob ? new File([reportBlob], reportFileName(), { type: "image/png" }) : null;
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
