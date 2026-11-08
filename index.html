@@ -422,6 +422,10 @@
   .wr-name small, .wr-num small { display: block; font-size: 10.5px; color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wr-num { text-align: right; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .wr-name small.wr-growth { color: var(--text-2); white-space: normal; }
+  .wr-head { display: flex; align-items: center; min-width: 0; } .wr-head b { min-width: 0; }
+  .wr-pol { flex: none; display: inline-block; font-style: normal; font-size: 10.5px; font-weight: 700; padding: 1px 6px; margin-left: 6px; border-radius: 6px; vertical-align: 2px;
+    background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+  .wr-pol.is-gone { background: color-mix(in srgb, var(--crit) 12%, transparent); color: var(--crit); }
   .wr-name small.wr-growth span { white-space: nowrap; margin-right: 6px; }
   .wr-gap { text-align: right; font-size: 12.5px; font-weight: 700; color: var(--text-2); font-variant-numeric: tabular-nums; }
   .wr-gap.is-hit { color: var(--accent); }
@@ -1753,6 +1757,7 @@
         <option value="yield">今の利回りが高い順</option>
         <option value="total">総合利回り(優待込み)が高い順</option>
         <option value="perk">優待ありを先に</option>
+        <option value="policy">累進配当・DOEを先に</option>
         <option value="growth">増配率(5年)が高い順</option>
         <option value="new">追加が新しい順</option>
         <option value="code">コード順</option>
@@ -5386,7 +5391,7 @@
   document.getElementById("backToCheckClose").addEventListener("click", function () { document.getElementById("backToCheckBox").hidden = true; });
 
   var WATCH_SHOW = 10, watchShowAll = false;
-  var watchSortMode = (function () { try { var v = localStorage.getItem("haitoWatchSort"); return ["gap", "sector", "yield", "total", "perk", "growth", "new", "code"].indexOf(v) === -1 ? "gap" : v; } catch (e) { return "gap"; } })();
+  var watchSortMode = (function () { try { var v = localStorage.getItem("haitoWatchSort"); return ["gap", "sector", "yield", "total", "perk", "policy", "growth", "new", "code"].indexOf(v) === -1 ? "gap" : v; } catch (e) { return "gap"; } })();
   (function () {
     var sel = document.getElementById("watchSort");
     sel.value = watchSortMode;
@@ -5417,6 +5422,8 @@
       total: function (x) { return x.totalYield !== null ? -x.totalYield : x.yieldNow === null ? null : -x.yieldNow; },
       // 優待ありを先に(PERK_INFO が 0 以外)。その中は総合利回りが高い順
       perk: function (x) { var t = x.totalYield !== null ? x.totalYield : (x.yieldNow || 0); return (PERK_INFO[String(x.w.code).toUpperCase()] ? 0 : 1000) - t; },
+      // 累進配当・DOEを宣言している会社を先に(両方なら一番上)。その中は今の利回りが高い順
+      policy: function (x) { var p = (finRec(x.w.code) || {}).pol || []; return (p.length ? 0 : 1000) - p.length * 100 - (x.yieldNow || 0); },
       growth: function (x) { var g = cagr(comparableDivs(x.w.code), 5); return g === null ? null : -g; },
       new: function (x) { return x.w.addedAt ? -new Date(x.w.addedAt).getTime() : null; },
       code: function (x) { return String(x.w.code); } }[watchSortMode] || null;
@@ -5430,7 +5437,7 @@
       return ka < kb ? -1 : ka > kb ? 1 : 0;
     });
     var hintEl = document.getElementById("watchSortHint");
-    if (hintEl) hintEl.textContent = { gap: "目標利回りに近い順", sector: "持っている割合が少ない業種順", yield: "今の利回りが高い順", total: "総合利回り(優待込み)が高い順", perk: "優待ありを先に", growth: "増配率(5年)が高い順", new: "追加が新しい順", code: "コード順" }[watchSortMode];
+    if (hintEl) hintEl.textContent = { gap: "目標利回りに近い順", sector: "持っている割合が少ない業種順", yield: "今の利回りが高い順", total: "総合利回り(優待込み)が高い順", perk: "優待ありを先に", policy: "累進配当・DOEを先に", growth: "増配率(5年)が高い順", new: "追加が新しい順", code: "コード順" }[watchSortMode];
     list.innerHTML = "";
     // 候補が増えても下の株主優待まで遠くならないよう、並べた順に10件だけ出す(追加した銘柄・試算中の銘柄は必ず出す)
     var more = document.getElementById("watchMore");
@@ -5472,8 +5479,12 @@
       var perkNote = v.totalYield !== null ? "優待込み" + fmtPct(v.totalYield, 2) : "";
       var growthNote = gv !== null ? "増配率" + (gv >= 0 ? "+" : "−") + Math.abs(gv * 100).toFixed(1) + "%" : "";
       var streakNote = stk ? (stk.up > 0 ? stk.label : stk.kind === "down" ? "直近で減配" : stk.kind === "flat" ? "据え置き" : "") : "";
+      // 配当方針(有報の配当政策): 累進配当・DOE。前の期にあって消えたものは注意として出す
+      var frec = finRec(v.w.code), pol = frec && frec.pol || [], gone = frec && frec.polgone;
+      var polHtml = pol.map(function (t) { return '<em class="wr-pol">' + escapeHtml(t) + '</em>'; }).join("") +
+        (gone ? '<em class="wr-pol is-gone">' + escapeHtml(gone.t.join("・")) + 'の記載が消えた</em>' : "");
       var gapTxt = v.gapPct === null ? (v.price > 0 ? "—" : "株価なし") : v.gapPct >= 0 ? "到達" : "−" + fmtPct(-v.gapPct);
-      row.innerHTML = '<span class="wr-name"><b>' + escapeHtml((cut ? "⚠ " : "") + v.w.code + " " + v.name) + '</b><small>' + escapeHtml(v.sector + (watchSortMode === "sector" && v.secPct !== null ? " " + (v.secPct > 0 ? fmtPct(v.secPct) : "未保有") : "") + (v.heldShares > 0 ? " ・ 保有中" : "")) + '</small>' +
+      row.innerHTML = '<span class="wr-name"><span class="wr-head"><b>' + escapeHtml((cut ? "⚠ " : "") + v.w.code + " " + v.name) + '</b>' + polHtml + '</span><small>' + escapeHtml(v.sector + (watchSortMode === "sector" && v.secPct !== null ? " " + (v.secPct > 0 ? fmtPct(v.secPct) : "未保有") : "") + (v.heldShares > 0 ? " ・ 保有中" : "")) + '</small>' +
         (streakNote || growthNote || perkNote ? '<small class="wr-growth" title="増配率は直近' + gN + '年の1株配当の伸び(年あたり)。優待込みは配当利回り＋優待利回り(優待の金額は有報の記載からの目安)">' + [streakNote, growthNote, perkNote].filter(Boolean).map(function (t) { return '<span>' + escapeHtml(t) + '</span>'; }).join(" ") + '</small>' : "") + '</span>' +
         '<span class="wr-num">' + (v.yieldNow !== null ? fmtPct(v.yieldNow, 2) : "—") + '<small>目標 ' + (v.w.targetYield != null ? v.w.targetYield + "%" : "—") + '</small></span>' +
         '<span class="wr-num">' + (v.targetPrice ? fmtYen(v.targetPrice) : "—") + '<small>' + (v.price > 0 ? "今 " + fmtYen(v.price) : "") + '</small></span>' +
