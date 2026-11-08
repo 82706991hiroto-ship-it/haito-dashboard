@@ -422,8 +422,8 @@
   .wr-name small, .wr-num small { display: block; font-size: 10.5px; color: var(--muted); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wr-num { text-align: right; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .wr-name small.wr-growth { color: var(--text-2); white-space: normal; }
-  .wr-head { display: flex; align-items: center; min-width: 0; } .wr-head b { min-width: 0; }
-  .wr-pol { flex: none; display: inline-block; font-style: normal; font-size: 10.5px; font-weight: 700; padding: 1px 6px; margin-left: 6px; border-radius: 6px; vertical-align: 2px;
+  .wr-name small.wr-line2 { color: var(--text-2); margin-top: 2px; }
+  .wr-pol { display: inline-block; font-style: normal; font-size: 10px; font-weight: 700; padding: 0 5px; margin-right: 5px; border-radius: 5px; line-height: 1.6;
     background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
   .wr-pol.is-gone { background: color-mix(in srgb, var(--crit) 12%, transparent); color: var(--crit); }
   .wr-name small.wr-growth span { white-space: nowrap; margin-right: 6px; }
@@ -5481,11 +5481,17 @@
       var streakNote = stk ? (stk.up > 0 ? stk.label : stk.kind === "down" ? "直近で減配" : stk.kind === "flat" ? "据え置き" : "") : "";
       // 配当方針(有報の配当政策): 累進配当・DOE。前の期にあって消えたものは注意として出す
       var frec = finRec(v.w.code), pol = frec && frec.pol || [], gone = frec && frec.polgone;
-      var polHtml = pol.map(function (t) { return '<em class="wr-pol">' + escapeHtml(t) + '</em>'; }).join("") +
-        (gone ? '<em class="wr-pol is-gone">' + escapeHtml(gone.t.join("・")) + 'の記載が消えた</em>' : "");
+      var polHtml = pol.map(function (t) { return '<em class="wr-pol">' + escapeHtml(t === "累進配当" ? "累進" : t) + '</em>'; }).join("") +
+        (gone ? '<em class="wr-pol is-gone">' + escapeHtml(gone.t.join("・").replace("累進配当", "累進")) + 'の記載が消えた</em>' : "");
+      // 2行目は大事なものだけ: 方針の札・連続増配・保有中。並べ方に合わせた値を1つだけ足す(詳しくは開いたときに)
+      var sortNote = watchSortMode === "sector" ? v.sector + (v.secPct !== null ? " " + (v.secPct > 0 ? fmtPct(v.secPct) : "未保有") : "")
+        : (watchSortMode === "perk" || watchSortMode === "total") ? perkNote
+        : watchSortMode === "growth" ? growthNote : "";
+      // 2行目の連続増配は短く(「・○期減配なし」は開いたときに)
+      var line2 = [pol.length ? streakNote.split("・")[0] : streakNote, sortNote, v.heldShares > 0 ? "保有中" : ""].filter(Boolean);
       var gapTxt = v.gapPct === null ? (v.price > 0 ? "—" : "株価なし") : v.gapPct >= 0 ? "到達" : "−" + fmtPct(-v.gapPct);
-      row.innerHTML = '<span class="wr-name"><span class="wr-head"><b>' + escapeHtml((cut ? "⚠ " : "") + v.w.code + " " + v.name) + '</b>' + polHtml + '</span><small>' + escapeHtml(v.sector + (watchSortMode === "sector" && v.secPct !== null ? " " + (v.secPct > 0 ? fmtPct(v.secPct) : "未保有") : "") + (v.heldShares > 0 ? " ・ 保有中" : "")) + '</small>' +
-        (streakNote || growthNote || perkNote ? '<small class="wr-growth" title="増配率は直近' + gN + '年の1株配当の伸び(年あたり)。優待込みは配当利回り＋優待利回り(優待の金額は有報の記載からの目安)">' + [streakNote, growthNote, perkNote].filter(Boolean).map(function (t) { return '<span>' + escapeHtml(t) + '</span>'; }).join(" ") + '</small>' : "") + '</span>' +
+      row.innerHTML = '<span class="wr-name"><b>' + escapeHtml((cut ? "⚠ " : "") + v.w.code + " " + v.name) + '</b>' +
+        '<small class="wr-line2">' + polHtml + escapeHtml(line2.join(" ・ ")) + '</small></span>' +
         '<span class="wr-num">' + (v.yieldNow !== null ? fmtPct(v.yieldNow, 2) : "—") + '<small>目標 ' + (v.w.targetYield != null ? v.w.targetYield + "%" : "—") + '</small></span>' +
         '<span class="wr-num">' + (v.targetPrice ? fmtYen(v.targetPrice) : "—") + '<small>' + (v.price > 0 ? "今 " + fmtYen(v.price) : "") + '</small></span>' +
         '<span class="wr-gap' + (v.gapPct !== null && v.gapPct >= 0 ? " is-hit" : "") + '">' + gapTxt + '</span>';
@@ -5524,6 +5530,9 @@
       cell("株価" + (v.priceDate ? "(" + v.priceDate.slice(5) + ")" : ""), priceIn);
       cell("1株配当" + (v.divFromHolding ? "(保有の値)" : v.divFromForecast ? "(会社予想)" : "(直近実績)"), v.div > 0 ? fmtPerShare(v.div) : "—");
       cell("今の利回り", v.yieldNow !== null ? fmtPct(v.yieldNow, 2) : "—");
+      cell("業種", v.sector + (v.secPct !== null ? "(" + (v.secPct > 0 ? "持っている割合 " + fmtPct(v.secPct) : "まだ持っていない") + ")" : ""));
+      var stk2 = dividendStreak(v.w.code), ods2 = comparableDivs(v.w.code), g52 = cagr(ods2, 5);
+      cell("増配", [stk2 && stk2.up > 0 ? stk2.label : "", g52 !== null ? "増配率(5年) " + (g52 >= 0 ? "+" : "−") + Math.abs(g52 * 100).toFixed(1) + "%" : ""].filter(Boolean).join(" ・ ") || "—");
       if (v.totalYield !== null) cell("優待込みの利回り", fmtPct(v.totalYield, 2) + "(" + v.perkY.shares.toLocaleString("ja-JP") + "株で優待 年" + fmtYen(v.perkY.yen) + "相当)");
       var tIn = document.createElement("input");
       tIn.type = "number"; tIn.min = "0"; tIn.step = "0.1"; tIn.inputMode = "decimal";
