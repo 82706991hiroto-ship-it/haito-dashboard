@@ -442,7 +442,7 @@ def apply_manual(info, state):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=45)
-    ap.add_argument("--html", default=os.path.join(ROOT, "index.html"))
+    ap.add_argument("--html", default=os.path.join(ROOT, "data.js"))
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--manual-only", action="store_true", help="EDINETは見ず、手で足した過去の配当だけ反映する")
     ap.add_argument("--only-missing", action="store_true",

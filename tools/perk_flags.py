@@ -7,7 +7,7 @@ perks/flags.json に書き出す。チェックシート(../ir-check/)が優待�
 import json, os, re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-src = open(os.path.join(ROOT, "index.html"), encoding="utf-8").read()
+src = open(os.path.join(ROOT, "data.js"), encoding="utf-8").read()
 m = re.search(r"var PERK_INFO = (\{.*?\});", src)
 info = json.loads(m.group(1))
 out = os.path.join(ROOT, "perks", "flags.json")

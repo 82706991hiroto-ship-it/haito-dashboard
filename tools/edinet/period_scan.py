@@ -158,7 +158,7 @@ def write_irreg_map(html, info, state):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=0, help="直近この日数だけ見る(0なら約10年分)")
-    ap.add_argument("--html", default=os.path.join(ROOT, "index.html"))
+    ap.add_argument("--html", default=os.path.join(ROOT, "data.js"))
     a = ap.parse_args()
     today = dt.date.today()
     start = (today - dt.timedelta(days=a.days)) if a.days else today.replace(year=today.year - 10)

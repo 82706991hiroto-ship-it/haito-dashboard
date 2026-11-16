@@ -403,7 +403,7 @@ def main():
     ap.add_argument("cmd", choices=["list", "fetch", "build", "apply"])
     ap.add_argument("--out", default="history.json")
     ap.add_argument("--history", default="history.json")
-    ap.add_argument("--html", default="index.html")
+    ap.add_argument("--html", default="data.js")
     a = ap.parse_args()
     if a.cmd == "list":
         cmd_list(a.cache)

@@ -38,7 +38,7 @@ function expect(cond, msg) { if (!cond) fails.push(msg); }
 
   // 株式分割の見張り: 予想配当と株価がどちらも約4分の1なら、減配ではなく分割を疑い、登録すると株数と過去の配当を直す
   // 内蔵データにまだ分割が入っていない銘柄で試す(毎週の更新で公式の分割が入ると、その銘柄では疑いが出なくなるため、銘柄は毎回データから選ぶ)
-  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "index.html"), "utf8");
+  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "data.js"), "utf8");
   const mapOf = name => JSON.parse(src.match(new RegExp("var " + name + " = (\\{.*?\\});"))[1]);
   const INFO = mapOf("CODE_INFO_MAP"), SPLITS = mapOf("SPLIT_MAP");
   const sc = Object.keys(INFO).sort().find(c => /^[1-9][0-9]{3}$/.test(c) && !SPLITS[c] && Array.isArray(INFO[c][3]) && INFO[c][3].length >= 6 &&

@@ -77,12 +77,12 @@ jobs:
       - name: 米国の個別株の配当(SEC EDGAR)を更新
         if: github.event_name != 'push'
         continue-on-error: true
-        run: python3 tools/us/sec_dividends.py
+        run: python3 tools/us/sec_dividends.py --html data.js
       - name: 変わっていればコミットして公開
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git add index.html tools/edinet/state.json data/irregular-periods.json data/splits.json data/splits-applied.json data/special-dividends.json data/fund-distributions.json perks/
+          git add data.js index.html tools/edinet/state.json data/irregular-periods.json data/splits.json data/splits-applied.json data/special-dividends.json data/fund-distributions.json perks/
           if git diff --cached --quiet; then echo "変更なし"; exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

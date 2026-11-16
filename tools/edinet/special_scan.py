@@ -16,7 +16,7 @@ import fetch_history as fh  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, "data", "special-dividends.json")
-HTML = os.path.join(ROOT, "index.html")
+HTML = os.path.join(ROOT, "data.js")
 
 BREAKDOWN = re.compile(r"普通配当\s*(\d+(?:\.\d+)?)円[、,・及び及びと\s]{0,3}(?:(?:創立|設立|創業|上場)?[^、。()]{0,12}?(?:記念配当|特別配当)\s*\d+(?:\.\d+)?円[、,・\s]{0,3}){1,2}")
 AMOUNT = re.compile(r"(記念配当|特別配当)[^0-9。]{0,8}?(\d+(?:\.\d+)?)円")

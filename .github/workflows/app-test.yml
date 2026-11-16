@@ -4,7 +4,7 @@ name: 画面の計算の点検
 on:
   push:
     branches: [main]
-    paths: [index.html, sync-core.js, tools/ranking_aggregate.py, tests/**]
+    paths: [index.html, data.js, sync-core.js, tools/ranking_aggregate.py, tests/**]
   workflow_dispatch:
 jobs:
   test:

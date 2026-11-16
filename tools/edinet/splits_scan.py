@@ -17,7 +17,7 @@ import fetch_history as fh  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STATE = os.path.join(ROOT, "tools", "edinet", "state.json")
 SPLITS = os.path.join(ROOT, "data", "splits.json")
-HTML = os.path.join(ROOT, "index.html")
+HTML = os.path.join(ROOT, "data.js")
 
 DATE = r"(\d{4})年(\d{1,2})月(\d{1,2})日(?:\([^)]{1,3}\))?"
 # 効力発生日の書き方は2通りだけを拾う(取締役会の日・基準日などを取り違えないように)
