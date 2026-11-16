@@ -134,7 +134,11 @@
   function newerQuote(w, l) {
     if (!w || !l) return w;
     var out = w;
-    if (l.price > 0 && day(l.priceDate) > day(w.priceDate)) { out = Object.assign({}, out, { price: l.price, priceDate: l.priceDate }); }
+    if (l.price > 0 && day(l.priceDate) > day(w.priceDate)) {
+      out = Object.assign({}, out, { price: l.price, priceDate: l.priceDate });
+      // 買い増し候補の「前回の株価」(前回比に使う)も一緒に
+      if (l.prevPrice > 0) { out.prevPrice = l.prevPrice; out.prevPriceDate = l.prevPriceDate; }
+    }
     // 予想配当は、入れた日時(divAt: 手入力・貼り付け・チェックシート・有報の実績のどれでも)の新しいほう。
     // divAt の無い古い記録は、会社予想を取り込んだ日・「変更なし」で確かめた日を使う
     if (divStamp(l) > divStamp(w) && (l.div > 0 || l.fdiv > 0)) {

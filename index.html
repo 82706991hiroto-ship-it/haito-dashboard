@@ -291,6 +291,19 @@
   .poll-ask-row button { flex: 1; font: inherit; font-weight: 600; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
   .poll-ask-row button.pri { background: #2563eb; border-color: #2563eb; color: #fff; }
   .poll-ask small { display: block; margin-top: 8px; color: var(--text-2); font-size: 11px; }
+  .guard { margin: 0 0 16px; padding: 14px 16px; border-radius: 14px; background: var(--field); }
+  .guard-t { margin: 0 0 8px; font-weight: 700; font-size: 14px; } .guard-t span { font-weight: 400; font-size: 11.5px; color: var(--text-2); margin-left: 6px; }
+  .guard-row { padding: 6px 0; } .guard-h { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+  .guard-h b { font-size: 16px; font-variant-numeric: tabular-nums; color: var(--accent); } .guard-h b.is-down { color: var(--crit); }
+  .guard-bar { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--text) 8%, transparent); margin-top: 4px; overflow: hidden; }
+  .guard-bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); } .guard-bar i.is-down { background: var(--crit); }
+  .guard-row small { display: block; margin-top: 3px; font-size: 10.5px; color: var(--muted); }
+  .app-notice { position: fixed; left: 12px; right: 12px; bottom: calc(78px + env(safe-area-inset-bottom, 0px)); z-index: 70; max-width: 520px; margin: 0 auto; display: flex; align-items: center; gap: 10px;
+    background: #14232e; color: #f4f1ea; border-radius: 14px; padding: 12px 14px; font-size: 13px; line-height: 1.55; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+  .app-notice + .app-notice { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+  .app-notice span { flex: 1; }
+  .app-notice button { flex: none; font: inherit; font-weight: 700; font-size: 12.5px; padding: 7px 12px; border-radius: 999px; border: 0; background: #d9b26a; color: #14232e; cursor: pointer; }
+  .app-notice button.x { background: transparent; color: #a9b3bd; padding: 4px 6px; font-size: 16px; }
   .rank-meta { margin: 0 0 8px; font-size: 12.5px; color: var(--text-2); }
   .rank-tabs { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
   .rank-tabs button { font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text-2); cursor: pointer; }
@@ -1759,10 +1772,12 @@
         <option value="perk">優待ありを先に</option>
         <option value="policy">累進配当・DOEを先に</option>
         <option value="growth">増配率(5年)が高い順</option>
+        <option value="drop">前回の株価から下がった順</option>
         <option value="new">追加が新しい順</option>
         <option value="code">コード順</option>
       </select>
     </label>
+    <div class="fq-box" id="wqBox" hidden></div>
     <div class="watch-add">
       <input type="text" id="watchAddInput" placeholder="コードか銘柄名で追加(例: 8306、KDDI)" autocomplete="off">
       <button class="btn primary" id="watchAddBtn" type="button">☆ 追加</button>
@@ -2022,8 +2037,30 @@
   var state = loadState();
   syncAllUsd();
 
+  // 画面の下に出す、消えないお知らせ(新しい版・保存の失敗・表示のエラー)。同じ種類は1つだけ
+  function showNotice(kind, text, btnText, onClick) {
+    var id = "notice-" + kind, el = document.getElementById(id);
+    if (!el) { el = document.createElement("div"); el.id = id; el.className = "app-notice"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+    el.innerHTML = "";
+    var sp = document.createElement("span"); sp.textContent = text; el.appendChild(sp);
+    if (btnText) { var b = document.createElement("button"); b.type = "button"; b.textContent = btnText; b.addEventListener("click", onClick); el.appendChild(b); }
+    var x = document.createElement("button"); x.type = "button"; x.className = "x"; x.setAttribute("aria-label", "閉じる"); x.textContent = "×";
+    x.addEventListener("click", function () { el.remove(); }); el.appendChild(x);
+  }
+  var saveFailed = false;
   function save() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      if (saveFailed) { saveFailed = false; var sn = document.getElementById("notice-save"); if (sn) sn.remove(); }
+    } catch (e) {
+      // 容量がいっぱい・プライベートブラウズなどで保存できないと、閉じたときに変更が消える。黙って捨てずに知らせる
+      if (!saveFailed) {
+        saveFailed = true;
+        showNotice("save", "この端末に保存できませんでした(ブラウザの保存容量がいっぱいか、プライベートブラウズかもしれません)。このまま閉じると、今の変更は残りません。", "控えを保存する(JSON)", function () {
+          var eb = document.getElementById("exportBtn"); if (eb) eb.click();
+        });
+      }
+    }
     if (window.HaitoSync) window.HaitoSync.soon();
     if (window.HaitoPoll && !state.isSample) window.HaitoPoll.soon(pollCodes);
   }
@@ -2514,6 +2551,14 @@
     var why = r.items.slice(0, 2).map(function (x) { return x.s; }).join("・");
     return '<span class="risk-line lv' + r.level + '">⚠ ' + (r.level === 2 ? "減配リスク高" : "要注意") + (why ? ": " + escapeHtml(why) : "") + '</span>';
   }
+  // 直近から数えて、何期続けて減配していないか(記念配当・決算期間の例外を除いた系列で、3%以内の差は同じとみなす)
+  function noCutYears(code) {
+    var s = comparableDivs(code);
+    if (!s || s.length < 2) return 0;
+    var n = 0;
+    for (var k = 0; k + 1 < s.length; k++) { if (s[k] < s[k + 1] * 0.97) break; n++; }
+    return n;
+  }
   function renderRiskPanel() {
     var body = document.getElementById("riskBody");
     if (!body) return;
@@ -2530,7 +2575,28 @@
     var chk = rows.filter(function (x) { return x.r.check; });
     var bad = rows.filter(function (x) { return x.r.level > 0; }).sort(function (a, b) { return b.r.level - a.r.level || b.div - a.div; });
     var hi = bad.filter(function (x) { return x.r.level === 2; }).length;
-    var html = '<p class="risk-sum">' + rows.length + '銘柄を点検: 減配リスク高 <b class="' + (hi ? "is-down" : "") + '">' + hi + '</b> ・ 要注意 <b>' + (bad.length - hi) + '</b> ・ 目立った兆しなし <b>' + (rows.length - bad.length) + '</b>' +
+    // 配当の守り: 日本株の年間配当のうち、減りにくい根拠のある会社からの分がどれだけあるか(有報の配当政策と配当の実績から)
+    var gTot = 0, gPol = 0, gKeep = 0, gHi = 0;
+    rows.forEach(function (x) {
+      var code = String(x.h.code || "").trim().toUpperCase();
+      var d = heldOf(code).reduce(function (a, hh) { return a + computeRow(hh).divPre; }, 0);
+      if (!(d > 0)) return;
+      gTot += d;
+      var rec = finRec(code);
+      if (rec && (rec.pol || []).length) gPol += d;
+      if (noCutYears(code) >= 10) gKeep += d;
+      if (x.r.level === 2) gHi += d;
+    });
+    function guard(label, v, cls, note) {
+      var pct = gTot > 0 ? v / gTot * 100 : 0;
+      return '<div class="guard-row"><div class="guard-h"><span>' + label + '</span><b class="' + (cls || "") + '">' + pct.toFixed(0) + '%</b></div>' +
+        '<div class="guard-bar"><i class="' + (cls || "") + '" style="width:' + Math.min(100, pct).toFixed(1) + '%"></i></div>' + (note ? '<small>' + note + '</small>' : '') + '</div>';
+    }
+    var guardHtml = gTot > 0 ? '<div class="guard"><p class="guard-t">配当の守り <span>日本株の年間配当のうち</span></p>' +
+      guard("累進配当・DOEを宣言した会社から", gPol, "", "減配しない・純資産に対して払うと約束している会社") +
+      guard("10期以上、減配していない会社から", gKeep, "", "有報の実績で、10期以上続けて配当を減らしていない会社") +
+      guard("減配リスク高の会社から", gHi, gHi > 0 ? "is-down" : "", gHi > 0 ? "下の一覧で理由を確かめてください" : "") + '</div>' : "";
+    var html = guardHtml + '<p class="risk-sum">' + rows.length + '銘柄を点検: 減配リスク高 <b class="' + (hi ? "is-down" : "") + '">' + hi + '</b> ・ 要注意 <b>' + (bad.length - hi) + '</b> ・ 目立った兆しなし <b>' + (rows.length - bad.length) + '</b>' +
       (noData ? ' ・ データなし ' + noData : "") + '</p>';
     if (bad.length) {
       html += '<ul class="risk-list">' + bad.map(function (x) {
@@ -5373,7 +5439,7 @@
       state.watch.push(w);
     }
     var price = num(q.get("price"));
-    if (price > 0) { w.price = price; w.priceDate = todayStamp(); }
+    if (price > 0) setWatchPrice(w, price);
     var fdiv = num(q.get("fdiv"));
     if (fdiv > 0) w.fdiv = fdiv; else delete w.fdiv;
     // チェックシートで保存したときに決めた目標利回り(渡されなければ、今の値か既定の4%のまま)
@@ -5391,7 +5457,7 @@
   document.getElementById("backToCheckClose").addEventListener("click", function () { document.getElementById("backToCheckBox").hidden = true; });
 
   var WATCH_SHOW = 10, watchShowAll = false;
-  var watchSortMode = (function () { try { var v = localStorage.getItem("haitoWatchSort"); return ["gap", "sector", "yield", "total", "perk", "policy", "growth", "new", "code"].indexOf(v) === -1 ? "gap" : v; } catch (e) { return "gap"; } })();
+  var watchSortMode = (function () { try { var v = localStorage.getItem("haitoWatchSort"); return ["gap", "sector", "yield", "total", "perk", "policy", "growth", "drop", "new", "code"].indexOf(v) === -1 ? "gap" : v; } catch (e) { return "gap"; } })();
   (function () {
     var sel = document.getElementById("watchSort");
     sel.value = watchSortMode;
@@ -5406,7 +5472,95 @@
     renderWatchList();
     if (!watchShowAll) document.getElementById("watchPanel").scrollIntoView({ block: "start", behavior: "smooth" });
   });
+  // 候補の株価を入れ直すとき、別の日の前の株価を覚えておく(前回からどれだけ動いたかを出す)
+  function setWatchPrice(w, price) {
+    var today = todayStamp();
+    if (num(w.price) > 0 && w.priceDate && isoDay(w.priceDate) !== isoDay(today) && num(w.price) !== price) { w.prevPrice = num(w.price); w.prevPriceDate = w.priceDate; }
+    w.price = price; w.priceDate = today;
+  }
+  function priceChangeOf(w) {
+    return num(w.prevPrice) > 0 && num(w.price) > 0 ? (num(w.price) / num(w.prevPrice) - 1) * 100 : null;
+  }
+  // ---------- 候補の株価・会社予想をまとめて入れ直す(Yahooの参考指標を順番に。保有銘柄の取り込みと同じやり方) ----------
+  var wq = null, wqLast = "";  // { list: [{code, name}], i, done, drops: [] }
+  function wqTodo() {
+    var today = isoDay(todayStamp()), seen = {};
+    // 今日まだ入れていない候補を、株価の古い順に
+    return (state.watch || []).filter(function (w) { return /^[1-9][0-9A-Z]{3}$/.test(w.code) && isoDay(w.priceDate || "") !== today && !seen[w.code] && (seen[w.code] = 1); })
+      .sort(function (a, b) { return String(a.priceDate || "") < String(b.priceDate || "") ? -1 : 1; })
+      .map(function (w) { return { code: w.code, name: (CODE_INFO_MAP[w.code] || [w.code])[0].normalize("NFKC") }; });
+  }
+  function renderWatchQuoteBox() {
+    var box = document.getElementById("wqBox");
+    if (!box) return;
+    var n = (state.watch || []).length;
+    if (state.isSample || !n) { box.hidden = true; return; }
+    box.hidden = false;
+    if (wq && wq.i < wq.list.length) {
+      var it = wq.list[wq.i];
+      box.innerHTML = '<div class="fq-step"><span class="fq-prog">' + (wq.i + 1) + ' / ' + wq.list.length + '</span> <b>' + escapeHtml(it.code + " " + it.name) + '</b></div>' +
+        '<div class="fq-actions"><a class="btn primary" target="_blank" rel="noopener noreferrer" data-wq="open" href="' + yahooQuoteUrl(it.code) + '">Yahooで参考指標を見る ↗</a>' +
+        '<button type="button" class="btn" data-wq="paste">📋 貼り付け</button>' +
+        '<button type="button" class="btn ghost" data-wq="skip">飛ばす</button>' +
+        '<button type="button" class="btn ghost" data-wq="stop">やめる</button></div>' +
+        '<p class="fq-help">「発行済株式数」から「BPS」までをコピーして戻ると、株価と会社予想の配当を読み込んで次の銘柄に進みます。</p>' +
+        (wq.msg ? '<p class="fq-msg">' + escapeHtml(wq.msg) + '</p>' : "");
+      return;
+    }
+    var todo = wqTodo(), done = wq ? wq.done : 0, drops = wq ? wq.drops : [];
+    var sum = wq ? "" : wqLast;  // 終わったあとの結果は、次に始めるまで出しておく(ほかの描き直しで消えないように)
+    wq = null;
+    if (done) {
+      drops.sort(function (a, b) { return a.pct - b.pct; });
+      sum = '<p><b>' + done + '銘柄を更新しました。</b>' + (drops.length ? ' 前回から大きく下がったのは ' + drops.slice(0, 3).map(function (d) { return escapeHtml(d.name) + " " + signedPct(d.pct); }).join("、") +
+        '(並べ替えの「前回の株価から下がった順」で一覧できます)' : '') + '</p>';
+      wqLast = sum;
+    }
+    box.innerHTML = sum + (todo.length
+      ? '<p>候補の株価と会社予想を、Yahooの参考指標からまとめて入れ直せます(今日まだ入れていない ' + todo.length + ' / ' + n + '銘柄)。</p><button type="button" class="btn" data-wq="start">株価の古い順に更新する(' + todo.length + '銘柄)</button>'
+      : '<p class="fq-ok">候補の株価は、すべて今日の値です。</p>');
+  }
+  function wqTake(t) {
+    if (!wq || wq.i >= wq.list.length) return false;
+    var q = t && t.length > 40 ? parseQuoteBlock(t) : null, it = wq.list[wq.i];
+    if (!q) {
+      wq.msg = t && t.length > 40 ? "読み取れませんでした。「発行済株式数」から「BPS」までを選んでコピーし直してください。" : "コピーした内容が見つかりません。参考指標をコピーしてから「📋 貼り付け」を押してください。";
+      renderWatchQuoteBox();
+      return false;
+    }
+    var stamp = todayStamp();
+    (state.watch || []).forEach(function (w) {
+      if (w.code !== it.code) return;
+      if (q.price > 0) setWatchPrice(w, q.price);
+      if (q.fdiv > 0) w.fdiv = q.fdiv;
+      var pc = priceChangeOf(w);
+      if (pc !== null && pc < -1 && isoDay(w.priceDate) === isoDay(stamp)) wq.drops.push({ name: it.name, pct: pc });
+    });
+    // 同じ銘柄を持っていれば、保有の株価・予想にも入れる
+    state.holdings.forEach(function (h) { if (String(h.code || "").trim().toUpperCase() === it.code && !isUS(h)) applyQuoteTo(h, q, stamp); });
+    storeQuote(it.code, q);
+    save();
+    wq.done++; wq.i++; wq.msg = "";
+    showToast(it.name + ": " + (q.price > 0 ? "株価 " + q.price.toLocaleString("ja-JP") + "円" : "") + (q.fdiv > 0 ? "・予想配当 " + q.fdiv + "円" : "") + " を入れました");
+    renderWatchList(); renderTable(); renderDashboard();
+    return true;
+  }
+  document.getElementById("wqBox").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-wq]");
+    if (!b) return;
+    var act = b.dataset.wq;
+    if (act === "start") { wqLast = ""; wq = { list: wqTodo(), i: 0, done: 0, drops: [] }; renderWatchQuoteBox(); return; }
+    if (!wq) return;
+    if (act === "open") { quoteWaiting = { at: Date.now(), take: wqTake }; return; }
+    e.preventDefault();
+    if (act === "skip") { wq.i++; wq.msg = ""; renderWatchQuoteBox(); }
+    else if (act === "stop") { wq.i = wq.list.length; renderWatchQuoteBox(); }
+    else if (act === "paste") {
+      if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then(wqTake, function () { wq.msg = "貼り付けが許可されませんでした。もう一度押して「ペースト」を選んでください。"; renderWatchQuoteBox(); });
+    }
+  });
   function renderWatchList() {
+    renderWatchQuoteBox();
     var list = document.getElementById("watchList");
     if (!list) return;
     var items = (Array.isArray(state.watch) ? state.watch : []).map(watchView);
@@ -5425,6 +5579,8 @@
       // 累進配当・DOEを宣言している会社を先に(両方なら一番上)。その中は今の利回りが高い順
       policy: function (x) { var p = (finRec(x.w.code) || {}).pol || []; return (p.length ? 0 : 1000) - p.length * 100 - (x.yieldNow || 0); },
       growth: function (x) { var g = cagr(comparableDivs(x.w.code), 5); return g === null ? null : -g; },
+      // 前回入れた株価からの下落が大きい順(暴落の日に、どれが大きく下がったかを見る)
+      drop: function (x) { var c = priceChangeOf(x.w); return c === null ? null : c; },
       new: function (x) { return x.w.addedAt ? -new Date(x.w.addedAt).getTime() : null; },
       code: function (x) { return String(x.w.code); } }[watchSortMode] || null;
     items.sort(function (a, b) {
@@ -5437,7 +5593,7 @@
       return ka < kb ? -1 : ka > kb ? 1 : 0;
     });
     var hintEl = document.getElementById("watchSortHint");
-    if (hintEl) hintEl.textContent = { gap: "目標利回りに近い順", sector: "持っている割合が少ない業種順", yield: "今の利回りが高い順", total: "総合利回り(優待込み)が高い順", perk: "優待ありを先に", policy: "累進配当・DOEを先に", growth: "増配率(5年)が高い順", new: "追加が新しい順", code: "コード順" }[watchSortMode];
+    if (hintEl) hintEl.textContent = { gap: "目標利回りに近い順", sector: "持っている割合が少ない業種順", yield: "今の利回りが高い順", total: "総合利回り(優待込み)が高い順", perk: "優待ありを先に", policy: "累進配当・DOEを先に", growth: "増配率(5年)が高い順", drop: "前回の株価から下がった順", new: "追加が新しい順", code: "コード順" }[watchSortMode];
     list.innerHTML = "";
     // 候補が増えても下の株主優待まで遠くならないよう、並べた順に10件だけ出す(追加した銘柄・試算中の銘柄は必ず出す)
     var more = document.getElementById("watchMore");
@@ -5486,9 +5642,10 @@
       // 2行目は大事なものだけ: 方針の札・連続増配・保有中。並べ方に合わせた値を1つだけ足す(詳しくは開いたときに)
       var sortNote = watchSortMode === "sector" ? v.sector + (v.secPct !== null ? " " + (v.secPct > 0 ? fmtPct(v.secPct) : "未保有") : "")
         : (watchSortMode === "perk" || watchSortMode === "total") ? perkNote
-        : watchSortMode === "growth" ? growthNote : "";
+        : watchSortMode === "growth" ? growthNote
+        : watchSortMode === "drop" && priceChangeOf(v.w) !== null ? "前回比 " + signedPct(priceChangeOf(v.w)) : "";
       // 2行目の連続増配は短く(「・○期減配なし」は開いたときに)
-      var line2 = [pol.length ? streakNote.split("・")[0] : streakNote, sortNote, v.heldShares > 0 ? "保有中" : ""].filter(Boolean);
+      var line2 = [watchSortMode === "drop" ? sortNote : "", pol.length ? streakNote.split("・")[0] : streakNote, watchSortMode === "drop" ? "" : sortNote, v.heldShares > 0 ? "保有中" : ""].filter(Boolean);
       var gapTxt = v.gapPct === null ? (v.price > 0 ? "—" : "株価なし") : v.gapPct >= 0 ? "到達" : "−" + fmtPct(-v.gapPct);
       row.innerHTML = '<span class="wr-name"><b>' + escapeHtml((cut ? "⚠ " : "") + v.w.code + " " + v.name) + '</b>' +
         '<small class="wr-line2">' + polHtml + escapeHtml(line2.join(" ・ ")) + '</small></span>' +
@@ -5523,11 +5680,13 @@
       priceIn.type = "number"; priceIn.min = "0"; priceIn.step = "any"; priceIn.inputMode = "decimal";
       priceIn.value = v.price > 0 ? v.price : ""; priceIn.placeholder = "株価";
       priceIn.addEventListener("change", function () {
-        v.w.price = priceIn.value === "" ? undefined : num(priceIn.value);
-        v.w.priceDate = priceIn.value === "" ? undefined : todayStamp();
+        if (priceIn.value === "") { v.w.price = undefined; v.w.priceDate = undefined; }
+        else setWatchPrice(v.w, num(priceIn.value));
         save(); renderWatchList();
       });
       cell("株価" + (v.priceDate ? "(" + v.priceDate.slice(5) + ")" : ""), priceIn);
+      var pc = priceChangeOf(v.w);
+      if (pc !== null) cell("前回の株価" + (v.w.prevPriceDate ? "(" + String(v.w.prevPriceDate).slice(5) + ")" : ""), fmtYen(num(v.w.prevPrice)) + " → " + signedPct(pc), pc < 0 ? "down" : "");
       cell("1株配当" + (v.divFromHolding ? "(保有の値)" : v.divFromForecast ? "(会社予想)" : "(直近実績)"), v.div > 0 ? fmtPerShare(v.div) : "—");
       cell("今の利回り", v.yieldNow !== null ? fmtPct(v.yieldNow, 2) : "—");
       cell("業種", v.sector + (v.secPct !== null ? "(" + (v.secPct > 0 ? "持っている割合 " + fmtPct(v.secPct) : "まだ持っていない") + ")" : ""));
@@ -5700,6 +5859,34 @@
       if (addWatch(hit)) input.value = "";
     });
   })();
+
+  // ---------- 新しい版のお知らせ ----------
+  // サイトは最大10分(ホーム画面のアプリはもっと長く)前のページを使い続けることがある。
+  // 開いているページの更新時刻(document.lastModified)と、サーバーの今の更新時刻を比べ、新しい版が出ていたら知らせる
+  function watchForUpdate() {
+    var loaded = new Date(document.lastModified).getTime(), told = false;
+    if (!(loaded > 0) || !/^https?:$/.test(location.protocol)) return;
+    function check() {
+      if (told || document.hidden || navigator.onLine === false) return;
+      fetch(location.pathname, { method: "HEAD", cache: "no-store" }).then(function (r) {
+        var lm = r.ok && r.headers.get("last-modified"), t = lm ? new Date(lm).getTime() : 0;
+        if (t > loaded + 5000) {
+          told = true;
+          showNotice("update", "アプリの新しい版があります。", "更新する", function () { location.reload(); });
+        }
+      }, function () {});
+    }
+    setTimeout(check, 3000);
+    setInterval(check, 10 * 60 * 1000);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
+  }
+  // 表示の途中で思わぬエラーが起きても黙って止まらないよう、一度だけ知らせる(データは消えない)
+  var errorTold = false;
+  window.addEventListener("error", function (e) {
+    if (errorTold || !e || !e.message || /ResizeObserver|Script error/i.test(e.message)) return;
+    errorTold = true;
+    showNotice("error", "表示の途中で問題が起きました。データは消えていません。再読み込みしても直らないときは、控え(JSON)を取っておいてください。", "再読み込み", function () { location.reload(); });
+  });
 
   // ---------- みんなのランキング(集計は tools/ranking_aggregate.py が1日1回 data/ranking.json に書く) ----------
   var RANK = null, rankTab = "watch";
@@ -6080,7 +6267,7 @@
       var watched = (state.watch || []).filter(function (w) { return w.code === r.code; });
       if (hits.length === 0 && watched.length === 0) { unknown.push(r.code); return; }
       hits.forEach(function (h) { h.price = r.price; h.priceDate = stamp; });
-      watched.forEach(function (w) { w.price = r.price; w.priceDate = stamp; });
+      watched.forEach(function (w) { setWatchPrice(w, r.price); w.priceDate = stamp; });
       updated++;
     });
     save(); renderTable(); renderDashboard(); renderWatchList();
@@ -10770,6 +10957,7 @@
     if (!state.isSample) applyLocalSplits();
     if (!state.isSample) takeQuotesFromCheck();
     loadRanking();
+    watchForUpdate();
     if (!state.isSample) applyHoldingSplits();
     if (!state.isSample) fixPreSplitDivs();
     if (!state.isSample) snapHistoryDivs();

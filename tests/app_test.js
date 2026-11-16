@@ -37,15 +37,23 @@ function expect(cond, msg) { if (!cond) fails.push(msg); }
   expect(!errs.length, "画面のエラー: " + errs.join(" / "));
 
   // 株式分割の見張り: 予想配当と株価がどちらも約4分の1なら、減配ではなく分割を疑い、登録すると株数と過去の配当を直す
+  // 内蔵データにまだ分割が入っていない銘柄で試す(毎週の更新で公式の分割が入ると、その銘柄では疑いが出なくなるため、銘柄は毎回データから選ぶ)
+  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "index.html"), "utf8");
+  const mapOf = name => JSON.parse(src.match(new RegExp("var " + name + " = (\\{.*?\\});"))[1]);
+  const INFO = mapOf("CODE_INFO_MAP"), SPLITS = mapOf("SPLIT_MAP");
+  const sc = Object.keys(INFO).sort().find(c => /^[1-9][0-9]{3}$/.test(c) && !SPLITS[c] && Array.isArray(INFO[c][3]) && INFO[c][3].length >= 6 &&
+    INFO[c][3][0] >= 20 && (INFO[c][2] || []).length === 2 && INFO[c][3].slice(0, 5).every((v, i, a) => i === 0 || a[i - 1] >= v));
+  const sName = INFO[sc][0].normalize("NFKC"), sDiv = INFO[sc][3][0], sPrice = Math.round(sDiv / 0.035);
   const ctx2 = await br.newContext({ viewport: { width: 390, height: 844 } });
-  await ctx2.addInitScript(() => {
+  await ctx2.addInitScript(a => {
     if (sessionStorage.getItem("t")) return;
     sessionStorage.setItem("t", "1");
     localStorage.clear();
-    localStorage.setItem("haitoDashboardV1", JSON.stringify({ holdings: [{ id: "s1", code: "1926", name: "ライト工業", sector: "建設業", account: "特定",
-      shares: 100, cost: 2000, div: 146, prevDiv: "", price: 14800, priceDate: "2026/09/20", months: [3, 9] }] }));
-    localStorage.setItem("irPrices", JSON.stringify({ "1926": { p: 3715, d: "2099-01-01", f: 36.5 } }));
-  });
+    // 保有と内蔵データは分割前の値、チェックシートで入れた値は分割後(配当も株価も4分の1)
+    localStorage.setItem("haitoDashboardV1", JSON.stringify({ holdings: [{ id: "s1", code: a.code, name: a.name, sector: a.sector, account: "特定",
+      shares: 100, cost: 2000, div: a.div, prevDiv: "", price: a.price, priceDate: "2026/09/20", months: a.months }] }));
+    localStorage.setItem("irPrices", JSON.stringify({ [a.code]: { p: Math.round(a.price / 4), d: "2099-01-01", f: Math.round(a.div / 4 * 100) / 100 } }));
+  }, { code: sc, name: sName, sector: INFO[sc][1], div: sDiv, price: sPrice, months: INFO[sc][2] });
   const q = await ctx2.newPage();
   const errs2 = [];
   q.on("pageerror", e => errs2.push(e.message));
@@ -60,7 +68,7 @@ function expect(cond, msg) { if (!cond) fails.push(msg); }
   expect(h1.shares === 400 && h1.cost === 500, "分割の登録で株数・取得単価が直っていない: " + h1.shares + "株・" + h1.cost + "円");
   await q.click('.tabbar .tab[data-tab="analysis"]');
   await q.waitForTimeout(800);
-  expect(!/ライト工業[^]*?減配予想/.test((await q.textContent("#riskBody")).split("判定のしかた")[0]), "分割を登録したのに減配予想になっている");
+  expect(!new RegExp(sName + "[^]*?減配予想").test((await q.textContent("#riskBody")).split("判定のしかた")[0]), "分割を登録したのに減配予想になっている");
   expect(!errs2.length, "画面のエラー(分割): " + errs2.join(" / "));
   await br.close();
   if (fails.length) { console.log("NG\n- " + fails.join("\n- ")); process.exit(1); }

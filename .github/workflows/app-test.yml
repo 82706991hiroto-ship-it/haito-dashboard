@@ -4,7 +4,7 @@ name: 画面の計算の点検
 on:
   push:
     branches: [main]
-    paths: [index.html, tests/app_test.js]
+    paths: [index.html, sync-core.js, tools/ranking_aggregate.py, tests/**]
   workflow_dispatch:
 jobs:
   test:
@@ -22,6 +22,11 @@ jobs:
         with:
           node-version: "20"
       - run: npm install --no-save playwright@1.47.2 && npx playwright install --with-deps chromium
+      # 画面を開かずに確かめられる部品(参考指標の読み取り・同期の足し合わせ・ランキングの集計)
+      - name: 部品の点検
+        run: |
+          node haito-dashboard/tests/unit_test.js
+          python3 haito-dashboard/tests/test_ranking.py
       - name: 点検
         run: |
           python3 -m http.server 8765 >/dev/null 2>&1 &
