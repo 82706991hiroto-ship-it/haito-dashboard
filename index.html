@@ -524,6 +524,8 @@
   .report-preview { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); margin: 4px 0 10px; }
   .hero-substats .stat { background: var(--field); border-radius: 12px; padding: 12px 14px; }
   .hero-substats .label { font-size: 11px; color: var(--text-2); margin-bottom: 5px; }
+  .hero-substats .stat-wide { grid-column: 1 / -1; }
+  .hero-substats .stat .note { font-size: 11px; color: var(--text-2); margin-top: 3px; }
   .hero-substats .value { font-size: 18px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 
   /* ---- タブ ---- */
@@ -8433,6 +8435,7 @@
       { label: "利回り(取得)", value: agg.totalAcq > 0 ? fmtPct(yieldPre, 2) : "—" },
       { label: "利回り(時価)", value: mktYield !== null ? fmtPct(mktYield, 2) : "—" },
       { label: "税引後", value: fmtYen(agg.totalDivPost), tax: true },
+      totalAssets(agg),
       { label: "銘柄", value: agg.stockCount + "" },
       { label: "業種", value: agg.sectorCount + "" }
     ];
@@ -8447,12 +8450,28 @@
       if (s.tax) return '<button type="button" class="stat stat-jump" data-tax="1" aria-controls="taxBox"><div class="label">' + s.label + ' ›</div><div class="value">' + s.value + '</div><div class="note">口座別の税金を見る</div></button>';
       return s.jump
         ? '<button type="button" class="stat stat-jump" data-jump="' + s.jump + '"><div class="label">' + s.label + ' ›</div><div class="value">' + s.value + '</div>' + (s.note ? '<div class="note">' + s.note + '</div>' : "") + '</button>'
-        : '<div class="stat"><div class="label">' + s.label + '</div><div class="value">' + s.value + '</div></div>';
+        : '<div class="stat' + (s.wide ? ' stat-wide' : '') + '"><div class="label">' + s.label + '</div><div class="value">' + s.value + '</div>' + (s.note ? '<div class="note">' + s.note + '</div>' : "") + '</div>';
     }).join("");
     renderTaxBox(agg);
     renderMilestones(annual);
   }
 
+  // 総資産(評価額): 株価のある銘柄は 株数×株価、無い銘柄は取得額で数える。含み損益は株価のある銘柄だけで
+  function totalAssets(agg) {
+    var mv = 0, acqP = 0, noPrice = 0;
+    agg.rows.forEach(function (r) {
+      var p = num(r.price);
+      if (p > 0 && num(r.shares) > 0) { mv += num(r.shares) * p; acqP += r.acquisition; }
+      else if (r.acquisition > 0) { mv += r.acquisition; noPrice++; }
+    });
+    var gain = mv - noPriceAcq(agg) - acqP, gp = acqP > 0 ? gain / acqP * 100 : null;
+    var note = (gp !== null ? "含み" + (gain >= 0 ? "益 +" : "損 −") + fmtYen(Math.abs(gain)) + "(" + signedPct(gp) + ")" : "") +
+      (noPrice ? (gp !== null ? " ・ " : "") + "株価の無い" + noPrice + "銘柄は取得額で" : "");
+    return { label: "総資産(評価額)", value: fmtYen(mv), note: note, wide: true };
+  }
+  function noPriceAcq(agg) {
+    return agg.rows.reduce(function (a, r) { return a + (num(r.price) > 0 && num(r.shares) > 0 ? 0 : r.acquisition); }, 0);
+  }
   // 税引前・税金・手元に残る額を、NISAと特定口座に分けて見せる。
   // 国内株・投資信託: 特定口座は20.315%、NISAは0。米国株: どちらの口座でも米国で10%、特定口座はさらに日本で20.315%
   function taxSplit(agg) {
