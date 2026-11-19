@@ -1603,6 +1603,10 @@
         <input type="checkbox" id="reportHide">
         <span>金額を隠して%・倍率だけにする</span>
       </label>
+      <label class="field-check" id="reportAssetsField">
+        <input type="checkbox" id="reportAssets">
+        <span>総資産(評価額)を載せる<small>(金額を隠すときは含み損益の%だけ)</small></span>
+      </label>
       <label class="field-check">
         <input type="checkbox" id="reportShowUrl">
         <span>アプリのURLを載せる(載せないと「何のアプリ?」と聞かれやすい)</span>
@@ -8835,12 +8839,19 @@
   // 金額を隠すときは、節目(「年間20万円を突破」)と%・数だけにする
   function annualData(agg) {
     var annual = agg.totalDivPre, goal = num(state.goals.monthly);
+    // 総資産: ホームの「総資産(評価額)」と同じ数え方(株価の無い銘柄は取得額)
+    var mv = 0, acqP = 0, mvP = 0;
+    agg.rows.forEach(function (r) {
+      var p = num(r.price);
+      if (p > 0 && num(r.shares) > 0) { mv += num(r.shares) * p; mvP += num(r.shares) * p; acqP += r.acquisition; }
+      else if (r.acquisition > 0) mv += r.acquisition;
+    });
     var top = MILESTONES.filter(function (m) { return annual >= m; }).pop() || 0;
     var next = MILESTONES.filter(function (m) { return annual < m; })[0] || 0;
     return { annual: annual, monthly: annual / 12, top: top, next: next, tier: tierOf(annual),
              stocks: agg.stockCount, sectors: agg.sectorCount,
              yieldBook: agg.totalAcq > 0 ? annual / agg.totalAcq * 100 : null,
-             goalPct: goal > 0 ? annual / 12 / goal * 100 : null, goal: goal,
+             goalPct: goal > 0 ? annual / 12 / goal * 100 : null, goal: goal, assets: mv, gainPct: acqP > 0 ? (mvP / acqP - 1) * 100 : null,
              sectors5: (function () {
                var t = agg.totalDivPre, list = agg.bySector.filter(function (x) { return x.value > 0; });
                var top = list.slice(0, 5).map(function (x) { return { label: x.label, pct: t > 0 ? x.value / t * 100 : 0 }; });
@@ -8910,12 +8921,19 @@
       { label: "利回り(取得)", value: d.yieldBook !== null ? d.yieldBook.toFixed(2) + "%" : "—" },
       d.goalPct !== null ? { label: "月の目標", value: d.goalPct.toFixed(1) + "%", gold: true } : { label: "次の節目まで", value: d.next ? Math.min(99.9, d.annual / d.next * 100).toFixed(1) + "%" : "達成", gold: true }
     ];
-    var sw = (R - L) / 3;
+    // 「総資産を載せる」を選んだら、2番目に総資産(金額を隠すときは含み損益の%)を足して4列にする
+    if (state.reportAssets && d.assets > 0) {
+      var av = hide ? (d.gainPct !== null ? signedPct(d.gainPct) : null) : (d.assets >= 100000000 ? (Math.round(d.assets / 1000000) / 100) + "億円" : Math.round(d.assets / 10000).toLocaleString("ja-JP") + "万円");
+      if (av) stats.splice(1, 0, { label: hide ? "含み損益" : "総資産", value: av });
+    }
+    var cols = stats.length, sw = (R - L) / cols, vsize = cols > 3 ? 44 : 58, pad = cols > 3 ? 22 : 36;
     stats.forEach(function (st, k) {
-      var x = L + k * sw + (k ? 36 : 0);
+      var x = L + k * sw + (k ? pad : 0);
       if (k) line(L + k * sw, 640, L + k * sw, 750);
-      font(500, 24); text(st.label, x, 668, C.text2);
-      font(800, 58); text(st.value, x, 740, st.gold ? C.gold : C.text);
+      font(500, cols > 3 ? 21 : 24); text(st.label, x, 668, C.text2);
+      var vs = vsize; font(800, vs);
+      while (g.measureText(st.value).width > sw - pad - 8 && vs > 28) { vs -= 2; font(800, vs); }
+      text(st.value, x, 740, st.gold ? C.gold : C.text);
     });
     // 目標の細いゲージ
     var pct = d.goalPct !== null ? d.goalPct : (d.next ? d.annual / d.next * 100 : 100);
@@ -8995,6 +9013,8 @@
     var agg = aggregate();
     document.getElementById("reportMonthField").hidden = reportKind !== "month";
     document.getElementById("reportTheme").hidden = reportKind !== "annual";
+    document.getElementById("reportAssetsField").hidden = reportKind !== "annual";
+    document.getElementById("reportAssets").checked = !!state.reportAssets;
     Array.prototype.forEach.call(document.querySelectorAll("#reportTheme .axis-tab"), function (b) { b.classList.toggle("active", b.dataset.theme === (state.reportTheme === "light" ? "light" : "dark")); });
     Array.prototype.forEach.call(document.querySelectorAll("#reportKind .axis-tab"), function (b) { b.classList.toggle("active", b.dataset.kind === reportKind); });
     if (reportKind === "annual") {
@@ -9084,6 +9104,7 @@
     if (b) { state.reportTheme = b.dataset.theme === "light" ? "light" : undefined; save(); paintReport(); }
   });
   document.getElementById("reportHide").addEventListener("change", paintReport);
+  document.getElementById("reportAssets").addEventListener("change", function (e) { state.reportAssets = e.target.checked || undefined; save(); paintReport(); });
   document.getElementById("reportShowUrl").addEventListener("change", paintReport);
   document.getElementById("reportCloseBtn").addEventListener("click", function () {
     document.getElementById("reportDialog").close();
